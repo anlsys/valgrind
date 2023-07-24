@@ -12,7 +12,8 @@ TOOLS = \
 		massif \
 		dhat \
 		lackey \
-		none
+		none	\
+		omp_task
 
 EXP_TOOLS = \
 		exp-bbv

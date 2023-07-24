@@ -2245,6 +2245,17 @@
 /none/tests/x86-freebsd/Makefile.in
 /none/tests/x86-freebsd/445032
 
+# /omp_task/
+/omp_task/Makefile
+/omp_task/Makefile.in
+/omp_task/.deps/none__linux-nl_main.Po
+/omp_task/.deps/none_amd64_linux-nl_main.Po
+/omp_task/.deps/omp_task__linux-omp_task_main.Po
+/omp_task/.deps/omp_task_amd64_linux-omp_task_main.Po
+omp_task/docs/openmp-task-manual.xml
+omp_task/omp_task-amd64-linux
+omp_task/tags
+
 # /perf/
 /perf/*.dSYM
 /perf/.deps
