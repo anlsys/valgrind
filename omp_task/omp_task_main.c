@@ -27,7 +27,10 @@
 
 #include "pub_tool_basics.h"
 #include "pub_tool_tooliface.h"
-#include "pub_tool_libcassert.h" /* tool_panic */
+#include "pub_tool_libcbase.h"      /* strstr */
+#include "pub_tool_libcprint.h"     /* snprintf */
+#include "pub_tool_libcassert.h"    /* tool_panic, lt_assert */
+#include "pub_tool_mallocfree.h"    /* malloc, free */
 
 #if 1
 # define OMP_DEBUG(...) VG_(printf)(__VA_ARGS__)
@@ -35,22 +38,75 @@
 # define OMP_DEBUG(...)
 #endif
 
-static void
-omp_task_post_clo_init(void)
+///////////////////////////////////////////////////////////////////////////////
+//  Hash table storing data accesses per task
+///////////////////////////////////////////////////////////////////////////////
+
+# define uthash_malloc(size)        VG_(malloc)("omp_task.uthash", size)
+# define uthash_free(ptr, size)     VG_(free)(ptr)
+# define uthash_exit(c)             VG_(exit)(c)
+# define uthash_memcmp(s1, s2, n)   VG_(memcmp)(s1, s2, n)
+# define uthash_memset(s, c, n)     VG_(memset)(s, c, n)
+
+# include "uthash.h"
+
+// hmap of tasks
+typedef struct  task_s
 {
+    HChar * key;
+    UT_hash_handle hh;
+}               task_t;
+
+static task_t *     TASKS;
+static HChar        TASK_IDENTIFIER_BUFFER[1024];
+
+// retrieve a task from its file and line number
+static inline task_t *
+get_task(const HChar * dir, const HChar * file, UInt line, const HChar * fn)
+{
+    if (!VG_(strstr)(fn, "omp_task_entry") && !VG_(strstr)(fn, "_omp_fn"))
+        return NULL;
+
+    tl_assert(sizeof(HChar) == 1);
+    int len = VG_(snprintf)(
+        TASK_IDENTIFIER_BUFFER, sizeof(TASK_IDENTIFIER_BUFFER),
+        "%s/%s:%u %s", dir, file, line, fn
+    );
+    tl_assert(len < sizeof(TASK_IDENTIFIER_BUFFER));
+
+    unsigned hashv;
+    HASH_VALUE(&TASK_IDENTIFIER_BUFFER, len, hashv);
+
+    task_t * task;
+    HASH_FIND_BYHASHVALUE(hh, TASKS, TASK_IDENTIFIER_BUFFER, len, hashv, task);
+
+    if (task == NULL)
+    {
+        task        = (task_t *) VG_(malloc)("omp_task.get_task", sizeof(task_t) + len + 1);
+        task->key   = (HChar *) (task + 1);
+        VG_(strcpy)(task->key, TASK_IDENTIFIER_BUFFER);
+
+        HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASKS, task->key, len, hashv, task);
+    }
+
+    return task;
 }
 
-static void
-omp_task_get_obj_node(IRSB * irsb, IRStmt * st)
+///////////////////////////////////////////////////////////////////////////////
+//  Retrieve the task we are currently instrumenting
+///////////////////////////////////////////////////////////////////////////////
+
+static task_t *
+omp_task_get_current_task(IRSB * irsb, IRStmt * st)
 {
     static const HChar * anonymous = "???";
 
     Addr addr;
     DiEpoch ep;
-    HChar * file;
-    HChar * dir;
-    HChar * fn;
-    UInt * line;
+    const HChar * file;
+    const HChar * dir;
+    const HChar * fn;
+    UInt line;
 
     addr = st->Ist.IMark.addr + st->Ist.IMark.delta;
     ep = VG_(current_DiEpoch)();
@@ -61,11 +117,18 @@ omp_task_get_obj_node(IRSB * irsb, IRStmt * st)
         line = 0;
     }
     if (!VG_(get_fnname)(ep, addr, &fn))
-        fn = anonymous;
+        return NULL;
 
-    OMP_DEBUG("%s/%s:%d %s\n", dir, file, line, fn);
+    return get_task(dir, file, line, fn);
+}
 
-    // TODO: voir CLG_(get_fn_node) - callgrind/fn.c
+///////////////////////////////////////////////////////////////////////////////
+//  Coregrind callbacks
+///////////////////////////////////////////////////////////////////////////////
+
+static void
+omp_task_post_clo_init(void)
+{
 }
 
 static IRSB *
@@ -90,7 +153,7 @@ omp_task_instrument(
     for (i = 0 ; i < sb_in->stmts_used && sb_in->stmts[i]->tag != Ist_IMark ; ++i)
         addStmtToIRSB(sb_out, sb_in->stmts[i]);
 
-    omp_task_get_obj_node(sb_in, sb_in->stmts[i]);
+    omp_task_get_current_task(sb_in, sb_in->stmts[i]);
 
     for (i = 0 ; i < sb_in->stmts_used; ++i)
     {
@@ -133,8 +196,6 @@ omp_task_pre_clo_init(void)
    VG_(basic_tool_funcs)        (omp_task_post_clo_init,
                                  omp_task_instrument,
                                  omp_task_fini);
-
-   /* No needs, no core events to track */
 }
 
 VG_DETERMINE_INTERFACE_VERSION(omp_task_pre_clo_init)

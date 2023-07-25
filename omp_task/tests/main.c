@@ -5,7 +5,8 @@ main(void)
     {
         # pragma omp single
         {
-            int x;
+            int x; (void) x;
+
             # pragma omp task shared(x)
                 x = 42;
 
