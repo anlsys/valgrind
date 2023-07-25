@@ -39,7 +39,7 @@
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
-//  Hash table storing data accesses per task
+//  Retrieve the task we are currently instrumenting
 ///////////////////////////////////////////////////////////////////////////////
 
 # define uthash_malloc(size)        VG_(malloc)("omp_task.uthash", size)
@@ -53,10 +53,12 @@
 // hmap of tasks
 typedef struct  task_s
 {
+    Int uid;
     HChar * key;
     UT_hash_handle hh;
 }               task_t;
 
+static Int          TASKS_UID;
 static task_t *     TASKS;
 static HChar        TASK_IDENTIFIER_BUFFER[1024];
 
@@ -84,6 +86,7 @@ get_task(const HChar * dir, const HChar * file, UInt line, const HChar * fn)
     {
         task        = (task_t *) VG_(malloc)("omp_task.get_task", sizeof(task_t) + len + 1);
         task->key   = (HChar *) (task + 1);
+        task->uid   = TASKS_UID++;
         VG_(strcpy)(task->key, TASK_IDENTIFIER_BUFFER);
 
         HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASKS, task->key, len, hashv, task);
@@ -91,10 +94,6 @@ get_task(const HChar * dir, const HChar * file, UInt line, const HChar * fn)
 
     return task;
 }
-
-///////////////////////////////////////////////////////////////////////////////
-//  Retrieve the task we are currently instrumenting
-///////////////////////////////////////////////////////////////////////////////
 
 static task_t *
 omp_task_get_current_task(IRSB * irsb, IRStmt * st)
@@ -141,39 +140,50 @@ omp_task_instrument(
     IRType gWordTy,
     IRType hWordTy
 ) {
-    IRSB * sb_out;
     IRStmt * st;
     Int i;
+    task_t * task;
 
     if (gWordTy != hWordTy)
         VG_(tool_panic)("host/guest word size mismatch");
 
-    sb_out = deepCopyIRSBExceptStmts(sb_in);
+    for (i = 0 ; i < sb_in->stmts_used && sb_in->stmts[i]->tag != Ist_IMark ; ++i);
 
-    for (i = 0 ; i < sb_in->stmts_used && sb_in->stmts[i]->tag != Ist_IMark ; ++i)
-        addStmtToIRSB(sb_out, sb_in->stmts[i]);
+    task = omp_task_get_current_task(sb_in, sb_in->stmts[i]);
 
-    omp_task_get_current_task(sb_in, sb_in->stmts[i]);
-
-    for (i = 0 ; i < sb_in->stmts_used; ++i)
+    if (task)
     {
-        st = sb_in->stmts[i];
-        switch (st->tag)
+        OMP_DEBUG("working on task %s\n", task->key);
+        for ( ; i < sb_in->stmts_used; ++i)
         {
-            case Ist_Store:
-            {
-                break ;
-            }
+            st = sb_in->stmts[i];
 
-            default:
+            switch (st->tag)
             {
-                break ;
+                case Ist_Store:
+                {
+//                    OMP_DEBUG("task %d writes address %p\n", task->uid, st->Ist.Store.addr);
+
+                    // TODO: find out why addresses change when
+                    //  x = 42
+                    //  y = 43
+                    // and
+                    //  x = 42
+                    //  y = x
+                    ppIRStmt(st);
+                    OMP_DEBUG("           (addr=%p)\n", st->Ist.Store.addr);
+                    break ;
+                }
+
+                default:
+                {
+                    break ;
+                }
             }
         }
-        addStmtToIRSB(sb_out, sb_in->stmts[i]);
     }
 
-    return sb_out;
+    return sb_in;
 }
 
 static void

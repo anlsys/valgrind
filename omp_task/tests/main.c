@@ -5,15 +5,25 @@ main(void)
     {
         # pragma omp single
         {
-            int x; (void) x;
+            int x = 0;
+            int y = 0;
 
-            # pragma omp task shared(x)
+            # pragma omp task shared(x, y)
+            {
                 x = 42;
+                y = 43;
+            }
 
-            # pragma omp task shared(x)
-                x = 43;
+            # pragma omp task shared(x, y)
+            {
+                x = 44;
+                y = x;
+            }
 
             # pragma omp taskwait
+
+            (void) x;
+            (void) y;
         }
     }
     return 0;
