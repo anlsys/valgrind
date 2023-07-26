@@ -1,29 +1,38 @@
+# include <stdio.h>
+# include <stdlib.h>
+
+# define V 42
+
 int
 main(void)
 {
-    # pragma omp parallel
+#if 1
+    int * x = (int *) malloc(sizeof(int));
+    int * y = (int *) malloc(sizeof(int));
+#else
+    int x = 0;
+    int y = 0;
+#endif
+
+    # pragma omp parallel shared(x, y)
     {
         # pragma omp single
         {
-            int x = 0;
-            int y = 0;
-
             # pragma omp task shared(x, y)
             {
-                x = 42;
-                y = 43;
+                *x = V + 0;
+                *y = V + 1;
             }
 
             # pragma omp task shared(x, y)
             {
-                x = 44;
-                y = x;
+                *x = V + 2;
+                *y = *x;
             }
 
             # pragma omp taskwait
 
-            (void) x;
-            (void) y;
+            printf("x=%d, y=%d\n", *x, *y);
         }
     }
     return 0;

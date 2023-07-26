@@ -53,12 +53,22 @@
 // hmap of tasks
 typedef struct  task_s
 {
-    Int uid;
-    HChar * key;
+    // global task ID (= which task region)
+    Int gid;
+
+    // instance task ID (= which task construct)
+    Int iid;
+
+    // task region (= which file, which task)
+    HChar * region;
+
+    // hmap handle
     UT_hash_handle hh;
+
 }               task_t;
 
-static Int          TASKS_UID;
+// Task hash table
+static Int          TASKS_GID;
 static task_t *     TASKS;
 static HChar        TASK_IDENTIFIER_BUFFER[1024];
 
@@ -84,14 +94,19 @@ get_task(const HChar * dir, const HChar * file, UInt line, const HChar * fn)
 
     if (task == NULL)
     {
-        task        = (task_t *) VG_(malloc)("omp_task.get_task", sizeof(task_t) + len + 1);
-        task->key   = (HChar *) (task + 1);
-        task->uid   = TASKS_UID++;
-        VG_(strcpy)(task->key, TASK_IDENTIFIER_BUFFER);
+        task            = (task_t *) VG_(malloc)("omp_task.get_task", sizeof(task_t) + len + 1);
+        task->region    = (HChar *) (task + 1);
+        task->gid       = TASKS_GID++;
 
-        HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASKS, task->key, len, hashv, task);
+        // TODO: task the OpenMP runtime which task instance is currently running
+        task->iid       = -1;
+
+        VG_(strcpy)(task->region, TASK_IDENTIFIER_BUFFER);
+
+        HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASKS, task->region, len, hashv, task);
     }
 
+    tl_assert(task);
     return task;
 }
 
@@ -130,6 +145,24 @@ omp_task_post_clo_init(void)
 {
 }
 
+typedef enum    omp_task_mem_access_type_e
+{
+    OMP_TASK_MEM_LOAD,
+    OMP_TASK_MEM_STORE,
+}               omp_task_mem_access_type_t;
+
+static void
+omp_task_instrument_mem_access(
+    task_t * task,
+    IRSB * sb,
+    IRExpr * addr,
+    Int size,
+    omp_task_mem_access_type_t access_type
+) {
+    if (access_type == OMP_TASK_MEM_STORE)
+        OMP_DEBUG("%s at %p (task=%p)\n", access_type == OMP_TASK_MEM_LOAD ? "LOAD " : "STORE", addr, task);
+}
+
 static IRSB *
 omp_task_instrument(
     VgCallbackClosure * closure,
@@ -151,44 +184,219 @@ omp_task_instrument(
 
     task = omp_task_get_current_task(sb_in, sb_in->stmts[i]);
 
-    if (task)
+    // Inspired from helgrind
+    for ( ; i < sb_in->stmts_used; ++i)
     {
-        OMP_DEBUG("working on task %s\n", task->key);
-        for ( ; i < sb_in->stmts_used; ++i)
+        st = sb_in->stmts[i];
+
+        switch (st->tag)
         {
-            st = sb_in->stmts[i];
-
-            switch (st->tag)
+            case Ist_NoOp:
             {
-                case Ist_Store:
-                {
-//                    OMP_DEBUG("task %d writes address %p\n", task->uid, st->Ist.Store.addr);
+                // do nothing
+                break ;
+            }
 
-                    // TODO: find out why addresses change when
-                    //  x = 42
-                    //  y = 43
-                    // and
-                    //  x = 42
-                    //  y = x
-                    ppIRStmt(st);
-                    OMP_DEBUG("           (addr=%p)\n", st->Ist.Store.addr);
-                    break ;
-                }
+            case Ist_IMark:
+            {
+                // do nothing
+                break ;
+            }
 
-                default:
+            case Ist_AbiHint:
+            {
+                // do nothing
+                break ;
+            }
+
+            case Ist_Put:
+            {
+                // do nothing
+                break ;
+            }
+
+            case Ist_PutI:
+            {
+                // do nothing
+                break ;
+            }
+
+            case Ist_WrTmp:
+            {
+                IRExpr* data = st->Ist.WrTmp.data;
+                // TODO: what if its not a load ?
+                if (data->tag == Iex_Load)
                 {
-                    break ;
+                    omp_task_instrument_mem_access(
+                        task,
+                        sb_in,
+                        data->Iex.Load.addr,
+                        sizeofIRType(data->Iex.Load.ty),
+                        OMP_TASK_MEM_LOAD
+                    );
                 }
+                break ;
+            }
+
+            case Ist_Store:
+            {
+                omp_task_instrument_mem_access(
+                    task,
+                    sb_in,
+                    st->Ist.Store.addr,
+                    sizeofIRType(typeOfIRExpr(sb_in->tyenv, st->Ist.Store.data)),
+                    OMP_TASK_MEM_STORE
+                );
+                break ;
+            }
+
+            case Ist_LoadG:
+            {
+                IRType type, wtype;
+
+                typeOfIRLoadGOp(st->Ist.LoadG.details->cvt, &wtype, &type);
+
+                omp_task_instrument_mem_access(
+                    task,
+                    sb_in,
+                    st->Ist.LoadG.details->addr,
+                    sizeofIRType(type),
+                    OMP_TASK_MEM_LOAD
+                );
+
+                break ;
+            }
+
+            case Ist_StoreG:
+            {
+                tl_assert(0);
+                break ;
+            }
+
+            case Ist_CAS:
+            {
+                IRCAS * cas;
+                Bool isDCAS;
+
+                cas = st->Ist.CAS.details;
+
+                isDCAS = cas->oldHi != IRTemp_INVALID;
+                tl_assert((isDCAS && cas->expdHi) || (!isDCAS && !cas->expdHi));
+                tl_assert((isDCAS && cas->dataHi) || (!isDCAS && !cas->dataHi));
+
+                omp_task_instrument_mem_access(
+                    task,
+                    sb_in,
+                    cas->addr,
+                    isDCAS ? 2 : 1,
+                    OMP_TASK_MEM_STORE
+                );
+
+                break ;
+            }
+
+            case Ist_LLSC:
+            {
+                tl_assert(0);
+                break ;
+            }
+
+            case Ist_Dirty:
+            {
+                IRDirty * d;
+                Int data_size;
+                omp_task_mem_access_type_t access_type;
+
+                d = st->Ist.Dirty.details;
+                if (d->mFx != Ifx_None)
+                {
+                    tl_assert(d->mAddr != NULL);
+                    tl_assert(d->mSize != 0);
+
+                    data_size = d->mSize;
+                    if (d->mFx == Ifx_Read || d->mFx == Ifx_Modify)
+                        access_type = OMP_TASK_MEM_LOAD;
+                    else if (d->mFx == Ifx_Write)
+                        access_type = OMP_TASK_MEM_STORE;
+                    else
+                        tl_assert(d->mFx == Ifx_None);
+
+                    omp_task_instrument_mem_access(
+                        task,
+                        sb_in,
+                        d->mAddr,
+                        data_size,
+                        access_type
+                    );
+                }
+                break ;
+            }
+
+            case Ist_MBE:
+            {
+                // do nothing
+                break ;
+            }
+
+            case Ist_Exit:
+            {
+                // do nothing
+                break ;
+            }
+
+            default:
+            {
+                OMP_DEBUG("ERROR unknown statement: ");
+                ppIRStmt(st);
+                OMP_DEBUG("\n");
+                break ;
             }
         }
     }
-
     return sb_in;
 }
 
 static void
 omp_task_fini(Int exitcode)
 {
+#if 0
+    const char * tags_str[] = {
+        "Iex_Binder",
+        "Iex_Get",
+        "Iex_GetI",
+        "Iex_RdTmp",
+        "Iex_Qop",
+        "Iex_Triop",
+        "Iex_Binop",
+        "Iex_Unop",
+        "Iex_Load",
+        "Iex_Const",
+        "Iex_ITE",
+        "Iex_CCall",
+        "Iex_VECRET",
+        "Iex_GSPTR"
+    };
+
+    IRExprTag tags[] = {
+        Iex_Binder,
+        Iex_Get,
+        Iex_GetI,
+        Iex_RdTmp,
+        Iex_Qop,
+        Iex_Triop,
+        Iex_Binop,
+        Iex_Unop,
+        Iex_Load,
+        Iex_Const,
+        Iex_ITE,
+        Iex_CCall,
+        Iex_VECRET,
+        Iex_GSPTR
+    };
+    OMP_DEBUG("-------------------------------\n");
+    for (int i = 0 ; i < 14 ; ++i)
+        OMP_DEBUG("%s = %u\n", tags_str[i], tags[i]);
+#endif
 }
 
 static void
