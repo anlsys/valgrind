@@ -52,5 +52,3 @@ omp_task_@VGCONF_ARCH_SEC@_@VGCONF_OS@_LINK = \
 	$(omp_task_@VGCONF_ARCH_SEC@_@VGCONF_OS@_CFLAGS) \
 	$(omp_task_@VGCONF_ARCH_SEC@_@VGCONF_OS@_LDFLAGS)
 endif
-
-

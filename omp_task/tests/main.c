@@ -9,6 +9,7 @@ main(void)
 #if 1
     int * x = (int *) malloc(sizeof(int));
     int * y = (int *) malloc(sizeof(int));
+    printf("x=%p, y=%p ; &x=%p, &y=%p\n", x, y, &x, &y);
 #else
     int x = 0;
     int y = 0;

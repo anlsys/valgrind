@@ -30,6 +30,7 @@
 #include "pub_tool_libcbase.h"      /* strstr */
 #include "pub_tool_libcprint.h"     /* snprintf */
 #include "pub_tool_libcassert.h"    /* tool_panic, lt_assert */
+#include "pub_tool_machine.h"       /* fnptr_to_fnentry */
 #include "pub_tool_mallocfree.h"    /* malloc, free */
 
 #if 1
@@ -68,9 +69,16 @@ typedef struct  task_s
 }               task_t;
 
 // Task hash table
-static Int          TASKS_GID;
-static task_t *     TASKS;
-static HChar        TASK_IDENTIFIER_BUFFER[1024];
+static task_t * TASKS;
+
+// Task global ID counter
+static Int TASKS_GID;
+
+// Buffer to identify tasks to their global ID
+static HChar TASK_IDENTIFIER_BUFFER[1024];
+
+// The current task
+static task_t *  CURRENT_TASK;
 
 // retrieve a task from its file and line number
 static inline task_t *
@@ -110,8 +118,8 @@ get_task(const HChar * dir, const HChar * file, UInt line, const HChar * fn)
     return task;
 }
 
-static task_t *
-omp_task_get_current_task(IRSB * irsb, IRStmt * st)
+static void
+omp_task_update_current_task(IRSB * irsb, IRStmt * st)
 {
     static const HChar * anonymous = "???";
 
@@ -131,9 +139,9 @@ omp_task_get_current_task(IRSB * irsb, IRStmt * st)
         line = 0;
     }
     if (!VG_(get_fnname)(ep, addr, &fn))
-        return NULL;
-
-    return get_task(dir, file, line, fn);
+        CURRENT_TASK = NULL;
+    else
+        CURRENT_TASK = get_task(dir, file, line, fn);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -152,15 +160,51 @@ typedef enum    omp_task_mem_access_type_e
 }               omp_task_mem_access_type_t;
 
 static void
+omp_task_instrument_mem_access_helper_load(
+    Addr addr,
+    SizeT size
+) {
+    OMP_DEBUG("(task=%p) LOAD  0x%010lX %lu\n", CURRENT_TASK, addr, size);
+}
+
+static void
+omp_task_instrument_mem_access_helper_store(
+    Addr addr,
+    SizeT size
+) {
+    OMP_DEBUG("(task=%p) STORE 0x%010lX %lu\n", CURRENT_TASK, addr, size);
+}
+
+static void
 omp_task_instrument_mem_access(
-    task_t * task,
     IRSB * sb,
     IRExpr * addr,
     Int size,
     omp_task_mem_access_type_t access_type
 ) {
-    if (access_type == OMP_TASK_MEM_STORE)
-        OMP_DEBUG("%s at %p (task=%p)\n", access_type == OMP_TASK_MEM_LOAD ? "LOAD " : "STORE", addr, task);
+    if (CURRENT_TASK)
+    {
+        IRExpr ** argv;
+        IRDirty * di;
+        void * fn;
+        const char * fn_name;
+
+        if (access_type == OMP_TASK_MEM_LOAD)
+        {
+            fn      = omp_task_instrument_mem_access_helper_load;
+            fn_name = "omp_task_instrument_mem_access_helper_load";
+        }
+        else
+        {
+            fn = omp_task_instrument_mem_access_helper_store;
+            fn_name = "omp_task_instrument_mem_access_helper_store";
+        }
+
+        argv =  mkIRExprVec_2(addr, mkIRExpr_HWord(size));
+        di   =  unsafeIRDirty_0_N(2, fn_name, VG_(fnptr_to_fnentry)(fn), argv);
+
+        addStmtToIRSB(sb, IRStmt_Dirty(di));
+    }
 }
 
 static IRSB *
@@ -173,18 +217,19 @@ omp_task_instrument(
     IRType gWordTy,
     IRType hWordTy
 ) {
+    IRSB * sb_out;
     IRStmt * st;
     Int i;
-    task_t * task;
 
     if (gWordTy != hWordTy)
         VG_(tool_panic)("host/guest word size mismatch");
 
-    for (i = 0 ; i < sb_in->stmts_used && sb_in->stmts[i]->tag != Ist_IMark ; ++i);
+    sb_out = deepCopyIRSBExceptStmts(sb_in);
+    for (i = 0 ; i < sb_in->stmts_used && sb_in->stmts[i]->tag != Ist_IMark ; ++i)
+        addStmtToIRSB(sb_out, sb_in->stmts[i]);
 
-    task = omp_task_get_current_task(sb_in, sb_in->stmts[i]);
+    omp_task_update_current_task(sb_in, sb_in->stmts[i]);
 
-    // Inspired from helgrind
     for ( ; i < sb_in->stmts_used; ++i)
     {
         st = sb_in->stmts[i];
@@ -194,59 +239,64 @@ omp_task_instrument(
             case Ist_NoOp:
             {
                 // do nothing
+                addStmtToIRSB(sb_out, st);
                 break ;
             }
 
             case Ist_IMark:
             {
                 // do nothing
+                addStmtToIRSB(sb_out, st);
                 break ;
             }
 
             case Ist_AbiHint:
             {
                 // do nothing
+                addStmtToIRSB(sb_out, st);
                 break ;
             }
 
             case Ist_Put:
             {
                 // do nothing
+                addStmtToIRSB(sb_out, st);
                 break ;
             }
 
             case Ist_PutI:
             {
                 // do nothing
+                addStmtToIRSB(sb_out, st);
                 break ;
             }
 
             case Ist_WrTmp:
             {
-                IRExpr* data = st->Ist.WrTmp.data;
-                // TODO: what if its not a load ?
+                // TODO: is it a load ?
+                IRExpr * data = st->Ist.WrTmp.data;
                 if (data->tag == Iex_Load)
                 {
                     omp_task_instrument_mem_access(
-                        task,
-                        sb_in,
+                        sb_out,
                         data->Iex.Load.addr,
                         sizeofIRType(data->Iex.Load.ty),
                         OMP_TASK_MEM_LOAD
                     );
                 }
+                addStmtToIRSB(sb_out, st);
                 break ;
             }
 
             case Ist_Store:
             {
                 omp_task_instrument_mem_access(
-                    task,
-                    sb_in,
+                    sb_out,
                     st->Ist.Store.addr,
-                    sizeofIRType(typeOfIRExpr(sb_in->tyenv, st->Ist.Store.data)),
+                    sizeofIRType(typeOfIRExpr(sb_out->tyenv, st->Ist.Store.data)),
                     OMP_TASK_MEM_STORE
                 );
+                addStmtToIRSB(sb_out, st);
                 break ;
             }
 
@@ -257,19 +307,20 @@ omp_task_instrument(
                 typeOfIRLoadGOp(st->Ist.LoadG.details->cvt, &wtype, &type);
 
                 omp_task_instrument_mem_access(
-                    task,
-                    sb_in,
+                    sb_out,
                     st->Ist.LoadG.details->addr,
                     sizeofIRType(type),
                     OMP_TASK_MEM_LOAD
                 );
 
+                addStmtToIRSB(sb_out, st);
                 break ;
             }
 
             case Ist_StoreG:
             {
                 tl_assert(0);
+                addStmtToIRSB(sb_out, st);
                 break ;
             }
 
@@ -285,19 +336,20 @@ omp_task_instrument(
                 tl_assert((isDCAS && cas->dataHi) || (!isDCAS && !cas->dataHi));
 
                 omp_task_instrument_mem_access(
-                    task,
-                    sb_in,
+                    sb_out,
                     cas->addr,
                     isDCAS ? 2 : 1,
                     OMP_TASK_MEM_STORE
                 );
 
+                addStmtToIRSB(sb_out, st);
                 break ;
             }
 
             case Ist_LLSC:
             {
                 tl_assert(0);
+                addStmtToIRSB(sb_out, st);
                 break ;
             }
 
@@ -321,26 +373,22 @@ omp_task_instrument(
                     else
                         tl_assert(d->mFx == Ifx_None);
 
-                    omp_task_instrument_mem_access(
-                        task,
-                        sb_in,
-                        d->mAddr,
-                        data_size,
-                        access_type
-                    );
                 }
+                addStmtToIRSB(sb_out, st);
                 break ;
             }
 
             case Ist_MBE:
             {
                 // do nothing
+                addStmtToIRSB(sb_out, st);
                 break ;
             }
 
             case Ist_Exit:
             {
                 // do nothing
+                addStmtToIRSB(sb_out, st);
                 break ;
             }
 
@@ -352,8 +400,9 @@ omp_task_instrument(
                 break ;
             }
         }
-    }
-    return sb_in;
+    } /* for each sb_in statements */
+
+    return sb_out;
 }
 
 static void
