@@ -11,7 +11,7 @@ if VGCONF_HAVE_PLATFORM_SEC
 noinst_PROGRAMS += omp_task-@VGCONF_ARCH_SEC@-@VGCONF_OS@
 endif
 
-OMP_TASK_SOURCES_COMMON = omp_task_main.c
+OMP_TASK_SOURCES_COMMON = omp_task_main.c omp_task_loader.c
 
 omp_task_@VGCONF_ARCH_PRI@_@VGCONF_OS@_SOURCES      = \
 	$(OMP_TASK_SOURCES_COMMON)

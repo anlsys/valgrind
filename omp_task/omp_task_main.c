@@ -25,19 +25,14 @@
    The GNU General Public License is contained in the file COPYING.
 */
 
+#include "omp_task.h"
+
 #include "pub_tool_basics.h"
 #include "pub_tool_tooliface.h"
 #include "pub_tool_libcbase.h"      /* strstr */
-#include "pub_tool_libcprint.h"     /* snprintf */
 #include "pub_tool_libcassert.h"    /* tool_panic, lt_assert */
 #include "pub_tool_machine.h"       /* fnptr_to_fnentry */
 #include "pub_tool_mallocfree.h"    /* malloc, free */
-
-#if 1
-# define OMP_DEBUG(...) VG_(printf)(__VA_ARGS__)
-#else
-# define OMP_DEBUG(...)
-#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 //  Retrieve the task we are currently instrumenting
@@ -51,71 +46,90 @@
 
 # include "uthash.h"
 
-// hmap of tasks
-typedef struct  task_s
+// hmap of task region
+typedef struct  task_region_s
 {
-    // global task ID (= which task region)
-    Int gid;
-
-    // instance task ID (= which task construct)
-    Int iid;
+    // task region ID (= which task region)
+    Int id;
 
     // task region (= which file, which task)
-    HChar * region;
+    HChar * name;
 
     // hmap handle
     UT_hash_handle hh;
+}               task_region_t;
+
+// list of tasks
+typedef struct  task_list_elt_s
+{
+    // the task pointed
+    struct task_s * task;
+
+    // the next element
+    struct task_list_elt_s * next;
+}               task_list_elt_t;
+
+// tasks
+typedef struct  task_s
+{
+    // instance task ID (= which task construct)
+    Int iid;
+
+    // task region associated to the task
+    task_region_t * region;
+
+    // task successors infered from data dependencies
+    struct task_list_elt_s * successors;
 
 }               task_t;
 
 // Task hash table
-static task_t * TASKS;
+static task_region_t * TASK_REGIONS;
 
 // Task global ID counter
-static Int TASKS_GID;
+static Int TASK_REGIONS_ID;
 
-// Buffer to identify tasks to their global ID
-static HChar TASK_IDENTIFIER_BUFFER[1024];
+// Buffer to identify a task region
+static HChar TASK_REGION_IDENTIFIER_BUFFER[1024];
 
 // The current task
-static task_t *  CURRENT_TASK;
+static task_t * TASK;
+
+// The current task region
+static task_region_t * TASK_REGION;
 
 // retrieve a task from its file and line number
-static inline task_t *
-get_task(const HChar * dir, const HChar * file, UInt line, const HChar * fn)
+static inline task_region_t *
+get_task_region(const HChar * dir, const HChar * file, UInt line, const HChar * fn)
 {
     if (!VG_(strstr)(fn, "omp_task_entry") && !VG_(strstr)(fn, "_omp_fn"))
         return NULL;
 
     tl_assert(sizeof(HChar) == 1);
     int len = VG_(snprintf)(
-        TASK_IDENTIFIER_BUFFER, sizeof(TASK_IDENTIFIER_BUFFER),
+        TASK_REGION_IDENTIFIER_BUFFER, sizeof(TASK_REGION_IDENTIFIER_BUFFER),
         "%s/%s:%u %s", dir, file, line, fn
     );
-    tl_assert(len < sizeof(TASK_IDENTIFIER_BUFFER));
+    tl_assert(len < sizeof(TASK_REGION_IDENTIFIER_BUFFER));
 
     unsigned hashv;
-    HASH_VALUE(&TASK_IDENTIFIER_BUFFER, len, hashv);
+    HASH_VALUE(&TASK_REGION_IDENTIFIER_BUFFER, len, hashv);
 
-    task_t * task;
-    HASH_FIND_BYHASHVALUE(hh, TASKS, TASK_IDENTIFIER_BUFFER, len, hashv, task);
+    task_region_t * region;
+    HASH_FIND_BYHASHVALUE(hh, TASK_REGIONS, TASK_REGION_IDENTIFIER_BUFFER, len, hashv, region);
 
-    if (task == NULL)
+    if (region == NULL)
     {
-        task            = (task_t *) VG_(malloc)("omp_task.get_task", sizeof(task_t) + len + 1);
-        task->region    = (HChar *) (task + 1);
-        task->gid       = TASKS_GID++;
+        region          = (task_region_t *) VG_(malloc)("omp_task.get_task", sizeof(task_region_t) + len + 1);
+        region->id      = TASK_REGIONS_ID++;
+        region->name    = (HChar *) (region + 1);
+        VG_(strcpy)(region->name, TASK_REGION_IDENTIFIER_BUFFER);
 
-        // TODO: task the OpenMP runtime which task instance is currently running
-        task->iid       = -1;
-
-        VG_(strcpy)(task->region, TASK_IDENTIFIER_BUFFER);
-
-        HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASKS, task->region, len, hashv, task);
+        HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASK_REGIONS, region->name, len, hashv, region);
     }
 
-    tl_assert(task);
-    return task;
+    tl_assert(region);
+    return region;
 }
 
 static void
@@ -139,9 +153,21 @@ omp_task_update_current_task(IRSB * irsb, IRStmt * st)
         line = 0;
     }
     if (!VG_(get_fnname)(ep, addr, &fn))
-        CURRENT_TASK = NULL;
+        TASK_REGION = NULL;
     else
-        CURRENT_TASK = get_task(dir, file, line, fn);
+        TASK_REGION = get_task_region(dir, file, line, fn);
+
+    // TODO: get the current task instance
+    TASK = NULL;
+
+# if 0
+    // Save the current task for TDG export
+    if (TASK)
+    {
+        TASK->region    = TASK_REGION;
+        TASKS[TASK_ID]  = TASK;
+    }
+# endif
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -164,7 +190,7 @@ omp_task_instrument_mem_access_helper_load(
     Addr addr,
     SizeT size
 ) {
-    OMP_DEBUG("(task=%p) LOAD  0x%010lX %lu\n", CURRENT_TASK, addr, size);
+    OMP_DEBUG("(task=%p) LOAD  0x%010lX %lu\n", TASK, addr, size);
 }
 
 static void
@@ -172,7 +198,7 @@ omp_task_instrument_mem_access_helper_store(
     Addr addr,
     SizeT size
 ) {
-    OMP_DEBUG("(task=%p) STORE 0x%010lX %lu\n", CURRENT_TASK, addr, size);
+    OMP_DEBUG("(task=%p) STORE 0x%010lX %lu\n", TASK, addr, size);
 }
 
 static void
@@ -182,7 +208,7 @@ omp_task_instrument_mem_access(
     Int size,
     omp_task_mem_access_type_t access_type
 ) {
-    if (CURRENT_TASK)
+    if (TASK)
     {
         IRExpr ** argv;
         IRDirty * di;
@@ -373,6 +399,13 @@ omp_task_instrument(
                     else
                         tl_assert(d->mFx == Ifx_None);
 
+                    omp_task_instrument_mem_access(
+                        sb_out,
+                        d->mAddr,
+                        data_size,
+                        access_type
+                    );
+
                 }
                 addStmtToIRSB(sb_out, st);
                 break ;
@@ -463,6 +496,8 @@ omp_task_pre_clo_init(void)
    VG_(basic_tool_funcs)        (omp_task_post_clo_init,
                                  omp_task_instrument,
                                  omp_task_fini);
+
+    omp_task_load_symbols();
 }
 
 VG_DETERMINE_INTERFACE_VERSION(omp_task_pre_clo_init)
