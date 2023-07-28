@@ -6,7 +6,12 @@
 #include "pub_tool_libcprint.h"     /* snprintf */
 
 #if 1
-# define OMP_DEBUG(...) VG_(printf)(__VA_ARGS__)
+# define OMP_DEBUG(...) do {                                \
+                            VG_(printf)("[TASKGRIND] ");    \
+                            VG_(printf)(__VA_ARGS__);       \
+                            VG_(printf)("\n");              \
+                        } while (0)
+                            
 #else
 # define OMP_DEBUG(...)
 #endif

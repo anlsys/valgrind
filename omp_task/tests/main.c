@@ -3,17 +3,19 @@
 
 # define V 42
 
+void
+tototest(int * x, int * y)
+{
+    printf("&tototest=%p\n", tototest);
+    printf("x=%p, y=%p, &x=%p, &y=%p\n", x, y, &x, &y);
+}
+
 int
 main(void)
 {
-#if 1
     int * x = (int *) malloc(sizeof(int));
     int * y = (int *) malloc(sizeof(int));
-    printf("x=%p, y=%p ; &x=%p, &y=%p\n", x, y, &x, &y);
-#else
-    int x = 0;
-    int y = 0;
-#endif
+    tototest(x, y);
 
     # pragma omp parallel shared(x, y)
     {

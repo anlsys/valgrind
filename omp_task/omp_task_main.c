@@ -101,6 +101,9 @@ static task_t * TASK;
 // The current task region
 static task_region_t * TASK_REGION;
 
+// Anonymous name
+static const HChar * ANONYMOUS = "???";
+
 // retrieve a task region from its file and line number
 static inline task_region_t *
 get_task_region(const HChar * dir, const HChar * file, UInt line, const HChar * fn)
@@ -142,34 +145,13 @@ typedef struct  kmp_taskdata_s
     UChar bytes[KMP_TASKDATA_SIZE];
 }              kmp_taskdata_t; 
 
-// retrieve a task
-static inline task_t *
-get_task(const HChar * dir, const HChar * file, UInt line, const HChar * fn)
-{
-#if defined(VGA_amd64)
-    VexGuestArchState * arch;
-    kmp_taskdata_t * taskdata;
-
-    if (VG_(strstr)(fn, "__kmp_task_start"))
-    {
-        arch = VG_(get_CurrentThreadArchState)();
-        taskdata = (kmp_taskdata_t *) (arch->guest_RSI - KMP_TASKDATA_SIZE);
-        OMP_DEBUG("%llu %llu %llu %llu\n", arch->guest_RDI, arch->guest_RSI, arch->guest_RDX, arch->guest_RCX);
-//        for (int i = 0 ; i < 16 * sizeof(ULong) ; i += sizeof(ULong))
-//            OMP_DEBUG("int[%d] = %llu\n", i, (ULong)taskdata->bytes[i]);
-    }
-#else /* defined(VGA_amd64) */
-    OMP_DEBUG("arch not supported");
-    VG_(exit)(1);
-#endif /* defined(VGA_amd64) */
-    return NULL;
-}
-
 static void
-omp_task_update_current_task(IRSB * irsb, IRStmt * st)
-{
-    static const HChar * anonymous = "???";
-
+omp_task_update_current_task(
+    VgCallbackClosure * closure,
+    IRSB * irsb,
+    Int i
+) {
+    IRStmt * st;
     Addr addr;
     DiEpoch ep;
     const HChar * file;
@@ -177,22 +159,23 @@ omp_task_update_current_task(IRSB * irsb, IRStmt * st)
     const HChar * fn;
     UInt line;
 
+    st = irsb->stmts[i];
     addr = st->Ist.IMark.addr + st->Ist.IMark.delta;
     ep = VG_(current_DiEpoch)();
     if (!VG_(get_filename_linenum)(ep, addr, &file, &dir, &line))
     {
-        dir  = anonymous;
-        file = anonymous;
+        dir  = ANONYMOUS;
+        file = ANONYMOUS;
         line = 0;
     }
-    VG_(get_fnname)(ep, addr, &fn);
+    if (!VG_(get_fnname)(ep, addr, &fn))
+        fn  = ANONYMOUS;
+
+    // OMP_DEBUG("%s/%s %s\n", dir, file, fn);
     
-    if (fn)
-    {
-        TASK_REGION = get_task_region(dir, file, line, fn);
-        TASK        = get_task(dir, file, line, fn);
-    }
-    
+    TASK_REGION = get_task_region(dir, file, line, fn);
+    TASK        = NULL;
+
 # if 0
     // Save the current task for TDG export
     if (TASK)
@@ -223,7 +206,7 @@ omp_task_instrument_mem_access_helper_load(
     Addr addr,
     SizeT size
 ) {
-    OMP_DEBUG("(task=%p) LOAD  0x%010lX %lu\n", TASK, addr, size);
+    //OMP_DEBUG("(task=%p) LOAD  0x%010lX %lu\n", TASK, addr, size);
 }
 
 static void
@@ -231,7 +214,7 @@ omp_task_instrument_mem_access_helper_store(
     Addr addr,
     SizeT size
 ) {
-    OMP_DEBUG("(task=%p) STORE 0x%010lX %lu\n", TASK, addr, size);
+    //OMP_DEBUG("(task=%p) STORE 0x%010lX %lu\n", TASK, addr, size);
 }
 
 static void
@@ -287,7 +270,7 @@ omp_task_instrument(
     for (i = 0 ; i < sb_in->stmts_used && sb_in->stmts[i]->tag != Ist_IMark ; ++i)
         addStmtToIRSB(sb_out, sb_in->stmts[i]);
 
-    omp_task_update_current_task(sb_in, sb_in->stmts[i]);
+    omp_task_update_current_task(closure, sb_in, i);
 
     for ( ; i < sb_in->stmts_used; ++i)
     {
