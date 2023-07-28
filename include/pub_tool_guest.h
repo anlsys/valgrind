@@ -66,6 +66,9 @@
 #  error Unknown arch
 #endif
 
+// Return current thread vex state
+VexGuestArchState * VG_(get_CurrentThreadArchState)(void);
+
 #endif   // __PUB_TOOL_GUEST_H
 
 /*--------------------------------------------------------------------*/

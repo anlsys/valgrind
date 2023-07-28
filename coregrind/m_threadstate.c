@@ -102,6 +102,16 @@ ThreadState *VG_(get_ThreadState)(ThreadId tid)
    return &VG_(threads)[tid];
 }
 
+VexGuestArchState * VG_(get_CurrentThreadArchState)(void)
+{
+    ThreadId tid;
+    ThreadState * thread;
+
+    tid = VG_(running_tid);
+    thread = VG_(get_ThreadState)(tid);
+    return &(thread->arch.vex);
+}
+
 Bool VG_(is_valid_tid) ( ThreadId tid )
 {
    /* tid is unsigned, hence no < 0 test. */

@@ -28,11 +28,14 @@
 #include "omp_task.h"
 
 #include "pub_tool_basics.h"
+#include "pub_tool_guest.h"         /* thread state */
 #include "pub_tool_tooliface.h"
 #include "pub_tool_libcbase.h"      /* strstr */
 #include "pub_tool_libcassert.h"    /* tool_panic, lt_assert */
 #include "pub_tool_machine.h"       /* fnptr_to_fnentry */
 #include "pub_tool_mallocfree.h"    /* malloc, free */
+
+#include "coregrind/pub_core_threadstate.h" /* thread state */
 
 ///////////////////////////////////////////////////////////////////////////////
 //  Retrieve the task we are currently instrumenting
@@ -98,7 +101,7 @@ static task_t * TASK;
 // The current task region
 static task_region_t * TASK_REGION;
 
-// retrieve a task from its file and line number
+// retrieve a task region from its file and line number
 static inline task_region_t *
 get_task_region(const HChar * dir, const HChar * file, UInt line, const HChar * fn)
 {
@@ -132,6 +135,36 @@ get_task_region(const HChar * dir, const HChar * file, UInt line, const HChar * 
     return region;
 }
 
+# define KMP_TASKDATA_SIZE 320
+
+typedef struct  kmp_taskdata_s
+{
+    UChar bytes[KMP_TASKDATA_SIZE];
+}              kmp_taskdata_t; 
+
+// retrieve a task
+static inline task_t *
+get_task(const HChar * dir, const HChar * file, UInt line, const HChar * fn)
+{
+#if defined(VGA_amd64)
+    VexGuestArchState * arch;
+    kmp_taskdata_t * taskdata;
+
+    if (VG_(strstr)(fn, "__kmp_task_start"))
+    {
+        arch = VG_(get_CurrentThreadArchState)();
+        taskdata = (kmp_taskdata_t *) (arch->guest_RSI - KMP_TASKDATA_SIZE);
+        OMP_DEBUG("%llu %llu %llu %llu\n", arch->guest_RDI, arch->guest_RSI, arch->guest_RDX, arch->guest_RCX);
+//        for (int i = 0 ; i < 16 * sizeof(ULong) ; i += sizeof(ULong))
+//            OMP_DEBUG("int[%d] = %llu\n", i, (ULong)taskdata->bytes[i]);
+    }
+#else /* defined(VGA_amd64) */
+    OMP_DEBUG("arch not supported");
+    VG_(exit)(1);
+#endif /* defined(VGA_amd64) */
+    return NULL;
+}
+
 static void
 omp_task_update_current_task(IRSB * irsb, IRStmt * st)
 {
@@ -152,14 +185,14 @@ omp_task_update_current_task(IRSB * irsb, IRStmt * st)
         file = anonymous;
         line = 0;
     }
-    if (!VG_(get_fnname)(ep, addr, &fn))
-        TASK_REGION = NULL;
-    else
+    VG_(get_fnname)(ep, addr, &fn);
+    
+    if (fn)
+    {
         TASK_REGION = get_task_region(dir, file, line, fn);
-
-    // TODO: get the current task instance
-    TASK = NULL;
-
+        TASK        = get_task(dir, file, line, fn);
+    }
+    
 # if 0
     // Save the current task for TDG export
     if (TASK)
@@ -208,7 +241,7 @@ omp_task_instrument_mem_access(
     Int size,
     omp_task_mem_access_type_t access_type
 ) {
-    if (TASK)
+    if (TASK_REGION)
     {
         IRExpr ** argv;
         IRDirty * di;
@@ -441,44 +474,7 @@ omp_task_instrument(
 static void
 omp_task_fini(Int exitcode)
 {
-#if 0
-    const char * tags_str[] = {
-        "Iex_Binder",
-        "Iex_Get",
-        "Iex_GetI",
-        "Iex_RdTmp",
-        "Iex_Qop",
-        "Iex_Triop",
-        "Iex_Binop",
-        "Iex_Unop",
-        "Iex_Load",
-        "Iex_Const",
-        "Iex_ITE",
-        "Iex_CCall",
-        "Iex_VECRET",
-        "Iex_GSPTR"
-    };
 
-    IRExprTag tags[] = {
-        Iex_Binder,
-        Iex_Get,
-        Iex_GetI,
-        Iex_RdTmp,
-        Iex_Qop,
-        Iex_Triop,
-        Iex_Binop,
-        Iex_Unop,
-        Iex_Load,
-        Iex_Const,
-        Iex_ITE,
-        Iex_CCall,
-        Iex_VECRET,
-        Iex_GSPTR
-    };
-    OMP_DEBUG("-------------------------------\n");
-    for (int i = 0 ; i < 14 ; ++i)
-        OMP_DEBUG("%s = %u\n", tags_str[i], tags[i]);
-#endif
 }
 
 static void
