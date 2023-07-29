@@ -233,6 +233,14 @@ Bool VG_(lookup_symbol_SLOW)(DiEpoch ep,
                              const HChar* sopatt, const HChar* name,
                              SymAVMAs* avmas);
 
+extern
+Int VG_(lookup_symbols_SLOW)(DiEpoch ep,
+                             const HChar * sopatt,
+                             const HChar ** names,
+                             SymAVMAs * avmas,
+                             Int n);
+
+
 #endif   // __PUB_CORE_DEBUGINFO_H
 
 /*--------------------------------------------------------------------*/

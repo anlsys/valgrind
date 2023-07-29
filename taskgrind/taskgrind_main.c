@@ -1,13 +1,12 @@
 /*--------------------------------------------------------------------*/
-/*--- OpenMP Tasks: a debugger for dependent tasks order of execution */
+/*--- Taskgrind: a debugger for dependent tasks order of execution */
 /*--------------------------------------------------------------------*/
 
 /*
-   This file is part of Nulgrind, the minimal Valgrind tool,
-   which does no instrumentation or analysis.
+   This file is part of Taskgrind
 
-   Copyright (C) 2002-2017 Nicholas Nethercote
-      njn@valgrind.org
+   Copyright (C) 2023 Romain PEREIRA
+      romain.pereira@outlook.com
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
@@ -16,7 +15,7 @@
 
    This program is distributed in the hope that it will be useful, but
    WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   MERCHANTABILITY or FITNESS FOR A PAENVICULAR PURPOSE.  See the GNU
    General Public License for more details.
 
    You should have received a copy of the GNU General Public License
@@ -25,7 +24,7 @@
    The GNU General Public License is contained in the file COPYING.
 */
 
-#include "omp_task.h"
+#include "taskgrind.h"
 
 #include "pub_tool_basics.h"
 #include "pub_tool_guest.h"         /* thread state */
@@ -35,19 +34,20 @@
 #include "pub_tool_machine.h"       /* fnptr_to_fnentry */
 #include "pub_tool_mallocfree.h"    /* malloc, free */
 
-#include "coregrind/pub_core_threadstate.h" /* thread state */
-
 ///////////////////////////////////////////////////////////////////////////////
 //  Retrieve the task we are currently instrumenting
 ///////////////////////////////////////////////////////////////////////////////
 
-# define uthash_malloc(size)        VG_(malloc)("omp_task.uthash", size)
+# define uthash_malloc(size)        VG_(malloc)("taskgrind.uthash", size)
 # define uthash_free(ptr, size)     VG_(free)(ptr)
 # define uthash_exit(c)             VG_(exit)(c)
 # define uthash_memcmp(s1, s2, n)   VG_(memcmp)(s1, s2, n)
 # define uthash_memset(s, c, n)     VG_(memset)(s, c, n)
 
 # include "uthash.h"
+
+// The tasking environment being instrumented
+static taskgrind_env_t ENV;
 
 // hmap of task region
 typedef struct  task_region_s
@@ -108,7 +108,7 @@ static const HChar * ANONYMOUS = "???";
 static inline task_region_t *
 get_task_region(const HChar * dir, const HChar * file, UInt line, const HChar * fn)
 {
-    if (!VG_(strstr)(fn, "omp_task_entry") && !VG_(strstr)(fn, "_omp_fn"))
+    if (!VG_(strstr)(fn, "taskgrind_entry") && !VG_(strstr)(fn, "_omp_fn"))
         return NULL;
 
     tl_assert(sizeof(HChar) == 1);
@@ -126,7 +126,7 @@ get_task_region(const HChar * dir, const HChar * file, UInt line, const HChar * 
 
     if (region == NULL)
     {
-        region          = (task_region_t *) VG_(malloc)("omp_task.get_task", sizeof(task_region_t) + len + 1);
+        region          = (task_region_t *) VG_(malloc)("taskgrind.get_task", sizeof(task_region_t) + len + 1);
         region->id      = TASK_REGIONS_ID++;
         region->name    = (HChar *) (region + 1);
         VG_(strcpy)(region->name, TASK_REGION_IDENTIFIER_BUFFER);
@@ -146,7 +146,7 @@ typedef struct  kmp_taskdata_s
 }              kmp_taskdata_t; 
 
 static void
-omp_task_update_current_task(
+taskgrind_update_current_task(
     VgCallbackClosure * closure,
     IRSB * irsb,
     Int i
@@ -171,7 +171,7 @@ omp_task_update_current_task(
     if (!VG_(get_fnname)(ep, addr, &fn))
         fn  = ANONYMOUS;
 
-    // OMP_DEBUG("%s/%s %s\n", dir, file, fn);
+    // TASKGRIND_DEBUG("%s/%s %s\n", dir, file, fn);
     
     TASK_REGION = get_task_region(dir, file, line, fn);
     TASK        = NULL;
@@ -191,38 +191,38 @@ omp_task_update_current_task(
 ///////////////////////////////////////////////////////////////////////////////
 
 static void
-omp_task_post_clo_init(void)
+taskgrind_post_clo_init(void)
 {
 }
 
-typedef enum    omp_task_mem_access_type_e
+typedef enum    taskgrind_mem_access_type_e
 {
-    OMP_TASK_MEM_LOAD,
-    OMP_TASK_MEM_STORE,
-}               omp_task_mem_access_type_t;
+    TASKGRIND_TASK_MEM_LOAD,
+    TASKGRIND_TASK_MEM_STORE,
+}               taskgrind_mem_access_type_t;
 
 static void
-omp_task_instrument_mem_access_helper_load(
+taskgrind_instrument_mem_access_helper_load(
     Addr addr,
     SizeT size
 ) {
-    //OMP_DEBUG("(task=%p) LOAD  0x%010lX %lu\n", TASK, addr, size);
+    //TASKGRIND_DEBUG("(task=%p) LOAD  0x%010lX %lu\n", TASK, addr, size);
 }
 
 static void
-omp_task_instrument_mem_access_helper_store(
+taskgrind_instrument_mem_access_helper_store(
     Addr addr,
     SizeT size
 ) {
-    //OMP_DEBUG("(task=%p) STORE 0x%010lX %lu\n", TASK, addr, size);
+    //TASKGRIND_DEBUG("(task=%p) STORE 0x%010lX %lu\n", TASK, addr, size);
 }
 
 static void
-omp_task_instrument_mem_access(
+taskgrind_instrument_mem_access(
     IRSB * sb,
     IRExpr * addr,
     Int size,
-    omp_task_mem_access_type_t access_type
+    taskgrind_mem_access_type_t access_type
 ) {
     if (TASK_REGION)
     {
@@ -231,15 +231,15 @@ omp_task_instrument_mem_access(
         void * fn;
         const char * fn_name;
 
-        if (access_type == OMP_TASK_MEM_LOAD)
+        if (access_type == TASKGRIND_TASK_MEM_LOAD)
         {
-            fn      = omp_task_instrument_mem_access_helper_load;
-            fn_name = "omp_task_instrument_mem_access_helper_load";
+            fn      = taskgrind_instrument_mem_access_helper_load;
+            fn_name = "taskgrind_instrument_mem_access_helper_load";
         }
         else
         {
-            fn = omp_task_instrument_mem_access_helper_store;
-            fn_name = "omp_task_instrument_mem_access_helper_store";
+            fn = taskgrind_instrument_mem_access_helper_store;
+            fn_name = "taskgrind_instrument_mem_access_helper_store";
         }
 
         argv =  mkIRExprVec_2(addr, mkIRExpr_HWord(size));
@@ -250,7 +250,7 @@ omp_task_instrument_mem_access(
 }
 
 static IRSB *
-omp_task_instrument(
+taskgrind_instrument(
     VgCallbackClosure * closure,
     IRSB * sb_in,
     const VexGuestLayout * layout,
@@ -266,11 +266,14 @@ omp_task_instrument(
     if (gWordTy != hWordTy)
         VG_(tool_panic)("host/guest word size mismatch");
 
+    if (!ENV.name)
+        taskgrind_load_environment(&ENV);
+
     sb_out = deepCopyIRSBExceptStmts(sb_in);
     for (i = 0 ; i < sb_in->stmts_used && sb_in->stmts[i]->tag != Ist_IMark ; ++i)
         addStmtToIRSB(sb_out, sb_in->stmts[i]);
 
-    omp_task_update_current_task(closure, sb_in, i);
+    taskgrind_update_current_task(closure, sb_in, i);
 
     for ( ; i < sb_in->stmts_used; ++i)
     {
@@ -319,11 +322,11 @@ omp_task_instrument(
                 IRExpr * data = st->Ist.WrTmp.data;
                 if (data->tag == Iex_Load)
                 {
-                    omp_task_instrument_mem_access(
+                    taskgrind_instrument_mem_access(
                         sb_out,
                         data->Iex.Load.addr,
                         sizeofIRType(data->Iex.Load.ty),
-                        OMP_TASK_MEM_LOAD
+                        TASKGRIND_TASK_MEM_LOAD
                     );
                 }
                 addStmtToIRSB(sb_out, st);
@@ -332,11 +335,11 @@ omp_task_instrument(
 
             case Ist_Store:
             {
-                omp_task_instrument_mem_access(
+                taskgrind_instrument_mem_access(
                     sb_out,
                     st->Ist.Store.addr,
                     sizeofIRType(typeOfIRExpr(sb_out->tyenv, st->Ist.Store.data)),
-                    OMP_TASK_MEM_STORE
+                    TASKGRIND_TASK_MEM_STORE
                 );
                 addStmtToIRSB(sb_out, st);
                 break ;
@@ -348,11 +351,11 @@ omp_task_instrument(
 
                 typeOfIRLoadGOp(st->Ist.LoadG.details->cvt, &wtype, &type);
 
-                omp_task_instrument_mem_access(
+                taskgrind_instrument_mem_access(
                     sb_out,
                     st->Ist.LoadG.details->addr,
                     sizeofIRType(type),
-                    OMP_TASK_MEM_LOAD
+                    TASKGRIND_TASK_MEM_LOAD
                 );
 
                 addStmtToIRSB(sb_out, st);
@@ -377,11 +380,11 @@ omp_task_instrument(
                 tl_assert((isDCAS && cas->expdHi) || (!isDCAS && !cas->expdHi));
                 tl_assert((isDCAS && cas->dataHi) || (!isDCAS && !cas->dataHi));
 
-                omp_task_instrument_mem_access(
+                taskgrind_instrument_mem_access(
                     sb_out,
                     cas->addr,
                     isDCAS ? 2 : 1,
-                    OMP_TASK_MEM_STORE
+                    TASKGRIND_TASK_MEM_STORE
                 );
 
                 addStmtToIRSB(sb_out, st);
@@ -399,7 +402,7 @@ omp_task_instrument(
             {
                 IRDirty * d;
                 Int data_size;
-                omp_task_mem_access_type_t access_type;
+                taskgrind_mem_access_type_t access_type;
 
                 d = st->Ist.Dirty.details;
                 if (d->mFx != Ifx_None)
@@ -409,13 +412,13 @@ omp_task_instrument(
 
                     data_size = d->mSize;
                     if (d->mFx == Ifx_Read || d->mFx == Ifx_Modify)
-                        access_type = OMP_TASK_MEM_LOAD;
+                        access_type = TASKGRIND_TASK_MEM_LOAD;
                     else if (d->mFx == Ifx_Write)
-                        access_type = OMP_TASK_MEM_STORE;
+                        access_type = TASKGRIND_TASK_MEM_STORE;
                     else
                         tl_assert(d->mFx == Ifx_None);
 
-                    omp_task_instrument_mem_access(
+                    taskgrind_instrument_mem_access(
                         sb_out,
                         d->mAddr,
                         data_size,
@@ -443,9 +446,9 @@ omp_task_instrument(
 
             default:
             {
-                OMP_DEBUG("ERROR unknown statement: ");
+                TASKGRIND_DEBUG("ERROR unknown statement: ");
                 ppIRStmt(st);
-                OMP_DEBUG("\n");
+                TASKGRIND_DEBUG("\n");
                 break ;
             }
         }
@@ -455,15 +458,15 @@ omp_task_instrument(
 }
 
 static void
-omp_task_fini(Int exitcode)
+taskgrind_fini(Int exitcode)
 {
 
 }
 
 static void
-omp_task_pre_clo_init(void)
+taskgrind_pre_clo_init(void)
 {
-   VG_(details_name)            ("OpenMP Task");
+   VG_(details_name)            ("Taskgrind");
    VG_(details_version)         (NULL);
    VG_(details_description)     ("a debugger for dependent tasks order of execution");
    VG_(details_copyright_author)(
@@ -472,14 +475,12 @@ omp_task_pre_clo_init(void)
 
    VG_(details_avg_translation_sizeB) ( 275 ); // TODO: adjust this
 
-   VG_(basic_tool_funcs)        (omp_task_post_clo_init,
-                                 omp_task_instrument,
-                                 omp_task_fini);
-
-    omp_task_load_symbols();
+   VG_(basic_tool_funcs)        (taskgrind_post_clo_init,
+                                 taskgrind_instrument,
+                                 taskgrind_fini);
 }
 
-VG_DETERMINE_INTERFACE_VERSION(omp_task_pre_clo_init)
+VG_DETERMINE_INTERFACE_VERSION(taskgrind_pre_clo_init)
 
 /*--------------------------------------------------------------------*/
 /*--- end                                                          ---*/

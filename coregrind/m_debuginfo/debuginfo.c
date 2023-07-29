@@ -2627,7 +2627,7 @@ Bool VG_(lookup_symbol_SLOW)(DiEpoch ep,
    Bool     require_pToc = False;
    Int      i;
    const DebugInfo* si;
-   Bool     debug = False;
+   Bool     debug = True;
 #  if defined(VG_PLAT_USES_PPCTOC)
    require_pToc = True;
 #  endif
@@ -2666,6 +2666,71 @@ Bool VG_(lookup_symbol_SLOW)(DiEpoch ep,
    }
    return False;
 }
+
+/* Same as VG_(lookup_symbol_SLOW) but for a list of symbols:
+    - 'names' and 'avmas' are arrays of size 'n'
+    - 'avmas[i]' points to the addr of symbol 'names[i]'
+    - 'avmas[i]' is set to 0 if there is no matching
+  Return the number of symbols matched 'k' (0 < 'k' <= 'n')
+*/
+Int VG_(lookup_symbols_SLOW)(DiEpoch ep,
+                             const HChar * sopatt,
+                             const HChar ** names,
+                             SymAVMAs * avmas,
+                             Int n)
+{
+   Bool     require_pToc = False;
+   Int      i, j, k;
+   const DebugInfo* si;
+   Bool     debug = False;
+#  if defined(VG_PLAT_USES_PPCTOC)
+   require_pToc = True;
+#  endif
+
+   k = 0;
+   for (si = debugInfo_list; si; si = si->next) {
+      if (debug)
+         VG_(printf)("lookup_symbols_SLOW: considering %s\n", si->soname);
+      if (!is_DI_valid_for_epoch(si, ep))
+         continue;
+      if (!VG_(string_match)(sopatt, si->soname)) {
+         if (debug)
+            VG_(printf)(" ... skip\n");
+         continue;
+      }
+      for (i = 0; i < si->symtab_used; i++) {
+         const HChar* pri_name = si->symtab[i].pri_name;
+         vg_assert(pri_name);
+         for (j = 0 ; j < n ; ++j) {
+            if (avmas[j].main) continue ;
+            if (0==VG_(strcmp)(names[j], pri_name)
+                    && (require_pToc ? GET_TOCPTR_AVMA(si->symtab[i].avmas) : True)) {
+                avmas[j] = si->symtab[i].avmas;
+                ++k;
+            }
+         }
+         const HChar** sec_names = si->symtab[i].sec_names;
+         if (sec_names) {
+            vg_assert(sec_names[0]);
+            while (*sec_names) {
+               for (j = 0 ; j < n ; ++j) {
+                  if (avmas[j].main) continue ;
+                  if (0==VG_(strcmp)(names[j], *sec_names)
+                      && (require_pToc 
+                           ? GET_TOCPTR_AVMA(si->symtab[i].avmas) : True)) {
+                     avmas[j] = si->symtab[i].avmas;
+                     ++k;
+                     return True;
+                  }
+               }
+               sec_names++;
+            }
+         }
+      }
+   }
+   return k;
+}
+
 
 
 /* VG_(describe_IP): return info on code address, function name and

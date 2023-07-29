@@ -13,7 +13,7 @@ TOOLS = \
 		dhat \
 		lackey \
 		none	\
-		omp_task
+		taskgrind
 
 EXP_TOOLS = \
 		exp-bbv
