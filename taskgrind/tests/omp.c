@@ -16,7 +16,7 @@ main(void)
     int * x = (int *) malloc(sizeof(int));
     int * y = (int *) malloc(sizeof(int));
     tototest(x, y);
-
+# if 0
     # pragma omp parallel shared(x, y)
     {
         # pragma omp single
@@ -38,5 +38,6 @@ main(void)
             printf("x=%d, y=%d\n", *x, *y);
         }
     }
+#endif
     return 0;
 }

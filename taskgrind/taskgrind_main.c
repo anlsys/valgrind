@@ -138,13 +138,6 @@ get_task_region(const HChar * dir, const HChar * file, UInt line, const HChar * 
     return region;
 }
 
-# define KMP_TASKDATA_SIZE 320
-
-typedef struct  kmp_taskdata_s
-{
-    UChar bytes[KMP_TASKDATA_SIZE];
-}              kmp_taskdata_t; 
-
 static void
 taskgrind_update_current_task(
     VgCallbackClosure * closure,
@@ -171,10 +164,8 @@ taskgrind_update_current_task(
     if (!VG_(get_fnname)(ep, addr, &fn))
         fn  = ANONYMOUS;
 
-    // TASKGRIND_DEBUG("%s/%s %s\n", dir, file, fn);
-    
     TASK_REGION = get_task_region(dir, file, line, fn);
-    TASK        = NULL;
+    TASK        = NULL; // TODO: use ENV->get_current_task
 
 # if 0
     // Save the current task for TDG export
@@ -266,9 +257,13 @@ taskgrind_instrument(
     if (gWordTy != hWordTy)
         VG_(tool_panic)("host/guest word size mismatch");
 
+    // nothing to do until we detected the tasking environment
     if (!ENV.name)
         taskgrind_load_environment(&ENV);
+    if (!ENV.name)
+        return sb_in;
 
+    // instrument code
     sb_out = deepCopyIRSBExceptStmts(sb_in);
     for (i = 0 ; i < sb_in->stmts_used && sb_in->stmts[i]->tag != Ist_IMark ; ++i)
         addStmtToIRSB(sb_out, sb_in->stmts[i]);
