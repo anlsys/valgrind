@@ -149,7 +149,10 @@ taskgrind_get_task(void)
         return ;
 
     // TODO: set 'TASK' and store it somewhere
-    TASKGRIND_DEBUG("Current task is %d", key);
+# if 0
+    if (key)
+        TASKGRIND_DEBUG("Current task is %d", key);
+# endif
 }
 
 static void

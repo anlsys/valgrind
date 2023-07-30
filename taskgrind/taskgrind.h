@@ -11,7 +11,6 @@
                                     VG_(umsg)(__VA_ARGS__);     \
                                     VG_(umsg)("\n");            \
                                 } while (0)
-                            
 #else
 # define TASKGRIND_DEBUG(...)
 #endif
@@ -21,9 +20,9 @@
                                     VG_(umsg)(__VA_ARGS__);     \
                                     VG_(umsg)("\n");            \
                                 } while (0)
-                            
 
-typedef Int taskgrind_task_key_t;
+typedef unsigned long long taskgrind_task_key_t;
+typedef taskgrind_task_key_t (*taskgrind_get_task_key_t)(void);
 
 typedef struct  taskgrind_env_s
 {

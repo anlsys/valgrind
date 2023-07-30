@@ -23,21 +23,57 @@ taskgrind_loading_found(taskgrind_env_t * env)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+//  Generic Tasking Runtime
+///////////////////////////////////////////////////////////////////////////////
+static const HChar * GENERIC_NAME = "Generic";
+static const HChar * GENERIC_SYMBOLS_LIB = "*";
+# define GENERIC_SYMBOLS_N 1
+static const HChar * GENERIC_SYMBOLS_NAMES[GENERIC_SYMBOLS_N] = {
+    "__taskgrind_get_current_task_id"
+};
+static SymAVMAs GENERIC_SYMBOLS_AVMAS[GENERIC_SYMBOLS_N];
+static taskgrind_get_task_key_t generic_get_task_id;
+
+static Bool
+generic_get_current_task(taskgrind_task_key_t * key)
+{
+    *key = generic_get_task_id();
+    return True;
+}
+
+static void
+generic_runtime_found(taskgrind_env_t * env)
+{
+    generic_get_task_id = (taskgrind_get_task_key_t) GENERIC_SYMBOLS_AVMAS[0].main;
+    env->get_current_task = generic_get_current_task;
+}
+
+///////////////////////////////////////////////////////////////////////////////
 //  LLVM OpenMP
 ///////////////////////////////////////////////////////////////////////////////
 static const HChar * OMP_LLVM_NAME = "LLVM OpenMP";
 static const HChar * OMP_LLVM_SYMBOLS_LIB = "libomp.so";
 # define OMP_LLVM_SYMBOLS_N 1
 static const HChar * OMP_LLVM_SYMBOLS_NAMES[OMP_LLVM_SYMBOLS_N] = {
-    "_ZL16__kmp_task_startiP8kmp_taskP12kmp_taskdata" 
+    "__kmpc_get_taskid"
 };
 static SymAVMAs OMP_LLVM_SYMBOLS_AVMAS[OMP_LLVM_SYMBOLS_N];
+
+typedef unsigned long long kmp_uint64_t;
+static taskgrind_get_task_key_t llvm_get_task_id;
 
 static Bool
 llvm_omp_get_current_task(taskgrind_task_key_t * key)
 {
-    *key = 0;
+    *key = llvm_get_task_id();
     return True;
+}
+
+static void
+llvm_omp_runtime_found(taskgrind_env_t * env)
+{
+    llvm_get_task_id = (taskgrind_get_task_key_t) OMP_LLVM_SYMBOLS_AVMAS[0].main;
+    env->get_current_task = llvm_omp_get_current_task;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -62,7 +98,7 @@ gnu_omp_get_current_task(taskgrind_task_key_t * key)
 //  Detect tasking environment
 ///////////////////////////////////////////////////////////////////////////////
 void
-taskgrind_load_environment(taskgrind_env_t * env) 
+taskgrind_load_environment(taskgrind_env_t * env)
 {
     const DiEpoch ep = VG_(current_DiEpoch)();
     Int k = 0;
@@ -83,12 +119,9 @@ taskgrind_load_environment(taskgrind_env_t * env)
             env->name = OMP_LLVM_NAME;
             taskgrind_loading_found(env);
             if (k != OMP_LLVM_SYMBOLS_N)
-                taskgrind_loading_error(LOAD_ERROR_INCOMPLETE);
+                return taskgrind_loading_error(LOAD_ERROR_INCOMPLETE);
             else
-            {
-                env->get_current_task = llvm_omp_get_current_task;
-                return ;
-            }
+                return llvm_omp_runtime_found(env);
         }
     }
 
@@ -115,5 +148,25 @@ taskgrind_load_environment(taskgrind_env_t * env)
         }
     }
 
-    // No environment detected
+    // Search for generic environment
+    {
+        k = VG_(lookup_symbols_SLOW)(
+                    ep,
+                    GENERIC_SYMBOLS_LIB,
+                    GENERIC_SYMBOLS_NAMES,
+                    GENERIC_SYMBOLS_AVMAS,
+                    GENERIC_SYMBOLS_N
+            );
+        if (k)
+        {
+            env->name = GENERIC_NAME;
+            taskgrind_loading_found(env);
+            if (k != OMP_LLVM_SYMBOLS_N)
+                return taskgrind_loading_error(LOAD_ERROR_INCOMPLETE);
+            else
+                return generic_runtime_found(env);
+        }
+    }
+
+    // No environment detected, try to find generic symbols
 }
