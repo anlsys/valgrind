@@ -29,10 +29,12 @@
 #include "pub_tool_basics.h"
 #include "pub_tool_guest.h"         /* thread state */
 #include "pub_tool_tooliface.h"
+#include "pub_tool_options.h"
 #include "pub_tool_libcbase.h"      /* strstr */
 #include "pub_tool_libcassert.h"    /* tool_panic, lt_assert */
 #include "pub_tool_machine.h"       /* fnptr_to_fnentry */
 #include "pub_tool_mallocfree.h"    /* malloc, free */
+#include "pub_tool_libcproc.h"      /* gettimeofday */
 
 ///////////////////////////////////////////////////////////////////////////////
 //  Retrieve the task we are currently instrumenting
@@ -139,11 +141,26 @@ get_task_region(const HChar * dir, const HChar * file, UInt line, const HChar * 
 }
 
 static void
+taskgrind_get_task(void)
+{
+    taskgrind_task_key_t key;
+
+    if (!ENV.get_current_task(&key))
+        return ;
+
+    // TODO: set 'TASK' and store it somewhere
+    TASKGRIND_DEBUG("Current task is %d", key);
+}
+
+static void
 taskgrind_update_current_task(
     VgCallbackClosure * closure,
-    IRSB * irsb,
-    Int i
+    IRSB * sb_in,
+    Int i,
+    IRSB * sb_out
 ) {
+
+    // Retrieve task region
     IRStmt * st;
     Addr addr;
     DiEpoch ep;
@@ -152,7 +169,7 @@ taskgrind_update_current_task(
     const HChar * fn;
     UInt line;
 
-    st = irsb->stmts[i];
+    st = sb_in->stmts[i];
     addr = st->Ist.IMark.addr + st->Ist.IMark.delta;
     ep = VG_(current_DiEpoch)();
     if (!VG_(get_filename_linenum)(ep, addr, &file, &dir, &line))
@@ -165,26 +182,20 @@ taskgrind_update_current_task(
         fn  = ANONYMOUS;
 
     TASK_REGION = get_task_region(dir, file, line, fn);
-    TASK        = NULL; // TODO: use ENV->get_current_task
 
-# if 0
-    // Save the current task for TDG export
-    if (TASK)
-    {
-        TASK->region    = TASK_REGION;
-        TASKS[TASK_ID]  = TASK;
-    }
-# endif
+    // Retrieve task
+    IRExpr ** argv;
+    IRDirty * di;
+
+    argv =  mkIRExprVec_0();
+    di   =  unsafeIRDirty_0_N(0, "taskgrind_get_task", VG_(fnptr_to_fnentry)(taskgrind_get_task), argv);
+
+    addStmtToIRSB(sb_out, IRStmt_Dirty(di));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-//  Coregrind callbacks
+//  Instrumentation
 ///////////////////////////////////////////////////////////////////////////////
-
-static void
-taskgrind_post_clo_init(void)
-{
-}
 
 typedef enum    taskgrind_mem_access_type_e
 {
@@ -268,7 +279,8 @@ taskgrind_instrument(
     for (i = 0 ; i < sb_in->stmts_used && sb_in->stmts[i]->tag != Ist_IMark ; ++i)
         addStmtToIRSB(sb_out, sb_in->stmts[i]);
 
-    taskgrind_update_current_task(closure, sb_in, i);
+    if (i < sb_in->stmts_used)
+        taskgrind_update_current_task(closure, sb_in, i, sb_out);
 
     for ( ; i < sb_in->stmts_used; ++i)
     {
@@ -452,12 +464,129 @@ taskgrind_instrument(
     return sb_out;
 }
 
+///////////////////////////////////////////////////////////////////////////////
+//  Command line argument, init and finialize
+///////////////////////////////////////////////////////////////////////////////
+
+static const char * clo_record      = NULL;
+
+static const char * clo_compare     = NULL;
+static const char * clo_compare_a   = NULL;
+static const char * clo_compare_b   = NULL;
+
 static void
 taskgrind_fini(Int exitcode)
 {
-
+    if (clo_compare_a && clo_compare_b)
+    {
+        TASKGRIND_DEBUG("Comparing task graph '%s' with '%s'", clo_compare_a, clo_compare_b);
+    }
 }
 
+static void
+taskgrind_print_usage(void)
+{
+   VG_(printf)(
+"    --record=<name>            Execute and record the task graph into <name> directory\n"
+"    --compare=<name1>,<name2>  Compare the two task graph previously recorded\n"
+   );
+}
+
+static void
+taskgrind_print_debug_usage(void)
+{
+   VG_(printf)(
+"    (none)\n"
+   );
+}
+
+static Bool
+taskgrind_clo_error(const HChar * err)
+{
+    VG_(printf)("Error usage: %s\n", err);
+    taskgrind_print_usage();
+    VG_(exit)(1);
+    return False;
+}
+
+static Bool
+taskgrind_process_cmd_line_option(const HChar * arg)
+{
+    if (VG_(strcmp)(arg, "--record") == 0)
+    {
+        if (!VG_STR_CLO(arg, "--record", clo_record))
+        {
+            HChar * record;
+            struct vki_timeval tv;
+            struct vki_timezone tz;
+
+            record  = (HChar *) VG_(malloc)("clo_record", sizeof(UChar) * 1024);
+            VG_(gettimeofday)(&tv, &tz);
+            VG_(snprintf)(record, 1024, "taskgrind-%ld", 1000000 * tv.tv_sec + tv.tv_usec);
+            clo_record = (const HChar *) record;
+        }
+    }
+    else if (VG_STR_CLO(arg, "--compare", clo_compare))
+    {
+        char * comma = VG_(strchr)(clo_compare, ',');
+        if (!comma)
+            return taskgrind_clo_error("invalid task graph record names");
+
+        comma[0] = 0;
+        clo_compare_a = clo_compare;
+        clo_compare_b = comma + 1;
+
+        if (!*clo_compare_a || !*clo_compare_b)
+            return taskgrind_clo_error("invalid task graph record names");
+
+    }
+    else
+    {
+        return False;
+    }
+
+    return True;
+}
+
+static void
+taskgrind_post_clo_init(void)
+{
+    if (clo_record)
+    {
+        TASKGRIND_INFO("Recording task graph to '%s'", clo_record);
+        VG_(basic_tool_funcs)(taskgrind_post_clo_init, taskgrind_instrument, taskgrind_fini);
+    }
+
+    if (!clo_record && !clo_compare)
+       taskgrind_clo_error("at least one command line option must be passed");
+}
+
+static IRSB *
+taskgrind_instrument_empty(
+    VgCallbackClosure * closure,
+    IRSB * sb_in,
+    const VexGuestLayout * layout,
+    const VexGuestExtents * vge,
+    const VexArchInfo * archinfo_host,
+    IRType gWordTy,
+    IRType hWordTy
+) {
+    (void) closure;
+    (void) sb_in;
+    (void) layout;
+    (void) vge;
+    (void) archinfo_host;
+    (void) gWordTy;
+    (void) hWordTy;
+
+    tl_assert(clo_compare_a && clo_compare_b);
+    // TODO: compare both
+    VG_(exit)(0);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//  Tool entry point
+///////////////////////////////////////////////////////////////////////////////
 static void
 taskgrind_pre_clo_init(void)
 {
@@ -465,14 +594,17 @@ taskgrind_pre_clo_init(void)
    VG_(details_version)         (NULL);
    VG_(details_description)     ("a debugger for dependent tasks order of execution");
    VG_(details_copyright_author)(
-      "Copyright (C) 2002-2017, and GNU GPL'd, by Romain Pereira.");
+      "Copyright (C) 2023, and GNU GPL'd, by Romain Pereira et al.");
    VG_(details_bug_reports_to)  ("romain.pereira@outlook.com");
 
-   VG_(details_avg_translation_sizeB) ( 275 ); // TODO: adjust this
+   VG_(details_avg_translation_sizeB) ( 500 ); // TODO: adjust this
 
-   VG_(basic_tool_funcs)        (taskgrind_post_clo_init,
-                                 taskgrind_instrument,
-                                 taskgrind_fini);
+   VG_(needs_command_line_options)(taskgrind_process_cmd_line_option,
+                                   taskgrind_print_usage,
+                                   taskgrind_print_debug_usage);
+
+   VG_(basic_tool_funcs)(taskgrind_post_clo_init, taskgrind_instrument_empty, taskgrind_fini);
+
 }
 
 VG_DETERMINE_INTERFACE_VERSION(taskgrind_pre_clo_init)

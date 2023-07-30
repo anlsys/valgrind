@@ -2700,6 +2700,8 @@ Int VG_(lookup_symbols_SLOW)(DiEpoch ep,
       }
       for (i = 0; i < si->symtab_used; i++) {
          const HChar* pri_name = si->symtab[i].pri_name;
+         if (debug)
+            VG_(printf)("    %s\n", pri_name);
          vg_assert(pri_name);
          for (j = 0 ; j < n ; ++j) {
             if (avmas[j].main) continue ;
@@ -2709,6 +2711,7 @@ Int VG_(lookup_symbols_SLOW)(DiEpoch ep,
                 ++k;
             }
          }
+#if 0
          const HChar** sec_names = si->symtab[i].sec_names;
          if (sec_names) {
             vg_assert(sec_names[0]);
@@ -2726,6 +2729,7 @@ Int VG_(lookup_symbols_SLOW)(DiEpoch ep,
                sec_names++;
             }
          }
+#endif
       }
    }
    return k;
