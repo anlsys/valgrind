@@ -1,0 +1,53 @@
+# Notes discussions JB / Romain 31/07 matin
+
+- Valgrind vs DynamoRIO vs Thread Sanatizer LLVM
+    - Valgrind vs DynamoRIO : single-threaded vs multi-threaded; pas un problème; Valgrind possiblement plus robuste
+    - Thread Sanatizer LLVM : programme compilé, parallèle, possiblement bien plus rapide que Valgrind. Avec Valgrind, on peut théoriquement skip l'exécution de basics blocs pas intéressant (probablement difficile en pratique)
+
+
+1/ Objectif - associer les accès mémoires à chaque tâche:
+TASK ID ; OP   ; ADDR    ; SIZE
+task 1    ; STORE ; 0x70640 ; 4
+task 1.1  ; LOAD  ; 0x70640 ; 4
+task 1.2  ; LOAD  ; 0x70640 ; 4
+task 2    ; STORE ; 0x70644 ; 4
+[...]
+
+Besoin d'un identifiant de tâche unique, consistant entre 2 exécutions.
+
+Exemple:
+
+```C
+// 1
+# pragma omp task
+{
+    // 1.1
+    # pragma omp task
+    {
+    }
+
+    // 1.2
+    # pragma omp task
+    {
+    }
+}
+
+// 2
+# pragma omp task
+{
+}
+
+```
+
+2/ Objectif - détecter erreur d'expression du parallélisme
+Exemple: OpenMP dépendances
+    - intégrer un outil OMPT loadé par Taskgrind automatiquement si environnement OpenMP, pour construire le graphe fourni par l'utilisateur
+    - comparer le graphe utilisatuer avec le graphe correct venant d'une exécution **séquentielle** des tâches (=> donc l'environnement de tâche doit être type STF)
+    - probablement: besoin d'étendre OMPT, le standard actuel autorise à omettre des arcs de dépendances (À VÉRIFIER QUAND MÊME, SÛR À 95%) -> un nouveau callback lever à la création de la tâche, qui fourni le tableau dépendances: (INOUT, 0x15465), (INOUTSET, 0x67465), ..., (IN, 0x97898) pour reconstruire le graphe complet post-mortem sans race condition entre découverte/exécution des tâches
+
+
+
+3/ Future work / Autre cas d'applications
+- (a) Ordonnancement: ajouter un poids à chaque tâche, fonction de son nombre d'instrutions / intensité arithmétique / ... et le fournir au runtime pour améliorer l'ordonnancement
+- (b)
+
