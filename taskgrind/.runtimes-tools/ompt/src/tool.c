@@ -4,7 +4,7 @@
 # include <stdio.h>
 # include <string.h>
 
-# define TOOL_NAME "Taskgrind_OMP"
+# define TOOL_NAME "Taskgrind"
 
 ///////////////////////////////////////////////////////////////////////////////
 // OMPT EVENT CALLBACKS
@@ -98,6 +98,6 @@ ompt_start_tool(
     const char * runtime_version)
 {
     static ompt_start_tool_result_t data = {&ompt_initialize, &ompt_finalize, (ompt_data_t) NULL};
-    INFO("[OMPT] - %s - %d - %s", TOOL_NAME, omp_version, runtime_version);
+    INFO("%s: OpenMP %d and runtime %s", TOOL_NAME, omp_version, runtime_version);
     return &data;
 }

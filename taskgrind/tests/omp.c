@@ -4,16 +4,17 @@
 
 # define V 42
 
-#if 0
 ///////////////////////////////////////////////////////////////////////////////
-//  Symbols for taskgrind
+//  Symbols for taskgrind, in case environment functions are explicitely
+//  declared by the programmer
 ///////////////////////////////////////////////////////////////////////////////
-uint64_t
-__taskgrind_get_current_task_id(void)
-{
-    return 1;
-}
-#endif
+// static uint64_t i = 0;
+// 
+// uint64_t
+// __taskgrind_get_current_task_id(void)
+// {
+//     return (i++ / 10000);   // just a simple trick to test taskgrind
+// }
 
 ///////////////////////////////////////////////////////////////////////////////
 //  The application

@@ -37,7 +37,7 @@ static SymAVMAs GENERIC_SYMBOLS_AVMAS[GENERIC_SYMBOLS_N];
 static taskgrind_get_task_key_t generic_get_task_id;
 
 static Bool
-generic_get_current_task(taskgrind_task_key_t * key)
+generic_get_current_task_id(taskgrind_task_key_t * key)
 {
     *key = generic_get_task_id();
     return True;
@@ -47,7 +47,7 @@ static void
 generic_runtime_found(taskgrind_env_t * env)
 {
     generic_get_task_id = (taskgrind_get_task_key_t) GENERIC_SYMBOLS_AVMAS[0].main;
-    env->get_current_task = generic_get_current_task;
+    env->get_current_task_id = generic_get_current_task_id;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -64,18 +64,20 @@ static SymAVMAs OMP_LLVM_SYMBOLS_AVMAS[OMP_LLVM_SYMBOLS_N];
 typedef unsigned long long kmp_uint64_t;
 static taskgrind_get_task_key_t llvm_get_task_id;
 
+// taskgrind wrapper
 static Bool
-llvm_omp_get_current_task(taskgrind_task_key_t * key)
+llvm_omp_get_current_task_id(taskgrind_task_key_t * key)
 {
-    *key = 0;//llvm_get_task_id();
+    *key = llvm_get_task_id();
     return True;
 }
 
+// retrieve llvm symbol
 static void
 llvm_omp_runtime_found(taskgrind_env_t * env)
 {
     llvm_get_task_id = (taskgrind_get_task_key_t) OMP_LLVM_SYMBOLS_AVMAS[0].main;
-    env->get_current_task = llvm_omp_get_current_task;
+    env->get_current_task_id = llvm_omp_get_current_task_id;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -90,7 +92,7 @@ static const HChar * OMP_GNU_SYMBOLS_NAMES[OMP_GNU_SYMBOLS_N] = {
 static SymAVMAs OMP_GNU_SYMBOLS_AVMAS[OMP_GNU_SYMBOLS_N];
 
 static Bool
-gnu_omp_get_current_task(taskgrind_task_key_t * key)
+gnu_omp_get_current_task_id(taskgrind_task_key_t * key)
 {
     *key = 0;
     return True;
@@ -144,7 +146,7 @@ taskgrind_env_detect(taskgrind_env_t * env)
                 taskgrind_env_detect_failure(LOAD_ERROR_INCOMPLETE);
             else
             {
-                env->get_current_task = gnu_omp_get_current_task;
+                env->get_current_task_id = gnu_omp_get_current_task_id;
                 return ;
             }
         }

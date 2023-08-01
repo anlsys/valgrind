@@ -30,7 +30,7 @@ typedef struct  taskgrind_env_s
     const HChar * name;
 
     /* Retrieve current task unique identifier */
-    Bool (*get_current_task)(taskgrind_task_key_t *);
+    Bool (*get_current_task_id)(taskgrind_task_key_t *);
 
 }               taskgrind_env_t;
 

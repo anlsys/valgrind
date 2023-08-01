@@ -46,8 +46,10 @@ Exemple: OpenMP dépendances
     - probablement: besoin d'étendre OMPT, le standard actuel autorise à omettre des arcs de dépendances (À VÉRIFIER QUAND MÊME, SÛR À 95%) -> un nouveau callback lever à la création de la tâche, qui fourni le tableau dépendances: (INOUT, 0x15465), (INOUTSET, 0x67465), ..., (IN, 0x97898) pour reconstruire le graphe complet post-mortem sans race condition entre découverte/exécution des tâches
 
 
-
 3/ Future work / Autre cas d'applications
 - (a) Ordonnancement: ajouter un poids à chaque tâche, fonction de son nombre d'instrutions / intensité arithmétique / ... et le fournir au runtime pour améliorer l'ordonnancement
 - (b) Detection "redondances par transitivité"
+
+4/ Idées en vracs
+- Si trop lent, passé sur LLVM. Memcheck me fait des faux-positifs sur du OpenMP, je reste sur Valgrind pour le moment: la sérialisation est nécessaire pour garantir l'ordre d'exécution correct dans tous les cas
 
