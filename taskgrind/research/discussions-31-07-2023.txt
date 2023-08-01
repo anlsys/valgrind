@@ -49,5 +49,5 @@ Exemple: OpenMP dépendances
 
 3/ Future work / Autre cas d'applications
 - (a) Ordonnancement: ajouter un poids à chaque tâche, fonction de son nombre d'instrutions / intensité arithmétique / ... et le fournir au runtime pour améliorer l'ordonnancement
-- (b)
+- (b) Detection "redondances par transitivité"
 

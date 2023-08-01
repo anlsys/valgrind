@@ -34,6 +34,7 @@ typedef struct  taskgrind_env_s
 
 }               taskgrind_env_t;
 
-void taskgrind_load_environment(taskgrind_env_t * env);
+void taskgrind_env_init(taskgrind_env_t * env);
+void taskgrind_env_detect(taskgrind_env_t * env);
 
 #endif /* TASKGRIND_TASK_H */

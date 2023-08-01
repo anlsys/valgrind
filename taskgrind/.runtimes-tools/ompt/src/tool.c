@@ -45,7 +45,7 @@ on_ompt_callback_task_create(
         int has_dependences,
         const void *codeptr_ra
 ) {
-    INFO("[CREATE] encountering_task_data, = %p, new_task_data = %p", encountering_task_data, new_task_data);
+    // INFO("[CREATE] encountering_task_data, = %p, new_task_data = %p", encountering_task_data, new_task_data);
 }
 
 void
@@ -54,7 +54,7 @@ on_ompt_callback_task_schedule(
     ompt_task_status_t prior_task_status,
     ompt_data_t * next_task_data
 ) {
-    INFO("[SCHEDULE] prior_task_data = %p, next_task_data = %p", prior_task_data, next_task_data);
+    // INFO("[SCHEDULE] prior_task_data = %p, next_task_data = %p", prior_task_data, next_task_data);
 }
 
 void
@@ -66,7 +66,7 @@ on_ompt_callback_implicit_task(
     unsigned int index,
     int ﬂags
 ) {
-    INFO("[IMPLICIT] task_data = %p", task_data);
+    // INFO("[IMPLICIT] task_data = %p", task_data);
 }
 
 ///////////////////////////////////////////////////////////////////////////////

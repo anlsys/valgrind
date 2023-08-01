@@ -273,7 +273,7 @@ taskgrind_instrument(
 
     // nothing to do until we detected the tasking environment
     if (!ENV.name)
-        taskgrind_load_environment(&ENV);
+        taskgrind_env_detect(&ENV);
     if (!ENV.name)
         return sb_in;
 
@@ -555,36 +555,10 @@ static void
 taskgrind_post_clo_init(void)
 {
     if (clo_record)
-    {
         TASKGRIND_INFO("Recording task graph to '%s'", clo_record);
-        VG_(basic_tool_funcs)(taskgrind_post_clo_init, taskgrind_instrument, taskgrind_fini);
-    }
 
     if (!clo_record && !clo_compare)
        taskgrind_clo_error("at least one command line option must be passed");
-}
-
-static IRSB *
-taskgrind_instrument_empty(
-    VgCallbackClosure * closure,
-    IRSB * sb_in,
-    const VexGuestLayout * layout,
-    const VexGuestExtents * vge,
-    const VexArchInfo * archinfo_host,
-    IRType gWordTy,
-    IRType hWordTy
-) {
-    (void) closure;
-    (void) sb_in;
-    (void) layout;
-    (void) vge;
-    (void) archinfo_host;
-    (void) gWordTy;
-    (void) hWordTy;
-
-    tl_assert(clo_compare_a && clo_compare_b);
-    // TODO: compare both
-    VG_(exit)(0);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -606,8 +580,8 @@ taskgrind_pre_clo_init(void)
                                    taskgrind_print_usage,
                                    taskgrind_print_debug_usage);
 
-   VG_(basic_tool_funcs)(taskgrind_post_clo_init, taskgrind_instrument_empty, taskgrind_fini);
-
+   VG_(basic_tool_funcs)(taskgrind_post_clo_init, taskgrind_instrument, taskgrind_fini);
+   taskgrind_env_init(&ENV);
 }
 
 VG_DETERMINE_INTERFACE_VERSION(taskgrind_pre_clo_init)
