@@ -1,6 +1,6 @@
 // TODO: header
 
-# include "taskgrind.h"
+# include "taskgrind_main.h"
 
 # include "pub_tool_libcassert.h"
 # include "pub_tool_libcbase.h" /* memset */
@@ -34,21 +34,6 @@ static const HChar * GENERIC_SYMBOLS_NAMES[GENERIC_SYMBOLS_N] = {
     "__taskgrind_get_current_task_id"
 };
 static SymAVMAs GENERIC_SYMBOLS_AVMAS[GENERIC_SYMBOLS_N];
-static taskgrind_get_task_key_t generic_get_task_id;
-
-static Bool
-generic_get_current_task_id(taskgrind_task_key_t * key)
-{
-    *key = generic_get_task_id();
-    return True;
-}
-
-static void
-generic_runtime_found(taskgrind_env_t * env)
-{
-    generic_get_task_id = (taskgrind_get_task_key_t) GENERIC_SYMBOLS_AVMAS[0].main;
-    env->get_current_task_id = generic_get_current_task_id;
-}
 
 ///////////////////////////////////////////////////////////////////////////////
 //  LLVM OpenMP
@@ -61,10 +46,7 @@ static const HChar * OMP_LLVM_SYMBOLS_NAMES[OMP_LLVM_SYMBOLS_N] = {
 };
 static SymAVMAs OMP_LLVM_SYMBOLS_AVMAS[OMP_LLVM_SYMBOLS_N];
 
-typedef unsigned long long kmp_uint64_t;
-static taskgrind_get_task_key_t llvm_get_task_id;
-
-// taskgrind wrapper
+#if 0
 static Bool
 llvm_omp_get_current_task_id(taskgrind_task_key_t * key)
 {
@@ -72,13 +54,13 @@ llvm_omp_get_current_task_id(taskgrind_task_key_t * key)
     return True;
 }
 
-// retrieve llvm symbol
 static void
 llvm_omp_runtime_found(taskgrind_env_t * env)
 {
     llvm_get_task_id = (taskgrind_get_task_key_t) OMP_LLVM_SYMBOLS_AVMAS[0].main;
     env->get_current_task_id = llvm_omp_get_current_task_id;
 }
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 //  GNU OpenMP
@@ -90,13 +72,6 @@ static const HChar * OMP_GNU_SYMBOLS_NAMES[OMP_GNU_SYMBOLS_N] = {
     "GOMP_task",
 };
 static SymAVMAs OMP_GNU_SYMBOLS_AVMAS[OMP_GNU_SYMBOLS_N];
-
-static Bool
-gnu_omp_get_current_task_id(taskgrind_task_key_t * key)
-{
-    *key = 0;
-    return True;
-}
 
 ///////////////////////////////////////////////////////////////////////////////
 //  Detect tasking environment
@@ -124,8 +99,6 @@ taskgrind_env_detect(taskgrind_env_t * env)
             taskgrind_env_detect_success(env);
             if (k != OMP_LLVM_SYMBOLS_N)
                 return taskgrind_env_detect_failure(LOAD_ERROR_INCOMPLETE);
-            else
-                return llvm_omp_runtime_found(env);
         }
     }
 
@@ -143,12 +116,7 @@ taskgrind_env_detect(taskgrind_env_t * env)
             env->name = OMP_GNU_NAME;
             taskgrind_env_detect_success(env);
             if (k != OMP_GNU_SYMBOLS_N)
-                taskgrind_env_detect_failure(LOAD_ERROR_INCOMPLETE);
-            else
-            {
-                env->get_current_task_id = gnu_omp_get_current_task_id;
-                return ;
-            }
+                return taskgrind_env_detect_failure(LOAD_ERROR_INCOMPLETE);
         }
     }
 
@@ -167,8 +135,6 @@ taskgrind_env_detect(taskgrind_env_t * env)
             taskgrind_env_detect_success(env);
             if (k != OMP_LLVM_SYMBOLS_N)
                 return taskgrind_env_detect_failure(LOAD_ERROR_INCOMPLETE);
-            else
-                return generic_runtime_found(env);
         }
     }
 

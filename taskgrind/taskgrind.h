@@ -1,40 +1,35 @@
 // TODO: header
 
-#ifndef TASKGRIND_TASK_H
-# define TASKGRIND_TASK_H
+#ifndef TASKGRIND_API_H
+# define TASKGRIND_API_H
 
-#include "pub_tool_libcprint.h"     /* snumsg */
+# include <valgrind/valgrind.h>
 
-#if 1
-# define TASKGRIND_DEBUG(...)   do {                            \
-                                    VG_(umsg)("[DEBUG] ");      \
-                                    VG_(umsg)(__VA_ARGS__);     \
-                                    VG_(umsg)("\n");            \
-                                } while (0)
-#else
-# define TASKGRIND_DEBUG(...)
-#endif
-
-# define TASKGRIND_INFO(...)    do {                            \
-                                    VG_(umsg)("[INFO] ");       \
-                                    VG_(umsg)(__VA_ARGS__);     \
-                                    VG_(umsg)("\n");            \
-                                } while (0)
-
-typedef unsigned long long taskgrind_task_key_t;
-typedef taskgrind_task_key_t (*taskgrind_get_task_key_t)(void);
-
-typedef struct  taskgrind_env_s
+typedef enum    taskgrind_client_request_t
 {
-    /* Which tasking environment are we instrumenting */
-    const HChar * name;
+    VG_USERREQ__TASKGRIND_CREATE_EVENT      = VG_USERREQ_TOOL_BASE('T', 'G'),
+    VG_USERREQ__TASKGRIND_SCHEDULE_EVENT,
+    VG_USERREQ__TASKGRIND_ACCESS_EVENT,
+    // VG_USERREQ__TASKGRIND_TASK_DEPS_EVENT,
 
-    /* Retrieve current task unique identifier */
-    Bool (*get_current_task_id)(taskgrind_task_key_t *);
+}               taskgrind_client_request_t;
 
-}               taskgrind_env_t;
+// Notify taskgrind about task events
+#define TASKGRIND_CREATE_EVENT(_qzz_key, _qzz_ptr)  \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_CREATE_EVENT, (_qzz_key), (_qzz_ptr), 0, 0, 0)
 
-void taskgrind_env_init(taskgrind_env_t * env);
-void taskgrind_env_detect(taskgrind_env_t * env);
+#define TASKGRIND_SCHEDULE_EVENT(_qzz_key)  \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_SCHEDULE_EVENT, (_qzz_key), 0, 0, 0, 0)
 
-#endif /* TASKGRIND_TASK_H */
+#define TASKGRIND_ACCESS_EVENT(_qzz_key, _qzz_addr, _qzz_access_type)  \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_ACCESS_EVENT, (_qzz_key), (_qzz_addr), (_qzz_access_type), 0, 0)
+
+// Taskgrind accesses, similar to OmpSs / OpenMP
+typedef enum    taskgrind_access_t
+{
+    TASKGRIND_IN,
+    TASKGRIND_OUT,
+    TASKGRIND_OUTSET,
+}               taskgrind_access_t;
+
+#endif /* TASKGRIND_API_H */

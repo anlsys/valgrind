@@ -6,6 +6,8 @@ EXTRA_DIST = docs/taskgrind-manual.xml
 # taskgrind-<platform>
 #----------------------------------------------------------------------------
 
+pkginclude_HEADERS = valgrind.h
+
 noinst_PROGRAMS  = taskgrind-@VGCONF_ARCH_PRI@-@VGCONF_OS@
 if VGCONF_HAVE_PLATFORM_SEC
 noinst_PROGRAMS += taskgrind-@VGCONF_ARCH_SEC@-@VGCONF_OS@

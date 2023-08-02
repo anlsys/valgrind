@@ -1,0 +1,15 @@
+#%Module1.0
+
+set whatis "valgrind"
+set software "valgrind"
+set description "valgrind"
+set version "taskgrind"
+
+conflict "$software"
+
+set prefix "/[...]/valgrind/install"
+
+prepend-path PATH  "$prefix/bin"
+prepend-path CPATH "$prefix/include"
+prepend-path LD_LIBRARY_PATH  "$prefix/lib/valgrind"
+prepend-path LD_LIBRARY_PATH  "$prefix/libexec/valgrind"

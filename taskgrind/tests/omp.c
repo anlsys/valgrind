@@ -8,8 +8,7 @@
 //  Symbols for taskgrind, in case environment functions are explicitely
 //  declared by the programmer
 ///////////////////////////////////////////////////////////////////////////////
-// static uint64_t i = 0;
-// 
+
 // uint64_t
 // __taskgrind_get_current_task_id(void)
 // {
@@ -19,10 +18,11 @@
 ///////////////////////////////////////////////////////////////////////////////
 //  The application
 ///////////////////////////////////////////////////////////////////////////////
+
 void
-tototest(int * x, int * y)
+toto(int * x, int * y)
 {
-    printf("&tototest=%p\n", tototest);
+    printf("&toto=%p\n", toto);
     printf("x=%p, y=%p, &x=%p, &y=%p\n", x, y, &x, &y);
 }
 
@@ -31,7 +31,7 @@ main(void)
 {
     int * x = (int *) malloc(sizeof(int));
     int * y = (int *) malloc(sizeof(int));
-    tototest(x, y);
+    toto(x, y);
     # pragma omp parallel shared(x, y)
     {
         # pragma omp single
@@ -42,7 +42,7 @@ main(void)
                 *y = V + 1;
             }
 
-            # pragma omp task shared(x, y)
+            # pragma omp task shared(x, y) depend(in: x)
             {
                 *x = V + 2;
                 *y = *x;

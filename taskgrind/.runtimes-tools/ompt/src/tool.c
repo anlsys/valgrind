@@ -1,9 +1,11 @@
 # include <assert.h>
+# include <bfd.h>
 # include <omp.h>
 # include <ompt.h>
 # include <stdio.h>
 # include <string.h>
 
+# include <valgrind/taskgrind.h>
 # define TOOL_NAME "Taskgrind"
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -45,7 +47,8 @@ on_ompt_callback_task_create(
         int has_dependences,
         const void *codeptr_ra
 ) {
-    // INFO("[CREATE] encountering_task_data, = %p, new_task_data = %p", encountering_task_data, new_task_data);
+    // INFO("[CREATE] encountering_task_data, = %p, new_task_data = %p, codeptr_ra = %p", encountering_task_data, new_task_data, codeptr_ra);
+   TASKGRIND_CREATE_EVENT(new_task_data, codeptr_ra);
 }
 
 void
@@ -55,6 +58,7 @@ on_ompt_callback_task_schedule(
     ompt_data_t * next_task_data
 ) {
     // INFO("[SCHEDULE] prior_task_data = %p, next_task_data = %p", prior_task_data, next_task_data);
+   TASKGRIND_SCHEDULE_EVENT(next_task_data);
 }
 
 void
@@ -67,6 +71,62 @@ on_ompt_callback_implicit_task(
     int ﬂags
 ) {
     // INFO("[IMPLICIT] task_data = %p", task_data);
+    if (endpoint == ompt_scope_begin)
+    {
+        TASKGRIND_CREATE_EVENT(task_data, 0);
+        TASKGRIND_SCHEDULE_EVENT(task_data);
+    }
+}
+
+void
+on_ompt_callback_dependences(
+    ompt_data_t * task_data,
+    const ompt_dependence_t * deps,
+    int ndeps
+) {
+    // INFO("[IMPLICIT] task_data = %p", task_data);
+
+    int i;
+
+    // convert to taskgrind dependency format
+    for (i = 0 ; i < ndeps ; ++i)
+    {
+        const ompt_dependence_t * dep = deps + i;
+        switch (dep->dependence_type)
+        {
+            case ompt_dependence_type_in:
+            {
+                TASKGRIND_ACCESS_EVENT(task_data, dep->variable.ptr, TASKGRIND_IN);
+                break ;
+            }
+
+            case ompt_dependence_type_out:
+            case ompt_dependence_type_inout:
+            // mutexinoutset is implement as 'out' in practice (2023)
+            case ompt_dependence_type_mutexinoutset:
+            {
+                TASKGRIND_ACCESS_EVENT(task_data, dep->variable.ptr, TASKGRIND_OUT);
+                break ;
+            }
+
+            case ompt_dependence_type_inoutset:
+            {
+                TASKGRIND_ACCESS_EVENT(task_data, dep->variable.ptr, TASKGRIND_OUTSET);
+                break ;
+            }
+
+            case ompt_dependence_type_source:
+            case ompt_dependence_type_sink:
+            case ompt_dependence_type_out_all_memory:
+            case ompt_dependence_type_inout_all_memory:
+            default:
+            {
+                INFO("Dependence type not supported %d\n", dep->dependence_type);
+                assert(0);
+                return ;
+            }
+        }
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -89,6 +149,7 @@ int ompt_initialize(
     register_callback(ompt_callback_task_create);
     register_callback(ompt_callback_implicit_task);
     register_callback(ompt_callback_task_schedule);
+    register_callback(ompt_callback_dependences);
     return 1;
 }
 

@@ -25,6 +25,7 @@
 */
 
 #include "taskgrind.h"
+#include "taskgrind_main.h"
 
 #include "pub_tool_basics.h"
 #include "pub_tool_guest.h"         /* thread state */
@@ -51,31 +52,6 @@ static taskgrind_env_t ENV;
 
 # include "uthash.h"
 
-// hmap of task region
-typedef struct  task_region_s
-{
-    // task region ID (= which task region)
-    Int id;
-
-    // task region (= which file, which task)
-    HChar * name;
-
-    // hmap handle
-    UT_hash_handle hh;
-}               task_region_t;
-
-// Task hash table
-static task_region_t * TASK_REGIONS;
-
-// Task global ID counter
-static Int TASK_REGIONS_ID;
-
-// The current task region
-static task_region_t * TASK_REGION;
-
-// Anonymous name
-static const HChar * ANONYMOUS = "???";
-
 // list of tasks
 typedef struct  task_list_elt_s
 {
@@ -86,24 +62,35 @@ typedef struct  task_list_elt_s
     struct task_list_elt_s * next;
 }               task_list_elt_t;
 
+// task accesses hmap for child dependences
+typedef struct  task_accesses_t
+{
+}               task_accesses_t;
+
 // tasks
 typedef struct  task_s
 {
     // the task unique key
-    taskgrind_task_key_t key;
+    UWord key;
 
-    // task region associated to the task
-    task_region_t * region;
+    // region associated to the task
+    Addr region;
 
-    // task successors infered from data dependencies
-    struct task_list_elt_s * successors;
+    // task successors infered from omp dependences
+    struct task_list_elt_s * omp_successors;
+
+    // real successors using RaW on load/stores
+    struct task_list_elt_s * actual_successors;
+
+    // task hmap for child dependencies
+    task_accesses_t * accesses;
+
+    // parent
+    struct task_s * parent;
 
     // hmap handle
     UT_hash_handle hh;
 }               task_t;
-
-// Buffer to identify a task region
-static HChar TASK_REGION_IDENTIFIER_BUFFER[1024];
 
 // The tasks hmap
 static task_t * TASKS;
@@ -111,107 +98,101 @@ static task_t * TASKS;
 // The current task
 static task_t * TASK;
 
-// retrieve a task region from its file and line number
-static inline void
-taskgrind_update_task_region(const HChar * dir, const HChar * file, UInt line, const HChar * fn)
+static inline task_t *
+taskgrind_task_create(UWord key, UWord addr)
 {
-    // TODO 1: unset the current task region on completion
-    // TODO 2: move this as part of the 'task_env_t'
-    if (!VG_(strstr)(fn, "omp_task_entry") && !VG_(strstr)(fn, "_omp_fn"))
-        return ;
-
-    tl_assert(sizeof(HChar) == 1);
-    int len = VG_(snprintf)(
-        TASK_REGION_IDENTIFIER_BUFFER, sizeof(TASK_REGION_IDENTIFIER_BUFFER),
-        "%s/%s:%u %s", dir, file, line, fn
-    );
-    tl_assert(len < sizeof(TASK_REGION_IDENTIFIER_BUFFER));
-
+    task_t * task;
     unsigned hashv;
-    HASH_VALUE(&TASK_REGION_IDENTIFIER_BUFFER, len, hashv);
-    HASH_FIND_BYHASHVALUE(hh, TASK_REGIONS, TASK_REGION_IDENTIFIER_BUFFER, len, hashv, TASK_REGION);
 
-    if (TASK_REGION == NULL)
+    HASH_VALUE(&key, sizeof(UWord), hashv);
+    HASH_FIND_BYHASHVALUE(hh, TASKS, &key, sizeof(UWord), hashv, task);
+
+    tl_assert(task == NULL);
+    if (task == NULL)
     {
-        TASK_REGION         = (task_region_t *) VG_(malloc)("taskgrind.get_task", sizeof(task_region_t) + len + 1);
-        TASK_REGION->id     = TASK_REGIONS_ID++;
-        TASK_REGION->name   = (HChar *) (TASK_REGION + 1);
-        VG_(strcpy)(TASK_REGION->name, TASK_REGION_IDENTIFIER_BUFFER);
+        task = (task_t *) VG_(malloc)("taskgrind_update_task", sizeof(task_t));
+        task->key               = key;
+        task->omp_successors    = NULL;
+        task->actual_successors = NULL;
+        task->region            = addr;
+        task->accesses          = NULL;
+        task->parent            = TASK;
 
-        HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASK_REGIONS, TASK_REGION->name, len, hashv, TASK_REGION);
+        HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASKS, &(task->key), sizeof(UWord), hashv, task);
+        TASKGRIND_DEBUG("Task create %p at %p (parent %p)", (void *) key, (void*) addr, (void *) (task->parent ? task->parent->key : 0));
     }
+    else
+        TASKGRIND_WARN("Created two tasks with the same key %p", (void *)key);
 
-    tl_assert(TASK_REGION);
+    tl_assert(task);
+
+    return task;
 }
 
-static void
-taskgrind_update_task(void)
+
+static inline void
+taskgrind_task_schedule(UWord key)
 {
-    taskgrind_task_key_t key;
-
-    if (!ENV.get_current_task_id(&key))
-        return ;
-
-    taskgrind_task_key_t old = TASK ? TASK->key : -1;   // DEBUG REMOVE ME
+    UWord old = TASK ? TASK->key : -1;   // DEBUG REMOVE ME
 
     unsigned hashv;
-    HASH_VALUE(&key, sizeof(taskgrind_task_key_t), hashv);
-    HASH_FIND_BYHASHVALUE(hh, TASKS, &key, sizeof(taskgrind_task_key_t), hashv, TASK);
+    HASH_VALUE(&key, sizeof(UWord), hashv);
+    HASH_FIND_BYHASHVALUE(hh, TASKS, &key, sizeof(UWord), hashv, TASK);
 
-    if (TASK == NULL)
+    if (!TASK)
     {
-        TASK                = (task_t *) VG_(malloc)("taskgrind_update_task", sizeof(task_t));
-        TASK->key           = key;
-        TASK->successors    = NULL;
-
-        HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASKS, &(TASK->key), sizeof(taskgrind_task_key_t), hashv, TASK);
+        TASKGRIND_WARN("Scheduled task %p was not previously created. Creating it now.", (void *) key);
+        TASK = taskgrind_task_create(key, 0);
     }
-
     tl_assert(TASK);
 
     if (old == -1 || old != TASK->key)                                      // DEBUG REMOVE ME
-        TASKGRIND_DEBUG("Task switch %d -> %d", (int)old, (int)TASK->key);  // DEBUG REMOVE ME
+    {
+        TASKGRIND_DEBUG("Task switch %p -> %p", (void *)old, (void *)TASK->key);  // DEBUG REMOVE ME
+        TASKGRIND_DEBUG("Region is now %p\n", (void *) (TASK && TASK->region ? TASK->region : 0));
+    }
 }
 
-static void
-taskgrind_update_current_task(
-    VgCallbackClosure * closure,
-    IRSB * sb_in,
-    Int i,
-    IRSB * sb_out
-) {
+// add a dependency to the task following RaW constraints
+static inline void
+taskgrind_task_access(UWord key, UWord addr, UWord type)
+{
+    tl_assert(type == TASKGRIND_IN || type == TASKGRIND_OUT || type == TASKGRIND_OUTSET);
+    TASKGRIND_DEBUG("Task %p accesses %s at %p\n", (void *) key, type == TASKGRIND_IN ? "IN" : type == TASKGRIND_OUT ? "OUT" : type == TASKGRIND_OUTSET ? "OUTSET" : "(null)", (void *) addr);
 
-    // Retrieve task region
-    IRStmt * st;
-    Addr addr;
-    DiEpoch ep;
-    const HChar * file;
-    const HChar * dir;
-    const HChar * fn;
-    UInt line;
-    IRExpr ** argv;
-    IRDirty * di;
+    // TODO, see MPC runtime implementation and backport it here
+    // to build TDG provided by the programmer
+}
 
-    st = sb_in->stmts[i];
-    addr = st->Ist.IMark.addr + st->Ist.IMark.delta;
-    ep = VG_(current_DiEpoch)();
-    if (!VG_(get_filename_linenum)(ep, addr, &file, &dir, &line))
+static Bool
+taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
+{
+    switch (arg[0])
     {
-        dir  = ANONYMOUS;
-        file = ANONYMOUS;
-        line = 0;
+        case VG_USERREQ__TASKGRIND_CREATE_EVENT:
+        {
+            taskgrind_task_create(arg[1], arg[2]);
+            return True;
+        }
+
+        case VG_USERREQ__TASKGRIND_SCHEDULE_EVENT:
+        {
+            taskgrind_task_schedule(arg[1]);
+            return True;
+        }
+
+        case VG_USERREQ__TASKGRIND_ACCESS_EVENT:
+        {
+            taskgrind_task_access(arg[1], arg[2], arg[3]);
+            return True;
+        }
+
+        default:
+        {
+            TASKGRIND_WARN("Unknown client request code %llx", (ULong)arg[0]);
+            return False;
+        }
     }
-    if (!VG_(get_fnname)(ep, addr, &fn))
-        fn  = ANONYMOUS;
-
-    // Retrieve the task region
-    taskgrind_update_task_region(dir, file, line, fn);
-
-    // Retrieve the task
-    argv =  mkIRExprVec_0();
-    di   =  unsafeIRDirty_0_N(0, "taskgrind_update_task", VG_(fnptr_to_fnentry)(taskgrind_update_task), argv);
-
-    addStmtToIRSB(sb_out, IRStmt_Dirty(di));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -247,7 +228,7 @@ taskgrind_instrument_mem_access(
     Int size,
     taskgrind_mem_access_type_t access_type
 ) {
-    if (TASK_REGION)
+    if (TASK)
     {
         IRExpr ** argv;
         IRDirty * di;
@@ -292,16 +273,13 @@ taskgrind_instrument(
     // nothing to do until we detected the tasking environment
     if (!ENV.name)
         taskgrind_env_detect(&ENV);
-    if (!ENV.name)
+    if (!ENV.name || !TASK)
         return sb_in;
 
     // instrument code
     sb_out = deepCopyIRSBExceptStmts(sb_in);
     for (i = 0 ; i < sb_in->stmts_used && sb_in->stmts[i]->tag != Ist_IMark ; ++i)
         addStmtToIRSB(sb_out, sb_in->stmts[i]);
-
-    if (i < sb_in->stmts_used)
-        taskgrind_update_current_task(closure, sb_in, i, sb_out);
 
     for ( ; i < sb_in->stmts_used; ++i)
     {
@@ -597,7 +575,7 @@ taskgrind_pre_clo_init(void)
    VG_(needs_command_line_options)(taskgrind_process_cmd_line_option,
                                    taskgrind_print_usage,
                                    taskgrind_print_debug_usage);
-
+   VG_(needs_client_requests)(taskgrind_handle_client_request);
    VG_(basic_tool_funcs)(taskgrind_post_clo_init, taskgrind_instrument, taskgrind_fini);
    taskgrind_env_init(&ENV);
 }
