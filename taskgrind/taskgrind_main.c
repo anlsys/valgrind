@@ -38,7 +38,7 @@
 #include "pub_tool_libcproc.h"      /* gettimeofday */
 
 ///////////////////////////////////////////////////////////////////////////////
-//  Retrieve the task we are currently instrumenting
+//  Track tasks and their dependencies
 ///////////////////////////////////////////////////////////////////////////////
 
 // The tasking environment being instrumented
@@ -53,18 +53,62 @@ static taskgrind_env_t ENV;
 # include "uthash.h"
 
 // list of tasks
-typedef struct  task_list_elt_s
+typedef struct  task_array_s
 {
-    // the task pointed
-    struct task_s * task;
+    // tasks
+    struct task_s ** tasks;
 
-    // the next element
-    struct task_list_elt_s * next;
-}               task_list_elt_t;
+    // capacity
+    UInt capacity;
+
+    // number of tasks set
+    UInt n;
+
+}               task_array_t;
+
+static void
+taskgrind_task_array_init(task_array_t * array)
+{
+    array->tasks    = NULL;
+    array->capacity = 0;
+    array->n        = 0;
+}
+
+static void
+taskgrind_task_array_push(task_array_t * array, struct task_s * task)
+{
+    if (array->n == array->capacity)
+    {
+        UInt capacity = (UInt)((array->n + 1) * 3 / 2);
+        array->tasks = VG_(realloc)("task_array_t", array->tasks, sizeof(struct task_s *) * capacity);
+        array->capacity = capacity;
+    }
+    array->tasks[array->n++] = task;
+}
+
+static void
+taskgrind_task_array_deinit(task_array_t * array)
+{
+    VG_(free)(array->tasks);
+    array->n        = 0;
+    array->capacity = 0;
+}
 
 // task accesses hmap for child dependences
 typedef struct  task_accesses_t
 {
+    // dependency address
+    Addr addr;
+
+    // last 'out' for this address
+    struct task_t * out;
+
+    // last 'in' tasks for this address
+    task_array_t ins;
+
+    // last 'outset' tasks for this address
+    task_array_t outset;
+
 }               task_accesses_t;
 
 // tasks
