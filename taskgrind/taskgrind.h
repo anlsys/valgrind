@@ -15,17 +15,17 @@ typedef enum    taskgrind_client_request_t
 }               taskgrind_client_request_t;
 
 // Notify taskgring of a create event
-//  - arg[1] is the task unique identifier, defined by the client
+//  - arg[1] is the task unique identifier (> 0) defined by the client
 #define TASKGRIND_CREATE_EVENT(_qzz_key)  \
     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_CREATE_EVENT, (_qzz_key), 0, 0, 0, 0)
 
 // Notify taskgrind of a schedule event
-//  - arg[1] is the task unique identifier
+//  - arg[1] is the task unique identifier (> 0)
 #define TASKGRIND_SCHEDULE_EVENT(_qzz_key)  \
     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_SCHEDULE_EVENT, (_qzz_key), 0, 0, 0, 0)
 
 // Notify taskgring of an access event (e.g. out: x)
-//  - arg[1] is the task unique identifier
+//  - arg[1] is the task unique identifier (> 0)
 //  - arg[2] is the access address (&x)
 //  - arg[3] is the access type (TASKGRIND_OUT)
 #define TASKGRIND_ACCESS_EVENT(_qzz_key, _qzz_addr, _qzz_access_type)  \

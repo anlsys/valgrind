@@ -152,7 +152,7 @@ typedef struct  task_s
     task_array_t access_successors;
 
     // real successors using RaW on load/stores
-    task_array_t actual_successors;
+    task_array_t ls_successors;
 
     // task hmap for child dependencies
     task_accesses_t * accesses;
@@ -178,11 +178,11 @@ task_alloc(void)
     task = (task_t *) VG_(malloc)("task_alloc", sizeof(task_t));
     task->child_id          = TASK ? ++TASK->next_child_id : 0;
     task->next_child_id     = 0;
-    task->client_id         = 0;
+    task->client_id         = -1;
     task->accesses          = NULL;
     task->parent            = TASK;
     task_array_init(&task->access_successors);
-    task_array_init(&task->actual_successors);
+    task_array_init(&task->ls_successors);
 
     return task;
 }
@@ -201,7 +201,7 @@ task_create(UWord client_id)
         task = task_alloc();
         task->client_id = client_id;
         HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASKS, &(task->client_id), sizeof(UWord), hashv, task);
-        TASKGRIND_DEBUG("Task create %p (parent %p)", (void *) client_id, (void *) (task->parent ? task->parent->client_id : 0));
+        TASKGRIND_DEBUG("Task create %p (parent %p)", (void *) client_id, (void *) (task->parent ? task->parent->client_id : -1));
     }
 
     tl_assert(task);
