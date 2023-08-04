@@ -36,13 +36,13 @@ main(void)
     {
         # pragma omp single
         {
-            # pragma omp task shared(x, y)
+            # pragma omp task shared(x, y) depend(in: x)
             {
                 *x = V + 0;
                 *y = V + 1;
             }
 
-            # pragma omp task shared(x, y) depend(in: x)
+            # pragma omp task shared(x, y) depend(inoutset: x)
             {
                 *x = V + 2;
                 *y = *x;

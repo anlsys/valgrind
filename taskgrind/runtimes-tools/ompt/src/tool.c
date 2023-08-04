@@ -8,6 +8,8 @@
 # include <valgrind/taskgrind.h>
 # define TOOL_NAME "Taskgrind"
 
+# include "uthash.h"
+
 ///////////////////////////////////////////////////////////////////////////////
 // OMPT EVENT CALLBACKS
 ///////////////////////////////////////////////////////////////////////////////
@@ -38,6 +40,52 @@
         fprintf(stdout, "\n");              \
     } while (0)
 
+// a map from OMP runtime 'task_data' to taskgrind 'client id'
+typedef struct  client_id_s
+{
+    void * task_data;
+    uint64_t value;
+    UT_hash_handle hh;
+}               client_id_t;
+
+// next client id
+static uint64_t NEXT_CLIENT_ID;
+
+// the map
+static client_id_t * CLIENT_IDS;
+
+static inline client_id_t *
+client_id_get(void * task_data)
+{
+    client_id_t * client_id;
+    unsigned hashv;
+
+    HASH_VALUE(&task_data, sizeof(void *), hashv);
+    HASH_FIND_BYHASHVALUE(hh, CLIENT_IDS, &task_data, sizeof(void *), hashv, client_id);
+
+    return client_id;
+}
+
+static inline client_id_t *
+client_id_insert(void * task_data)
+{
+    client_id_t * client_id;
+    unsigned hashv;
+
+    HASH_VALUE(&task_data, sizeof(void *), hashv);
+    HASH_FIND_BYHASHVALUE(hh, CLIENT_IDS, &task_data, sizeof(void *), hashv, client_id);
+
+    client_id = client_id_get(task_data);
+    if (client_id == NULL)
+    {
+        client_id = (client_id_t *) malloc(sizeof(client_id_t));
+        assert(client_id);
+        client_id->task_data = task_data;
+        HASH_ADD_KEYPTR_BYHASHVALUE(hh, CLIENT_IDS, &(client_id->task_data), sizeof(void *), hashv, client_id);
+    }
+    return client_id;
+}
+
 void
 on_ompt_callback_task_create(
         ompt_data_t * encountering_task_data,
@@ -48,7 +96,12 @@ on_ompt_callback_task_create(
         const void *codeptr_ra
 ) {
     // INFO("[CREATE] encountering_task_data, = %p, new_task_data = %p, codeptr_ra = %p", encountering_task_data, new_task_data, codeptr_ra);
-   TASKGRIND_CREATE_EVENT(new_task_data, codeptr_ra);
+
+    client_id_t * client_id;
+
+    client_id = client_id_insert(new_task_data);
+    client_id->value = ++NEXT_CLIENT_ID;
+    TASKGRIND_CREATE_EVENT(client_id->value);
 }
 
 void
@@ -58,7 +111,11 @@ on_ompt_callback_task_schedule(
     ompt_data_t * next_task_data
 ) {
     // INFO("[SCHEDULE] prior_task_data = %p, next_task_data = %p", prior_task_data, next_task_data);
-   TASKGRIND_SCHEDULE_EVENT(next_task_data);
+
+    client_id_t * client_id;
+
+    client_id = client_id_get(next_task_data);
+    TASKGRIND_SCHEDULE_EVENT(client_id->value);
 }
 
 void
@@ -71,10 +128,15 @@ on_ompt_callback_implicit_task(
     int ﬂags
 ) {
     // INFO("[IMPLICIT] task_data = %p", task_data);
+
+    client_id_t * client_id;
+
     if (endpoint == ompt_scope_begin)
     {
-        TASKGRIND_CREATE_EVENT(task_data, 0);
-        TASKGRIND_SCHEDULE_EVENT(task_data);
+        client_id = client_id_insert(task_data);
+        client_id->value = ++NEXT_CLIENT_ID;
+        TASKGRIND_CREATE_EVENT(client_id->value);
+        TASKGRIND_SCHEDULE_EVENT(client_id->value);
     }
 }
 
@@ -86,7 +148,10 @@ on_ompt_callback_dependences(
 ) {
     // INFO("[IMPLICIT] task_data = %p", task_data);
 
+    client_id_t * client_id;
     int i;
+
+    client_id = client_id_get(task_data);
 
     // convert to taskgrind dependency format
     for (i = 0 ; i < ndeps ; ++i)
@@ -96,7 +161,7 @@ on_ompt_callback_dependences(
         {
             case ompt_dependence_type_in:
             {
-                TASKGRIND_ACCESS_EVENT(task_data, dep->variable.ptr, TASKGRIND_IN);
+                TASKGRIND_ACCESS_EVENT(client_id->value, dep->variable.ptr, TASKGRIND_IN);
                 break ;
             }
 
@@ -105,13 +170,13 @@ on_ompt_callback_dependences(
             // mutexinoutset is implement as 'out' in practice (2023)
             case ompt_dependence_type_mutexinoutset:
             {
-                TASKGRIND_ACCESS_EVENT(task_data, dep->variable.ptr, TASKGRIND_OUT);
+                TASKGRIND_ACCESS_EVENT(client_id->value, dep->variable.ptr, TASKGRIND_OUT);
                 break ;
             }
 
             case ompt_dependence_type_inoutset:
             {
-                TASKGRIND_ACCESS_EVENT(task_data, dep->variable.ptr, TASKGRIND_OUTSET);
+                TASKGRIND_ACCESS_EVENT(client_id->value, dep->variable.ptr, TASKGRIND_OUTSET);
                 break ;
             }
 

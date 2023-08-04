@@ -3,7 +3,7 @@
 #ifndef TASKGRIND_API_H
 # define TASKGRIND_API_H
 
-# include <valgrind/valgrind.h>
+# include "valgrind.h"
 
 typedef enum    taskgrind_client_request_t
 {
@@ -14,13 +14,20 @@ typedef enum    taskgrind_client_request_t
 
 }               taskgrind_client_request_t;
 
-// Notify taskgrind about task events
-#define TASKGRIND_CREATE_EVENT(_qzz_key, _qzz_ptr)  \
-    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_CREATE_EVENT, (_qzz_key), (_qzz_ptr), 0, 0, 0)
+// Notify taskgring of a create event
+//  - arg[1] is the task unique identifier, defined by the client
+#define TASKGRIND_CREATE_EVENT(_qzz_key)  \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_CREATE_EVENT, (_qzz_key), 0, 0, 0, 0)
 
+// Notify taskgrind of a schedule event
+//  - arg[1] is the task unique identifier
 #define TASKGRIND_SCHEDULE_EVENT(_qzz_key)  \
     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_SCHEDULE_EVENT, (_qzz_key), 0, 0, 0, 0)
 
+// Notify taskgring of an access event (e.g. out: x)
+//  - arg[1] is the task unique identifier
+//  - arg[2] is the access address (&x)
+//  - arg[3] is the access type (TASKGRIND_OUT)
 #define TASKGRIND_ACCESS_EVENT(_qzz_key, _qzz_addr, _qzz_access_type)  \
     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_ACCESS_EVENT, (_qzz_key), (_qzz_addr), (_qzz_access_type), 0, 0)
 

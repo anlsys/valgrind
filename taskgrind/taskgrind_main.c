@@ -67,7 +67,7 @@ typedef struct  task_array_s
 }               task_array_t;
 
 static void
-taskgrind_task_array_init(task_array_t * array)
+task_array_init(task_array_t * array)
 {
     array->tasks    = NULL;
     array->capacity = 0;
@@ -75,7 +75,7 @@ taskgrind_task_array_init(task_array_t * array)
 }
 
 static void
-taskgrind_task_array_push(task_array_t * array, struct task_s * task)
+task_array_push(task_array_t * array, struct task_s * task)
 {
     if (array->n == array->capacity)
     {
@@ -86,8 +86,22 @@ taskgrind_task_array_push(task_array_t * array, struct task_s * task)
     array->tasks[array->n++] = task;
 }
 
+static struct task_s *
+task_array_last(task_array_t * array)
+{
+    if (array->n == 0)
+        return NULL;
+    return array->tasks[array->n - 1];
+}
+
+static inline void
+task_array_clear(task_array_t * array)
+{
+    array->n = 0;
+}
+
 static void
-taskgrind_task_array_deinit(task_array_t * array)
+task_array_deinit(task_array_t * array)
 {
     VG_(free)(array->tasks);
     array->n        = 0;
@@ -100,31 +114,45 @@ typedef struct  task_accesses_t
     // dependency address
     Addr addr;
 
-    // last 'out' for this address
-    struct task_t * out;
+    // last task that had an 'out' for this address
+    struct task_s * out;
 
-    // last 'in' tasks for this address
+    // last task that had an 'in' for this address
     task_array_t ins;
 
-    // last 'outset' tasks for this address
-    task_array_t outset;
+    // last task that had an 'outset' for this address
+    task_array_t outsets;
 
+    // the last successor task that matched the 'out' dependency (for redundancy filtering)
+    struct task_s * last_out;
+
+    // the last successor task that matched the 'in' dependency (for redundancy filtering)
+    struct task_s * last_in;
+
+    // the last successor task that matched the 'outset' dependency (for redundancy filtering)
+    struct task_s * last_outset;
+
+    // hmap handle
+    UT_hash_handle hh;
 }               task_accesses_t;
 
 // tasks
 typedef struct  task_s
 {
-    // the task unique key
-    UWord key;
+    // unique identifier relative to its parent (independant from schedule)
+    UWord child_id;
 
-    // region associated to the task
-    Addr region;
+    // next unique identifier for a child
+    UWord next_child_id;
 
-    // task successors infered from omp dependences
-    struct task_list_elt_s * omp_successors;
+    // id for the tool client (depend on schedule)
+    UWord client_id;
+
+    // task successors infered from dependences provided by user program
+    task_array_t access_successors;
 
     // real successors using RaW on load/stores
-    struct task_list_elt_s * actual_successors;
+    task_array_t actual_successors;
 
     // task hmap for child dependencies
     task_accesses_t * accesses;
@@ -143,69 +171,242 @@ static task_t * TASKS;
 static task_t * TASK;
 
 static inline task_t *
-taskgrind_task_create(UWord key, UWord addr)
+task_alloc(void)
+{
+    task_t * task;
+
+    task = (task_t *) VG_(malloc)("task_alloc", sizeof(task_t));
+    task->child_id          = TASK ? ++TASK->next_child_id : 0;
+    task->next_child_id     = 0;
+    task->client_id         = 0;
+    task->accesses          = NULL;
+    task->parent            = TASK;
+    task_array_init(&task->access_successors);
+    task_array_init(&task->actual_successors);
+
+    return task;
+}
+
+static inline task_t *
+task_create(UWord client_id)
 {
     task_t * task;
     unsigned hashv;
 
-    HASH_VALUE(&key, sizeof(UWord), hashv);
-    HASH_FIND_BYHASHVALUE(hh, TASKS, &key, sizeof(UWord), hashv, task);
+    HASH_VALUE(&client_id, sizeof(UWord), hashv);
+    HASH_FIND_BYHASHVALUE(hh, TASKS, &client_id, sizeof(UWord), hashv, task);
 
-    tl_assert(task == NULL);
     if (task == NULL)
     {
-        task = (task_t *) VG_(malloc)("taskgrind_update_task", sizeof(task_t));
-        task->key               = key;
-        task->omp_successors    = NULL;
-        task->actual_successors = NULL;
-        task->region            = addr;
-        task->accesses          = NULL;
-        task->parent            = TASK;
-
-        HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASKS, &(task->key), sizeof(UWord), hashv, task);
-        TASKGRIND_DEBUG("Task create %p at %p (parent %p)", (void *) key, (void*) addr, (void *) (task->parent ? task->parent->key : 0));
+        task = task_alloc();
+        task->client_id = client_id;
+        HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASKS, &(task->client_id), sizeof(UWord), hashv, task);
+        TASKGRIND_DEBUG("Task create %p (parent %p)", (void *) client_id, (void *) (task->parent ? task->parent->client_id : 0));
     }
-    else
-        TASKGRIND_WARN("Created two tasks with the same key %p", (void *)key);
 
     tl_assert(task);
 
     return task;
 }
 
+static inline task_t *
+task_get(UWord client_id)
+{
+    task_t * task;
+    unsigned hashv;
+
+    HASH_VALUE(&client_id, sizeof(UWord), hashv);
+    HASH_FIND_BYHASHVALUE(hh, TASKS, &client_id, sizeof(UWord), hashv, task);
+
+    return task;
+}
 
 static inline void
-taskgrind_task_schedule(UWord key)
+task_schedule(UWord client_id)
 {
-    UWord old = TASK ? TASK->key : -1;   // DEBUG REMOVE ME
+    UWord old = TASK ? TASK->client_id : -1;   // DEBUG REMOVE ME
 
-    unsigned hashv;
-    HASH_VALUE(&key, sizeof(UWord), hashv);
-    HASH_FIND_BYHASHVALUE(hh, TASKS, &key, sizeof(UWord), hashv, TASK);
-
-    if (!TASK)
-    {
-        TASKGRIND_WARN("Scheduled task %p was not previously created. Creating it now.", (void *) key);
-        TASK = taskgrind_task_create(key, 0);
-    }
+    TASK = task_get(client_id);
     tl_assert(TASK);
 
-    if (old == -1 || old != TASK->key)                                      // DEBUG REMOVE ME
+    if (old == -1 || old != TASK->client_id)                                      // DEBUG REMOVE ME
     {
-        TASKGRIND_DEBUG("Task switch %p -> %p", (void *)old, (void *)TASK->key);  // DEBUG REMOVE ME
-        TASKGRIND_DEBUG("Region is now %p\n", (void *) (TASK && TASK->region ? TASK->region : 0));
+        TASKGRIND_DEBUG("Task switch %p -> %p", (void *)old, (void *)TASK->client_id);  // DEBUG REMOVE ME
     }
+}
+
+static inline task_accesses_t *
+task_accesses_get(task_t * parent, UWord addr)
+{
+    task_accesses_t * accesses;
+    unsigned hashv;
+
+    HASH_VALUE(&addr, sizeof(UWord), hashv);
+    HASH_FIND_BYHASHVALUE(hh, parent->accesses, &addr, sizeof(UWord), hashv, accesses);
+
+    if (!accesses)
+    {
+        accesses = (task_accesses_t *) VG_(malloc)("task_access", sizeof(task_accesses_t));
+        accesses->addr          = addr;
+        accesses->out           = NULL;
+        accesses->last_out      = NULL;
+        accesses->last_in       = NULL;
+        accesses->last_outset   = NULL;
+        task_array_init(&accesses->ins);
+        task_array_init(&accesses->outsets);
+
+        HASH_ADD_KEYPTR_BYHASHVALUE(hh, parent->accesses, &(accesses->addr), sizeof(UWord), hashv, accesses);
+    }
+    tl_assert(accesses);
+
+    return accesses;
+}
+
+// return true if the given task access is redundant for the given address
+static inline Bool
+task_access_is_redundant(
+    task_t * task,
+    task_accesses_t * accesses,
+    UWord addr,
+    UWord type)
+{
+    switch (type)
+    {
+        case (TASKGRIND_OUT):
+        {
+            if (accesses->last_out == task)
+                return True;
+            accesses->last_out = task;
+            return False;
+        }
+
+        case (TASKGRIND_IN):
+        {
+            if (accesses->last_out == task || accesses->last_in == task)
+                return True;
+            accesses->last_in = task;
+            return False;
+        }
+
+        case (TASKGRIND_OUTSET):
+        {
+            if (accesses->last_out == task || accesses->last_outset == task)
+                return True;
+            accesses->last_outset = task;
+            return False;
+        }
+
+        default:
+        {
+            tl_assert(0);
+            return False;
+        }
+    }
+}
+
+// set the edge pred -> succ
+static inline void
+task_link_access(task_t * pred, task_t * succ)
+{
+    // filter out multiple edges
+    if (task_array_last(&pred->access_successors) == succ)
+        return ;
+    task_array_push(&pred->access_successors, succ);
+    TASKGRIND_DEBUG("set %p as a successor to %p", (void *)pred->client_id, (void *)succ->client_id);
 }
 
 // add a dependency to the task following RaW constraints
 static inline void
-taskgrind_task_access(UWord key, UWord addr, UWord type)
+task_access(UWord client_id, UWord addr, UWord type)
 {
     tl_assert(type == TASKGRIND_IN || type == TASKGRIND_OUT || type == TASKGRIND_OUTSET);
-    TASKGRIND_DEBUG("Task %p accesses %s at %p\n", (void *) key, type == TASKGRIND_IN ? "IN" : type == TASKGRIND_OUT ? "OUT" : type == TASKGRIND_OUTSET ? "OUTSET" : "(null)", (void *) addr);
+    TASKGRIND_DEBUG("Task %p accesses %s at %p", (void *) client_id, type == TASKGRIND_IN ? "IN" : type == TASKGRIND_OUT ? "OUT" : type == TASKGRIND_OUTSET ? "OUTSET" : "(null)", (void *) addr);
 
-    // TODO, see MPC runtime implementation and backport it here
-    // to build TDG provided by the programmer
+    // retrieve current task and its parent accesses
+    task_t * task, * in;
+    task_accesses_t * accesses;
+    int i;
+
+    task = task_get(client_id);
+    tl_assert(task);
+    tl_assert(task->parent);
+
+    accesses = task_accesses_get(task->parent, addr);
+    tl_assert(accesses);
+
+    // filter out redundancies
+    if (!task_access_is_redundant(task, accesses, addr, type))
+    {
+        // infer edge between 'task' and its predecessor
+
+        // case 1.1 - the generated task is dependant of previous 'in'
+        if (accesses->ins.n && (type == TASKGRIND_OUT || type == TASKGRIND_OUTSET))
+        {
+            if (type == TASKGRIND_OUTSET)
+            {
+                /**
+                 * in:      O O O
+                 *           \|/
+                 * out:       X     <- we insert this empty node
+                 *           / \
+                 * outset:  O   O
+                 */
+                accesses->out = task_alloc();
+                for (i = 0 ; i < accesses->ins.n ; ++i)
+                {
+                    // prevent cyclic deps in case 'task' already had an 'in'
+                    // dep type on the same addr previously
+                    in = accesses->ins.tasks[i];
+                    if (in != task)
+                    {
+                        TASKGRIND_DEBUG("linking");
+                        task_link_access(in, accesses->out);
+                    }
+                    else
+                        TASKGRIND_DEBUG("not linking as %p == %p", (void *)in->client_id, (void *)task->client_id);
+                }
+            }
+            else
+            {
+                for (i = 0 ; i < accesses->ins.n ; ++i)
+                {
+                    in = accesses->ins.tasks[i];
+                    task_link_access(in, task);
+                }
+            }
+        } // 1.1
+
+        // save access for future task
+        switch (type)
+        {
+            case (TASKGRIND_IN):
+            {
+                task_array_push(&accesses->ins, task);
+                break ;
+            }
+
+            case (TASKGRIND_OUT):
+            {
+                task_array_clear(&accesses->ins);
+                task_array_clear(&accesses->outsets);
+                accesses->out = task;
+                break ;
+            }
+
+            case (TASKGRIND_OUTSET):
+            {
+                task_array_push(&accesses->outsets, task);
+                break ;
+            }
+
+            default:
+            {
+                tl_assert(0);
+                break ;
+            }
+        }
+
+    } // redundant check
 }
 
 static Bool
@@ -215,19 +416,19 @@ taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
     {
         case VG_USERREQ__TASKGRIND_CREATE_EVENT:
         {
-            taskgrind_task_create(arg[1], arg[2]);
+            task_create(arg[1]);
             return True;
         }
 
         case VG_USERREQ__TASKGRIND_SCHEDULE_EVENT:
         {
-            taskgrind_task_schedule(arg[1]);
+            task_schedule(arg[1]);
             return True;
         }
 
         case VG_USERREQ__TASKGRIND_ACCESS_EVENT:
         {
-            taskgrind_task_access(arg[1], arg[2], arg[3]);
+            task_access(arg[1], arg[2], arg[3]);
             return True;
         }
 
