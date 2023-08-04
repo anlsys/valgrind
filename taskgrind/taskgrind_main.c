@@ -312,7 +312,7 @@ task_link_access(task_t * pred, task_t * succ)
     if (task_array_last(&pred->access_successors) == succ)
         return ;
     task_array_push(&pred->access_successors, succ);
-    TASKGRIND_DEBUG("set %p as a successor to %p", (void *)pred->client_id, (void *)succ->client_id);
+    TASKGRIND_DEBUG("   Added edge %p -> %p", (void *)pred->client_id, (void *)succ->client_id);
 }
 
 // add a dependency to the task following RaW constraints
@@ -323,7 +323,7 @@ task_access(UWord client_id, UWord addr, UWord type)
     TASKGRIND_DEBUG("Task %p accesses %s at %p", (void *) client_id, type == TASKGRIND_IN ? "IN" : type == TASKGRIND_OUT ? "OUT" : type == TASKGRIND_OUTSET ? "OUTSET" : "(null)", (void *) addr);
 
     // retrieve current task and its parent accesses
-    task_t * task, * in;
+    task_t * task, * in, * outset;
     task_accesses_t * accesses;
     int i;
 
@@ -345,11 +345,11 @@ task_access(UWord client_id, UWord addr, UWord type)
             if (type == TASKGRIND_OUTSET)
             {
                 /**
-                 * in:      O O O
+                 * in:      O O O   <- the predecessor
                  *           \|/
                  * out:       X     <- we insert this empty node
                  *           / \
-                 * outset:  O   O
+                 * outset:  O   O   <- the task we are inserting
                  */
                 accesses->out = task_alloc();
                 for (i = 0 ; i < accesses->ins.n ; ++i)
@@ -358,13 +358,10 @@ task_access(UWord client_id, UWord addr, UWord type)
                     // dep type on the same addr previously
                     in = accesses->ins.tasks[i];
                     if (in != task)
-                    {
-                        TASKGRIND_DEBUG("linking");
                         task_link_access(in, accesses->out);
-                    }
-                    else
-                        TASKGRIND_DEBUG("not linking as %p == %p", (void *)in->client_id, (void *)task->client_id);
                 }
+                task_link_access(accesses->out, task);
+                task_array_clear(&accesses->ins);
             }
             else
             {
@@ -375,6 +372,51 @@ task_access(UWord client_id, UWord addr, UWord type)
                 }
             }
         } // 1.1
+
+        // 1.2 - the generated task is dependent of previous 'outset'
+        if (accesses->outsets.n && (type == TASKGRIND_IN || type == TASKGRIND_OUT))
+        {
+            if (type == TASKGRIND_IN)
+            {
+                /**
+                 * outset:          O O O   <- the predecessor
+                 *                   \|/
+                 * out:               X     <- we insert this empty node
+                 *                   / \
+                 * in:              O   O   <- the task we are inserting
+                 */
+                accesses->out = task_alloc();
+                for (i = 0 ; i < accesses->outsets.n ; ++i)
+                {
+                    outset = accesses->outsets.tasks[i];
+                    task_link_access(outset, accesses->out);
+                }
+                task_link_access(accesses->out, task);
+                task_array_clear(&accesses->outsets);
+            }
+            else
+            {
+                for (i = 0 ; i < accesses->outsets.n ; ++i)
+                {
+                    outset = accesses->outsets.tasks[i];
+                    task_link_access(outset, accesses->out);
+                }
+            }
+        } // 1.2
+
+        // 1.3 - the generated task is dependent of previous 'out'
+        if (accesses->out && (type == TASKGRIND_OUT || type == TASKGRIND_IN || type == TASKGRIND_OUTSET))
+        {
+            if (type == TASKGRIND_OUT && (accesses->ins.n || accesses->outsets.n))
+            {
+                // nothing to do, the task already depends on a previous 'in'
+                // or 'outset' that depend on the 'accesses->out'
+            }
+            else
+            {
+                task_link_access(accesses->out, task);
+            }
+        }
 
         // save access for future task
         switch (type)
