@@ -1592,6 +1592,9 @@ Int valgrind_main ( Int argc, HChar **argv, HChar **envp )
    if (!need_help) {
       VG_(debugLog)(1, "main", "Create initial image\n");
 
+      if (VG_(tl_prepare_env))
+          VG_(tl_prepare_env)(&envp);
+
 #     if defined(VGO_linux) || defined(VGO_darwin) || defined(VGO_solaris) || defined(VGO_freebsd)
       the_iicii.argv              = argv;
       the_iicii.envp              = envp;

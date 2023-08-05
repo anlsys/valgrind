@@ -45,12 +45,19 @@
 */
 extern void (*VG_(tl_pre_clo_init)) ( void );
 
+/* set environment variable before client executable is loaded */
+extern void (*VG_(tl_prepare_env))(HChar *** );
+
+#define VG_DETERMINE_INTERFACE_VERSION_WITH_ENV(pre_clo_init, prepare_env)  \
+    void (*VG_(tl_pre_clo_init)) ( void ) = pre_clo_init;                   \
+    void (*VG_(tl_prepare_env)) ( HChar ***) = prepare_env;
+
 /* Every tool must include this macro somewhere, exactly once.  The
    interface version is no longer relevant, but we kept the same name
    to avoid requiring changes to tools.
 */
 #define VG_DETERMINE_INTERFACE_VERSION(pre_clo_init) \
-   void (*VG_(tl_pre_clo_init)) ( void ) = pre_clo_init;
+    VG_DETERMINE_INTERFACE_VERSION_WITH_ENV(pre_clo_init, NULL)
 
 /* ------------------------------------------------------------------ */
 /* Basic tool functions */
@@ -226,6 +233,8 @@ extern void VG_(basic_tool_funcs)(
    // code.  The shadow can be found with VG_(get_exit_status_shadow)().
    void  (*fini)(Int)
 );
+
+extern void VG_(tool_prepare_env_func)(void (*f)(HChar ***));
 
 /* ------------------------------------------------------------------ */
 /* Details */

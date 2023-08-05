@@ -23,10 +23,6 @@ vgbasedir=`dirname $scriptname`
 
 # echo "VG base directory:   " $vgbasedir
 
-# TODO: move this to taskgrind before instrumenting
-export OMP_TOOL_LIBRARIES="$vgbasedir/taskgrind/runtimes-tools/ompt/build/libtaskgrind_omp.so"
-export OMP_NUM_THREADS=1
-
 # We set both VALGRIND_LIB and VALGRIND_LIB_INNER to handle normal and
 # 'inner' builds.
 VALGRIND_LIB="$vgbasedir/.in_place" \

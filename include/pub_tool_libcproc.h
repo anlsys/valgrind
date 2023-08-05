@@ -42,6 +42,9 @@ extern HChar** VG_(client_envp);
 /* Looks up VG_(client_envp) */
 extern HChar* VG_(getenv) ( const HChar* name );
 
+/* Modify an env variable */
+extern HChar ** VG_(env_setenv) ( HChar ** *envp, const HChar* varname, const HChar *val );
+
 /* Path to all our library/aux files */
 extern const HChar *VG_(libdir);
 

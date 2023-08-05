@@ -867,7 +867,26 @@ taskgrind_pre_clo_init(void)
    taskgrind_env_init(&ENV);
 }
 
-VG_DETERMINE_INTERFACE_VERSION(taskgrind_pre_clo_init)
+///////////////////////////////////////////////////////////////////////////////
+//   Callback to prepare environment before loading the client program
+///////////////////////////////////////////////////////////////////////////////
+static void
+taskgrind_prepare_env(HChar *** envp)
+{
+    // TODO: make it portable between developer and installed setup
+    const HChar * relative_so = "/../taskgrind/runtimes-tools/ompt/build/libtaskgrind_omp.so";
+    HChar * absolute_so = VG_(malloc)("prepare_env", sizeof(HChar) * VG_(strlen)(VG_(libdir)) + VG_(strlen)(relative_so) + 1);
+    VG_(strcpy)(absolute_so, VG_(libdir));
+    VG_(strcat)(absolute_so, relative_so);
+
+    TASKGRIND_DEBUG("Set OMP_TOOL_LIBRARIES=%s (%lu chars)", absolute_so, VG_(strlen(absolute_so)));
+    VG_(env_setenv)(envp, "OMP_TOOL_LIBRARIES", absolute_so);
+
+    TASKGRIND_DEBUG("Set OMP_NUM_THREADS=1");
+    VG_(env_setenv)(envp, "OMP_NUM_THREADS", "1");
+}
+
+VG_DETERMINE_INTERFACE_VERSION_WITH_ENV(taskgrind_pre_clo_init, taskgrind_prepare_env)
 
 /*--------------------------------------------------------------------*/
 /*--- end                                                          ---*/
