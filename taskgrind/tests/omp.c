@@ -1,3 +1,5 @@
+# include <assert.h>
+# include <omp.h>
 # include <stdio.h>
 # include <stdlib.h>
 # include <stdint.h>
@@ -34,8 +36,10 @@ main(void)
     toto(x, y);
     # pragma omp parallel shared(x, y)
     {
-        # pragma omp single
+        # pragma omp single nowait
         {
+            assert(omp_get_num_threads() == 1);
+
             # pragma omp task shared(x, y) depend(in: x)
             {
                 *x = V + 0;
@@ -47,11 +51,16 @@ main(void)
                 *x = V + 2;
                 *y = *x;
             }
-
-            # pragma omp taskwait
-
-            printf("x=%d, y=%d\n", *x, *y);
         }
+
+        # pragma omp taskwait
+
+        printf("x=%d, y=%d\n", *x, *y);
+
+        # pragma omp for
+        for (int i = 0 ; i < 4096 ; ++i)
+        {}
+
     }
     return 0;
 }

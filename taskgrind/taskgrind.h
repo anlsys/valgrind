@@ -10,6 +10,7 @@ typedef enum    taskgrind_client_request_t
     VG_USERREQ__TASKGRIND_CREATE_EVENT      = VG_USERREQ_TOOL_BASE('T', 'G'),
     VG_USERREQ__TASKGRIND_SCHEDULE_EVENT,
     VG_USERREQ__TASKGRIND_ACCESS_EVENT,
+    VG_USERREQ__TASKGRIND_SYNC_EVENT,
     // VG_USERREQ__TASKGRIND_TASK_DEPS_EVENT,
 
 }               taskgrind_client_request_t;
@@ -31,12 +32,16 @@ typedef enum    taskgrind_client_request_t
 #define TASKGRIND_ACCESS_EVENT(_qzz_key, _qzz_addr, _qzz_access_type)  \
     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_ACCESS_EVENT, (_qzz_key), (_qzz_addr), (_qzz_access_type), 0, 0)
 
-// Taskgrind accesses, similar to OmpSs / OpenMP
+// Taskgrind accesses, similar to StarSs / StarPU / OpenMP
 typedef enum    taskgrind_access_t
 {
     TASKGRIND_IN,
     TASKGRIND_OUT,
     TASKGRIND_OUTSET,
 }               taskgrind_access_t;
+
+// Notify taskgring of a barrier requiring current task children completion
+#define TASKGRIND_SYNC_EVENT()  \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_SYNC_EVENT, 0, 0, 0, 0, 0)
 
 #endif /* TASKGRIND_API_H */

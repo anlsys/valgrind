@@ -194,6 +194,32 @@ on_ompt_callback_dependences(
     }
 }
 
+void
+on_ompt_callback_sync_region(
+    ompt_sync_region_t kind,
+    ompt_scope_endpoint_t endpoint,
+    ompt_data_t * parallel_data,
+    ompt_data_t * task_data,
+    const void * codeptr_ra
+) {
+    switch (endpoint)
+    {
+        case (ompt_scope_begin):
+        {
+            DEBUG("kind=%d", kind);
+            TASKGRIND_SYNC_EVENT();
+            break ;
+        }
+
+        case (ompt_scope_end):
+        case (ompt_scope_beginend):
+        {
+            // do nothing
+            break ;
+        }
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // OMPT INIT / DEINIT CALLBACKS
 ///////////////////////////////////////////////////////////////////////////////
@@ -215,6 +241,7 @@ int ompt_initialize(
     register_callback(ompt_callback_implicit_task);
     register_callback(ompt_callback_task_schedule);
     register_callback(ompt_callback_dependences);
+    register_callback(ompt_callback_sync_region);
     return 1;
 }
 

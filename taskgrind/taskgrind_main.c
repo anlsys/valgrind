@@ -152,13 +152,16 @@ typedef struct  task_s
     task_array_t access_successors;
 
     // real successors using RaW on load/stores
-    task_array_t ls_successors;
+    task_array_t dataflow_successors;
 
     // task hmap for child dependencies
     task_accesses_t * accesses;
 
     // parent
     struct task_s * parent;
+
+    // children
+    task_array_t children;
 
     // hmap handle
     UT_hash_handle hh;
@@ -182,7 +185,11 @@ task_alloc(void)
     task->accesses          = NULL;
     task->parent            = TASK;
     task_array_init(&task->access_successors);
-    task_array_init(&task->ls_successors);
+    task_array_init(&task->dataflow_successors);
+    task_array_init(&task->children);
+
+    if (TASK)
+       task_array_push(&TASK->children, task);
 
     return task;
 }
@@ -195,6 +202,8 @@ task_create(UWord client_id)
 
     HASH_VALUE(&client_id, sizeof(UWord), hashv);
     HASH_FIND_BYHASHVALUE(hh, TASKS, &client_id, sizeof(UWord), hashv, task);
+
+    tl_assert(task == NULL);
 
     if (task == NULL)
     {
@@ -352,6 +361,7 @@ task_access(UWord client_id, UWord addr, UWord type)
                  * outset:  O   O   <- the task we are inserting
                  */
                 accesses->out = task_alloc();
+                accesses->out->client_id = 0xFA3E;
                 for (i = 0 ; i < accesses->ins.n ; ++i)
                 {
                     // prevent cyclic deps in case 'task' already had an 'in'
@@ -386,6 +396,7 @@ task_access(UWord client_id, UWord addr, UWord type)
                  * in:              O   O   <- the task we are inserting
                  */
                 accesses->out = task_alloc();
+                accesses->out->client_id = 0xFA3E;
                 for (i = 0 ; i < accesses->outsets.n ; ++i)
                 {
                     outset = accesses->outsets.tasks[i];
@@ -451,6 +462,29 @@ task_access(UWord client_id, UWord addr, UWord type)
     } // redundant check
 }
 
+// a task barrier: wait for the completion of children tasks, represented by
+// adding an empty task node which depends on all previously created tasks with
+// no successors (leaves)
+static void
+task_sync(void)
+{
+    if (!TASK)
+        return ;
+
+    // create an empty task
+    task_t * barrier = task_alloc();
+    barrier->client_id = 0xFA3E;
+
+    // for each children task of the current task
+    int i;
+    for (i = 0 ; i < TASK->children.n ; ++i)
+    {
+        task_t * task = TASK->children.tasks[i];
+        if (task->access_successors.n == 0)
+            task_link_access(task, barrier);
+    }
+}
+
 static Bool
 taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
 {
@@ -474,6 +508,12 @@ taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
             return True;
         }
 
+        case VG_USERREQ__TASKGRIND_SYNC_EVENT:
+        {
+            task_sync();
+            return True;
+        }
+
         default:
         {
             TASKGRIND_WARN("Unknown client request code %llx", (ULong)arg[0]);
@@ -481,6 +521,16 @@ taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
         }
     }
 }
+
+///////////////////////////////////////////////////////////////////////////////
+//  Export graph to dot file
+///////////////////////////////////////////////////////////////////////////////
+static void
+taskgrind_export_task(task_t * task)
+{
+
+}
+
 
 ///////////////////////////////////////////////////////////////////////////////
 //  Instrumentation
@@ -754,28 +804,28 @@ taskgrind_instrument(
 //  Command line argument, init and finialize
 ///////////////////////////////////////////////////////////////////////////////
 
-static const char * clo_record      = NULL;
+/* static const char * clo_record      = NULL;
 
 static const char * clo_compare     = NULL;
 static const char * clo_compare_a   = NULL;
-static const char * clo_compare_b   = NULL;
+static const char * clo_compare_b   = NULL; */
 
 static void
 taskgrind_fini(Int exitcode)
 {
-    if (clo_compare_a && clo_compare_b)
+/*     if (clo_compare_a && clo_compare_b)
     {
         TASKGRIND_DEBUG("Comparing task graph '%s' with '%s'", clo_compare_a, clo_compare_b);
-    }
+    } */
 }
 
 static void
 taskgrind_print_usage(void)
 {
-   VG_(printf)(
+/*    VG_(printf)(
 "    --record=<name>            Execute and record the task graph into <name> directory\n"
 "    --compare=<name1>,<name2>  Compare the two task graph previously recorded\n"
-   );
+   ); */
 }
 
 static void
@@ -798,7 +848,7 @@ taskgrind_clo_error(const HChar * err)
 static Bool
 taskgrind_process_cmd_line_option(const HChar * arg)
 {
-    if (VG_(strcmp)(arg, "--record") == 0)
+/*     if (VG_(strcmp)(arg, "--record") == 0)
     {
         if (!VG_STR_CLO(arg, "--record", clo_record))
         {
@@ -829,7 +879,7 @@ taskgrind_process_cmd_line_option(const HChar * arg)
     else
     {
         return False;
-    }
+    } */
 
     return True;
 }
@@ -837,11 +887,11 @@ taskgrind_process_cmd_line_option(const HChar * arg)
 static void
 taskgrind_post_clo_init(void)
 {
-    if (clo_record)
+/*     if (clo_record)
         TASKGRIND_INFO("Recording task graph to '%s'", clo_record);
 
     if (!clo_record && !clo_compare)
-       taskgrind_clo_error("at least one command line option must be passed");
+       taskgrind_clo_error("at least one command line option must be passed"); */
 }
 
 ///////////////////////////////////////////////////////////////////////////////
