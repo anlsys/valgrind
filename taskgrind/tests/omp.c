@@ -24,8 +24,8 @@
 void
 toto(int * x, int * y)
 {
-    printf("&toto=%p\n", toto);
-    printf("x=%p, y=%p, &x=%p, &y=%p\n", x, y, &x, &y);
+    printf("function address is %p\n", toto);
+    printf("variable values and addresses are x=%p, y=%p, &x=%p, &y=%p\n", x, y, &x, &y);
 }
 
 int
@@ -54,8 +54,6 @@ main(void)
         }
 
         # pragma omp taskwait
-
-        printf("x=%d, y=%d\n", *x, *y);
 
         # pragma omp for
         for (int i = 0 ; i < 4096 ; ++i)

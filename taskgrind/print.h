@@ -1,7 +1,7 @@
 // TODO: header
 
-#ifndef TASKGRIND_MAIN_H
-# define TASKGRIND_MAIN_H
+#ifndef __PRINT_H__
+# define __PRINT_H__
 
 #include "pub_tool_libcprint.h"     /* snumsg */
 
@@ -27,14 +27,10 @@
                                     VG_(umsg)("\n");            \
                                 } while (0)
 
-typedef struct  taskgrind_env_s
-{
-    /* Which tasking environment are we instrumenting */
-    const HChar * name;
+# define TASKGRIND_ERR(...)     do {                            \
+                                    VG_(umsg)("[ERRR] ");       \
+                                    VG_(umsg)(__VA_ARGS__);     \
+                                    VG_(umsg)("\n");            \
+                                } while (0)
 
-}               taskgrind_env_t;
-
-void taskgrind_env_init(taskgrind_env_t * env);
-void taskgrind_env_detect(taskgrind_env_t * env);
-
-#endif /* TASKGRIND_MAIN_H */
+#endif /* __PRINT_H__ */

@@ -206,7 +206,7 @@ on_ompt_callback_sync_region(
     {
         case (ompt_scope_begin):
         {
-            DEBUG("kind=%d", kind);
+            DEBUG("sync region kind=%d", kind);
             TASKGRIND_SYNC_EVENT();
             break ;
         }

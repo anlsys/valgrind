@@ -1,6 +1,7 @@
 // TODO: header
 
-# include "taskgrind_main.h"
+# include "env.h"
+# include "print.h"
 
 # include "pub_tool_libcassert.h"
 # include "pub_tool_libcbase.h" /* memset */
@@ -140,31 +141,3 @@ taskgrind_env_detect(taskgrind_env_t * env)
 
     // No environment detected, try to find generic symbols
 }
-
-
-///////////////////////////////////////////////////////////////////////////////
-//  Initialize the loader
-///////////////////////////////////////////////////////////////////////////////
-void
-taskgrind_env_init(taskgrind_env_t * env)
-{
-    // TODO: add the taskgrind OMPT tool to the environment variables
-    // Currently, assume the 'VALGRIND_LIB' is set and use it
-    // Later, let's detect automatically where valgrind is installed and isntall the ompt tool with it
-    // -> still a scuffed solution though, gotta use the multiplexer in case programmers wanna debug an actual OMPT tool
-
-
-    // TODO: this code doesn't work, its too late in the valgrind pipeline.
-    // A workaround is to modify the '../vg-in-place' script for now.
-    // Maybe we can also detect dependencies automatically without OMPT
-    //
-    // const HChar * valgrind = VG_(getenv)("VALGRIND_LIB");
-    // tl_assert(valgrind);
-
-    // HChar buffer[1024];
-    // VG_(strcpy)(buffer, valgrind);
-    // VG_(strcat)(buffer, "/../taskgrind/.runtimes-tools/ompt/build/libtaskgrind_omp.so");
-    // VG_(client_envp) = VG_(env_setenv)(&VG_(client_envp), "OMP_TOOL_LIBRARIES", buffer);
-    // TASKGRIND_INFO("Set OMPT tool to '%s'", buffer);
-}
-
