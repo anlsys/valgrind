@@ -13,6 +13,16 @@
 
 # include "uthash.h"
 
+// task types
+typedef enum    task_type_e
+{
+    TASK_TYPE_UNKNOWN,
+    TASK_TYPE_EXPLICIT,
+    TASK_TYPE_IMPLICIT_OUTSET,
+    TASK_TYPE_IMPLICIT_BARRIER,
+    TASK_TYPE_IMPLICIT_UNKNOWN,
+}               task_type_t;
+
 // list of tasks
 typedef struct  task_array_s
 {
@@ -24,7 +34,6 @@ typedef struct  task_array_s
 
     // number of tasks set
     UInt n;
-
 }               task_array_t;
 
 // task accesses hmap for child dependences
@@ -58,6 +67,9 @@ typedef struct  task_accesses_t
 // tasks
 typedef struct  task_s
 {
+    // the task type
+    task_type_t type;
+
     // unique identifier relative to its parent (independant from schedule)
     UWord child_id;
 
@@ -98,7 +110,7 @@ extern task_t * CURRENT_TASK;
 extern task_array_t ROOTS;
 
 // FUNCTIONS TO BUILD THE MAPPING
-task_t * task_create(UWord client_id);
+task_t * task_create(UWord client_id, task_type_t type);
 void task_schedule(UWord client_id);
 void task_access(UWord client_id, UWord addr, UWord type);
 void task_sync(void);

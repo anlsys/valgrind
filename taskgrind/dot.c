@@ -15,16 +15,57 @@ void dot_file_err(void)
     VG_(exit)(1);
 }
 
+// dump a task
+static inline void
+dump_task(VgFile * fp, task_t * task)
+{
+    const char * type, * shape;
+
+    switch (task->type)
+    {
+        case (TASK_TYPE_IMPLICIT_BARRIER):
+        case (TASK_TYPE_IMPLICIT_OUTSET):
+        case (TASK_TYPE_IMPLICIT_UNKNOWN):
+        {
+            type = "implicit";
+            shape = "diamond";
+            break ;
+        }
+
+        case (TASK_TYPE_EXPLICIT):
+        {
+            type = "explicit";
+            shape = "circle";
+            break ;
+        }
+
+        case (TASK_TYPE_UNKNOWN):
+        default:
+        {
+            type = "unknown";
+            shape = "hexagon";
+            TASKGRIND_ERR("Unknown task type %u", task->type);
+            tl_assert(0);
+            break ;
+        }
+    }
+    VG_(fprintf)(fp, "    \"%p\" [label=\"type=%s\\nclient=%ld\nchild=%ld\",shape=%s];\n",
+        task, type, (Word)task->client_id, (Word)task->child_id, shape);
+
+}
+
 // TDG
 static void
 dump_access_tdg(VgFile * fp, task_t * pred)
 {
+    dump_task(fp, pred);
+
     int i;
     for (i = 0 ; i < pred->access_successors.n ; ++i)
     {
         task_t * succ = pred->access_successors.tasks[i];
-        VG_(fprintf)(fp, "    %lu -> %lu ;\n", pred->child_id, succ->child_id);
         dump_access_tdg(fp, succ);
+        VG_(fprintf)(fp, "    \"%p\" -> \"%p\" ;\n", pred, succ);
     }
 }
 
@@ -56,15 +97,18 @@ taskgrind_export_access_tdg(task_t * task)
 static void
 dump_tcfg(VgFile * fp, task_t * parent)
 {
-    taskgrind_export_access_tdg(parent);
+    // TODO: debug remove me
+    if (parent->access_successors.n)
+        taskgrind_export_access_tdg(parent);
+
+    dump_task(fp, parent);
 
     int i;
     for (i = 0 ; i < parent->children.n ; ++i)
     {
         task_t * child = parent->children.tasks[i];
-        if (child->client_id != -1)
-            VG_(fprintf)(fp, "    %lu -> %lu ;\n", parent->client_id, child->client_id);
         dump_tcfg(fp, child);
+        VG_(fprintf)(fp, "    \"%p\" -> \"%p\" ;\n", parent, child);
     }
 }
 

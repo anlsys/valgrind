@@ -101,7 +101,7 @@ on_ompt_callback_task_create(
 
     client_id = client_id_insert(new_task_data);
     client_id->value = ++NEXT_CLIENT_ID;
-    TASKGRIND_CREATE_EVENT(client_id->value);
+    TASKGRIND_CREATE_EVENT(client_id->value, TASKGRIND_TASK_TYPE_EXPLICIT);
 }
 
 void
@@ -135,7 +135,7 @@ on_ompt_callback_implicit_task(
     {
         client_id = client_id_insert(task_data);
         client_id->value = ++NEXT_CLIENT_ID;
-        TASKGRIND_CREATE_EVENT(client_id->value);
+        TASKGRIND_CREATE_EVENT(client_id->value, TASKGRIND_TASK_TYPE_IMPLICIT);
         TASKGRIND_SCHEDULE_EVENT(client_id->value);
     }
 }

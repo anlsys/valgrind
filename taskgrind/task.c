@@ -63,7 +63,8 @@ task_alloc(void)
     task = (task_t *) VG_(malloc)("task_alloc", sizeof(task_t));
     task->child_id          = CURRENT_TASK ? ++CURRENT_TASK->next_child_id : 0;
     task->next_child_id     = 0;
-    task->client_id         = -1;
+    task->client_id         = TASKGRIND_CLIENT_ID_PRIVATE;
+    task->type              = TASK_TYPE_UNKNOWN;
     task->accesses          = NULL;
     task->parent            = CURRENT_TASK;
     task_array_init(&task->access_successors);
@@ -79,7 +80,7 @@ task_alloc(void)
 }
 
 task_t *
-task_create(UWord client_id)
+task_create(UWord client_id, task_type_t type)
 {
     task_t * task;
     unsigned hashv;
@@ -93,8 +94,9 @@ task_create(UWord client_id)
     {
         task = task_alloc();
         task->client_id = client_id;
+        task->type = type;
         HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASKS, &(task->client_id), sizeof(UWord), hashv, task);
-        TASKGRIND_DEBUG("Task create %p (parent %p)", (void *) client_id, (void *) (task->parent ? task->parent->client_id : -1));
+        TASKGRIND_DEBUG("Task create %p (parent %p)", (void *) client_id, (void *) (task->parent ? task->parent->client_id : TASKGRIND_CLIENT_ID_PRIVATE));
     }
 
     tl_assert(task);
@@ -118,15 +120,17 @@ task_get(UWord client_id)
 void
 task_schedule(UWord client_id)
 {
-    UWord old = CURRENT_TASK ? CURRENT_TASK->client_id : -1;   // DEBUG REMOVE ME
+    // DEBUG REMOVE ME
+    UWord old = CURRENT_TASK ? CURRENT_TASK->client_id : TASKGRIND_CLIENT_ID_PRIVATE;
 
     CURRENT_TASK = task_get(client_id);
     tl_assert(CURRENT_TASK);
 
-    if (old == -1 || old != CURRENT_TASK->client_id)                                      // DEBUG REMOVE ME
+    if (old != CURRENT_TASK->client_id)
     {
-        TASKGRIND_DEBUG("Task switch %p -> %p", (void *)old, (void *)CURRENT_TASK->client_id);  // DEBUG REMOVE ME
+        TASKGRIND_DEBUG("Task switch %p -> %p", (void *)old, (void *)CURRENT_TASK->client_id);
     }
+    // DEBUG REMOVE ME
 }
 
 // accesses
@@ -207,7 +211,7 @@ task_link_access(task_t * pred, task_t * succ)
     if (task_array_last(&pred->access_successors) == succ)
         return ;
     task_array_push(&pred->access_successors, succ);
-    TASKGRIND_DEBUG("   Added edge %p -> %p", (void *)pred->child_id, (void *)succ->child_id);
+    TASKGRIND_DEBUG("   Added edge %p -> %p", (void *)pred->client_id, (void *)succ->client_id);
 }
 
 // add a dependency to the task following RaW constraints
@@ -247,7 +251,8 @@ task_access(UWord client_id, UWord addr, UWord type)
                  * outset:  O   O   <- the task we are inserting
                  */
                 accesses->out = task_alloc();
-                accesses->out->client_id = -1;
+                accesses->out->client_id = TASKGRIND_CLIENT_ID_PRIVATE;
+                accesses->out->type      = TASK_TYPE_IMPLICIT_OUTSET;
                 for (i = 0 ; i < accesses->ins.n ; ++i)
                 {
                     // prevent cyclic deps in case 'task' already had an 'in'
@@ -359,7 +364,8 @@ task_sync(void)
 
     //// create an empty task (the barrier)
     //task_t * barrier = task_alloc();
-    //barrier->client_id = -1;
+    //barrier->client_id = TASKGRIND_CLIENT_ID_PRIVATE;
+    //barrier->type      = TASKGRIND_TYPE_IMPLICIT_BARRIER;
 
     //// for each children task of the current task
     //int i;

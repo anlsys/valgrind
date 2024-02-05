@@ -56,7 +56,30 @@ taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
     {
         case VG_USERREQ__TASKGRIND_CREATE_EVENT:
         {
-            task_create(arg[1]);
+            taskgrind_task_type_t ttype = (taskgrind_task_type_t) arg[2];
+            task_type_t type;
+            switch (type)
+            {
+                case (TASKGRIND_TASK_TYPE_EXPLICIT):
+                {
+                    type = TASK_TYPE_EXPLICIT;
+                    break ;
+                }
+
+                case (TASKGRIND_TASK_TYPE_IMPLICIT):
+                {
+                    type = TASK_TYPE_IMPLICIT_UNKNOWN;
+                    break ;
+                }
+
+                default:
+                {
+                    type = TASK_TYPE_UNKNOWN;
+                    break ;
+                }
+            }
+
+            task_create(arg[1], type);
             return True;
         }
 
