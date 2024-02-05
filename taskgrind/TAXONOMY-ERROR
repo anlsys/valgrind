@@ -1,0 +1,34 @@
+! ATTENTION !
+VALGRIND (i.e. associer les accès mémoires aux tâches) n'est vraiment utile qu'à
+    E1, PH1
+
+ERROR
+    E1 - 2 tâches sont déclarés concurrentes alors que non (d'après ordre séquentiel + RaW rule)
+        - Dépendances manquantes entre tâches soeurs
+        - Dépendances manquantes entre tâches cousines (weak dependencies)
+
+PERFORMANCE HINT
+    PH1 - des dépendances sont déclarés inutilement (réduisant le parallélisme)
+        - (T1) -> (T2) alors que pas de dépendances sur les accès mémoires.
+
+    PH2 - arcs multiples (surcoût 'inutile')
+        - out(x, y) -> in(x, y)
+
+    PH3 - dépendances redondances (surcoût 'inutile')
+        - out(x), in(x), outset(x)
+        - out(x, x, x)
+
+    PH4 - arcs redondants par transitivité
+        - out(x, y) -> out(x) -> in(x)
+                |_________________^
+
+    PH5 - plusieurs barrière de synchronisation se suivent inutilement (1 seul suffirait)
+
+
+IDEE A CREUSER
+
+    PH6 - un hint pour favoriser l'usage des caches
+        - exemple : la tâche 'T' accède à un tableau qui ne rentre pas en cache L1 (ou L2, ou L3)...
+
+    PH7 - consommation énergétique
+            - intensité arithmétique et ordonnancement ?

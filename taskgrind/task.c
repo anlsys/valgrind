@@ -68,7 +68,7 @@ task_alloc(void)
     task->accesses          = NULL;
     task->parent            = CURRENT_TASK;
     task_array_init(&task->access_successors);
-    task_array_init(&task->dataflow_successors);
+    task_array_init(&task->raw_successors);
     task_array_init(&task->children);
 
     if (CURRENT_TASK)

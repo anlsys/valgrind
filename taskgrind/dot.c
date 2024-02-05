@@ -24,13 +24,26 @@ dump_task(VgFile * fp, task_t * task)
     switch (task->type)
     {
         case (TASK_TYPE_IMPLICIT_BARRIER):
-        case (TASK_TYPE_IMPLICIT_OUTSET):
-        case (TASK_TYPE_IMPLICIT_UNKNOWN):
         {
-            type = "implicit";
+            type = "imp(barrier)";
             shape = "diamond";
             break ;
         }
+
+        case (TASK_TYPE_IMPLICIT_OUTSET):
+        {
+            type = "imp(outset)";
+            shape = "diamond";
+            break ;
+        }
+
+        case (TASK_TYPE_IMPLICIT_UNKNOWN):
+        {
+            type = "imp(unknown)";
+            shape = "diamond";
+            break ;
+        }
+
 
         case (TASK_TYPE_EXPLICIT):
         {

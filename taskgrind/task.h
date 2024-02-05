@@ -83,7 +83,7 @@ typedef struct  task_s
     task_array_t access_successors;
 
     // real successors using RaW on load/stores
-    task_array_t dataflow_successors;
+    task_array_t raw_successors;
 
     // task hmap for child dependencies
     task_accesses_t * accesses;
