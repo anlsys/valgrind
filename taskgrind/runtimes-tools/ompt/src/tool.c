@@ -220,6 +220,18 @@ on_ompt_callback_sync_region(
     }
 }
 
+void
+on_ompt_callback_work(
+    ompt_work_t work_type,
+    ompt_scope_endpoint_t endpoint,
+    ompt_data_t * parallel_data,
+    ompt_data_t * task_data,
+    uint64_t count,
+    const void * codeptr_ra
+) {
+
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // OMPT INIT / DEINIT CALLBACKS
 ///////////////////////////////////////////////////////////////////////////////
@@ -242,6 +254,7 @@ int ompt_initialize(
     register_callback(ompt_callback_task_schedule);
     register_callback(ompt_callback_dependences);
     register_callback(ompt_callback_sync_region);
+    register_callback(ompt_callback_work);
     return 1;
 }
 
