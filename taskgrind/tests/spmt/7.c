@@ -34,5 +34,9 @@ int main(void)
 
     SPMT_F_ASSERT(SPMT_IS_EMPTY(&DST));
 
+    SPMT_RELEASE(&A);
+    SPMT_RELEASE(&B);
+    SPMT_RELEASE(&DST);
+
     return 0;
 }

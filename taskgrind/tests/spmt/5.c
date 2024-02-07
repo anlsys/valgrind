@@ -30,5 +30,9 @@ int main(void)
     puts("----------------------------------------------------");
     SPMT_DUMP_FILLED(printf, &DST);
 
+    SPMT_RELEASE(&A);
+    SPMT_RELEASE(&B);
+    SPMT_RELEASE(&DST);
+
     return 0;
 }

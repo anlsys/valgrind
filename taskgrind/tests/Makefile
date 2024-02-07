@@ -2,19 +2,22 @@ CC=clang
 
 CFLAGS=-Wall -Werror -Wextra
 CFLAGS+=-fopenmp
+CFLAGS+=-I ../
+CFLAGS+=-O0 -g
 
 LDFLAGS=
 
-TARGET=omp
+SRC=omp.c ph1.c $(wildcard spmt/*.c)
+EXE=$(SRC:.c=.exe)
 
-SRC=omp.c
+all: $(EXE)
 
-all: $(TARGET)
-
-$(TARGET): $(SRC)
-	$(CC) $(CFLAGS) omp.c $(LDFLAGS) -o $(TARGET)
+%.exe: %.c
+	$(CC) $(CFLAGS) $< $(LDFLAGS) -o $@
 
 clean:
-	rm $(TARGET)
+	rm -rf $(EXE)
+
+re: clean all
 
 install:

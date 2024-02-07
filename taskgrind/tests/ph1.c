@@ -4,29 +4,36 @@
 # include <stdlib.h>
 # include <stdint.h>
 
-void toto(int * x, int i)
+static int * x;
+
+void toto(int * x, int i, int v)
 {
-    x[i] = 1;
+    x[i] = v;
+    x[0] = v;
+    x[1] = v;
 }
 
 int
 main(void)
 {
-    int * x = (int *) malloc(2 * sizeof(int));
+    x = (int *) malloc(2 * sizeof(int));
     printf("&x[0] == %p\n", x);
 
-    # pragma omp parallel shared(x)
+    # pragma omp parallel
     {
-        assert(omp_get_num_threads() == 1);
+//        assert(omp_get_num_threads() == 1);
 
         # pragma omp single nowait
         {
-            # pragma omp task shared(x) depend(in: x)
-                toto(x, 0);
+            # pragma omp task
+                toto(x, 0, 42);
 
-            # pragma omp task shared(x) depend(out: x)
-                toto(x, 1);
+            # pragma omp task
+                toto(x, 1, 43);
         }
     }
+
+    printf("x[0]=%d, x[1]=%d\n", x[0], x[1]);
+
     return 0;
 }

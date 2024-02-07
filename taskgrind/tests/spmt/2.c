@@ -13,5 +13,6 @@ int main(void)
     SPMT_DUMP(printf, &tree);
     puts("----------------------------------------------------");
     SPMT_DUMP_FILLED(printf, &tree);
+    SPMT_RELEASE(&tree);
     return 0;
 }
