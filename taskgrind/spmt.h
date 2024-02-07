@@ -184,6 +184,27 @@ __spmt_dump(int (*print)(const char *, ...), spmt_node_t * parent, int depth)
     } while (0);
 
 static inline void
+__spmt_dump_filled(int (*print)(const char *, ...), spmt_node_t * parent)
+{
+    if (parent->filled)
+        print(", [%llu, %llu]", parent->begin, parent->end);
+
+    int i;
+    for (i = 0 ; i < SPMT_N_CHILDREN ; ++i)
+    {
+        if (parent->children[i])
+            __spmt_dump_filled(print, parent->children[i]);
+    }
+}
+
+# define SPMT_DUMP_FILLED(F, T)     \
+    do {                            \
+        F("U {}");                  \
+        __spmt_dump_filled(F, T);   \
+        F("\n");                    \
+    } while (0);
+
+static inline void
 __spmt_intersect(spmt_node_t * dst, spmt_node_t * a, spmt_node_t * b, char a_filled, char  b_filled)
 {
     if (a_filled && b_filled)
@@ -225,6 +246,8 @@ __spmt_intersect(spmt_node_t * dst, spmt_node_t * a, spmt_node_t * b, char a_fil
             SPMT_F_ASSERT((DST)->children[i] == SPMT_NULL);     \
         __spmt_intersect(DST, A, B, (A)->filled, (B)->filled);  \
     } while (0);
+
+# define SPMT_RELEASE(DST) __spmt_release_children(DST)
 
 static inline int
 __spmt_is_empty(spmt_node_t * node)

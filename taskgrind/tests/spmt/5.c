@@ -10,19 +10,25 @@ int main(void)
     spmt_t A;
     SPMT_INITIALIZE(&A);
     SPMT_FILL(&A, 0, 8);
-    puts("----------------------");
+    puts("----------------------------------------------------");
     SPMT_DUMP(printf, &A);
+    puts("----------------------------------------------------");
+    SPMT_DUMP_FILLED(printf, &A);
 
     spmt_t B;
     SPMT_INITIALIZE(&B);
     SPMT_FILL(&B, 0, 8);
-    puts("----------------------");
+    puts("----------------------------------------------------");
     SPMT_DUMP(printf, &B);
+    puts("----------------------------------------------------");
+    SPMT_DUMP_FILLED(printf, &B);
 
     spmt_t DST;
     SPMT_INTERSECT(&DST, &A, &B);
-    puts("----------------------");
+    puts("----------------------------------------------------");
     SPMT_DUMP(printf, &DST);
+    puts("----------------------------------------------------");
+    SPMT_DUMP_FILLED(printf, &DST);
 
     return 0;
 }
