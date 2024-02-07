@@ -12,6 +12,7 @@ typedef enum    task_type_e
 {
     TASK_TYPE_UNKNOWN,
     TASK_TYPE_EXPLICIT,
+    TASK_TYPE_IMPLICIT,
     TASK_TYPE_IMPLICIT_ROOT,
     TASK_TYPE_IMPLICIT_OUTSET,
     TASK_TYPE_IMPLICIT_BARRIER,
@@ -142,5 +143,8 @@ void task_array_push(task_array_t * array, struct task_s * task);
 struct task_s * task_array_last(task_array_t * array);
 void task_array_clear(task_array_t * array);
 void task_array_deinit(task_array_t * array);
+
+// FINILIZE -> generate analysis and report
+void task_fini(void);
 
 #endif /* __TASK_H__ */

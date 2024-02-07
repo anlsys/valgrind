@@ -9,8 +9,6 @@ static int * x;
 void toto(int * x, int i, int v)
 {
     x[i] = v;
-    x[0] = v;
-    x[1] = v;
 }
 
 int
@@ -21,14 +19,14 @@ main(void)
 
     # pragma omp parallel
     {
-//        assert(omp_get_num_threads() == 1);
+        assert(omp_get_num_threads() == 1);
 
         # pragma omp single nowait
         {
-            # pragma omp task
+            # pragma omp task depend(out: x)
                 toto(x, 0, 42);
 
-            # pragma omp task
+            # pragma omp task depend(in: x)
                 toto(x, 1, 43);
         }
     }

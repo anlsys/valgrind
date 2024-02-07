@@ -48,7 +48,6 @@
 // The tasking environment being instrumented
 static taskgrind_env_t ENV = {0};
 
-
 static Bool
 taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
 {
@@ -174,9 +173,11 @@ taskgrind_instrument(
     IRType gWordTy,
     IRType hWordTy
 ) {
-    IRSB * sb_out;
-    IRStmt * st;
-    Int i;
+    // Accesses in these functions can be ignored
+    static const HChar * SUPPRESS_FN[] = {
+        "on_ompt",
+        "__kmp",
+    };
 
     if (gWordTy != hWordTy)
         VG_(tool_panic)("host/guest word size mismatch");
@@ -192,14 +193,37 @@ taskgrind_instrument(
     if (!ENV.name)
         return sb_in;
 
-    // instrument code
-    sb_out = deepCopyIRSBExceptStmts(sb_in);
+    // Nothing to do if running in run-time code
+    IRStmt * st = sb_in->stmts[0];
+    Addr addr = st->Ist.IMark.addr + st->Ist.IMark.delta;
+    DiEpoch ep = VG_(current_DiEpoch)();
+    const HChar * fn;
+    if (VG_(get_fnname)(ep, addr, &fn))
+        for (int i = 0 ; i < sizeof(SUPPRESS_FN) / sizeof(const HChar *) ; ++i)
+            if (VG_(strstr)(fn, SUPPRESS_FN[i]))
+                return sb_in;
+
+    if (CURRENT_TASK->client_id == 3)
+        TASKGRIND_INFO("Instrumenting %s", fn);
+
+    // deep copy code until marker
+    IRSB * sb_out = deepCopyIRSBExceptStmts(sb_in);
+    Int i;
     for (i = 0 ; i < sb_in->stmts_used && sb_in->stmts[i]->tag != Ist_IMark ; ++i)
         addStmtToIRSB(sb_out, sb_in->stmts[i]);
 
+    // instrument code
     for ( ; i < sb_in->stmts_used; ++i)
     {
         st = sb_in->stmts[i];
+
+#if 0
+        addr = st->Ist.IMark.addr + st->Ist.IMark.delta;
+        ep = VG_(current_DiEpoch)();
+        if (VG_(get_fnname)(ep, addr, &fn))
+            if (CURRENT_TASK->client_id == 3)
+                TASKGRIND_INFO("  Instrumenting %s", fn);
+#endif
 
         switch (st->tag)
         {
@@ -472,8 +496,7 @@ taskgrind_post_clo_init(void)
 static void
 taskgrind_fini(Int exitcode)
 {
-    // CURRENT_task should be 'ROOT' to that point
-    taskgrind_export_tcfg(CURRENT_TASK);
+    task_fini();
 }
 
 ///////////////////////////////////////////////////////////////////////////////

@@ -56,20 +56,22 @@ task_array_deinit(task_array_t * array)
 }
 
 static inline task_t *
-task_alloc(void)
+task_new(UWord client_id, task_type_t type)
 {
     task_t * task;
 
-    task = (task_t *) VG_(malloc)("task_alloc", sizeof(task_t));
+    task = (task_t *) VG_(malloc)("task_new", sizeof(task_t));
     task->child_id          = ++CURRENT_TASK->next_child_id;
     task->next_child_id     = 0;
-    task->client_id         = TASKGRIND_CLIENT_ID_PRIVATE;
-    task->type              = TASK_TYPE_UNKNOWN;
+    task->client_id         = client_id;
+    task->type              = type;
     task->accesses          = NULL;
     task->parent            = CURRENT_TASK;
     task_array_init(&task->access_successors);
     task_array_init(&task->raw_successors);
     task_array_init(&task->children);
+    SPMT_INITIALIZE(&task->loads);
+    SPMT_INITIALIZE(&task->stores);
 
     task_array_push(&CURRENT_TASK->children, task);
 
@@ -89,13 +91,9 @@ task_create(UWord client_id, task_type_t type)
 
     if (task == NULL)
     {
-        task = task_alloc();
-        task->client_id = client_id;
-        task->type = type;
+        task = task_new(client_id, type);
         HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASKS, &(task->client_id), sizeof(UWord), hashv, task);
         TASKGRIND_DEBUG("Task create %p (parent %p)", (void *) client_id, (void *) (task->parent ? task->parent->client_id : TASKGRIND_CLIENT_ID_PRIVATE));
-        SPMT_INITIALIZE(&task->loads);
-        SPMT_INITIALIZE(&task->stores);
     }
 
     tl_assert(task);
@@ -249,9 +247,7 @@ task_access(UWord client_id, UWord addr, UWord type)
                  *           / \
                  * outset:  O   O   <- the task we are inserting
                  */
-                accesses->out = task_alloc();
-                accesses->out->client_id = TASKGRIND_CLIENT_ID_PRIVATE;
-                accesses->out->type      = TASK_TYPE_IMPLICIT_OUTSET;
+                accesses->out = task_new(TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_OUTSET);
                 for (i = 0 ; i < accesses->ins.n ; ++i)
                 {
                     // prevent cyclic deps in case 'task' already had an 'in'
@@ -285,8 +281,7 @@ task_access(UWord client_id, UWord addr, UWord type)
                  *                   / \
                  * in:              O   O   <- the task we are inserting
                  */
-                accesses->out = task_alloc();
-                accesses->out->client_id = 0xFA3E;
+                accesses->out = task_new(TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_OUTSET);
                 for (i = 0 ; i < accesses->outsets.n ; ++i)
                 {
                     outset = accesses->outsets.tasks[i];
@@ -358,30 +353,32 @@ task_access(UWord client_id, UWord addr, UWord type)
 void
 task_sync(void)
 {
-    //// create an empty task (the barrier)
-    //task_t * barrier = task_alloc();
-    //barrier->client_id = TASKGRIND_CLIENT_ID_PRIVATE;
-    //barrier->type      = TASKGRIND_TYPE_IMPLICIT_BARRIER;
+    // // create an empty task (the barrier)
+    // task_t * barrier = task_new(TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_BARRIER);
 
-    //// for each children task of the current task
-    //int i;
-    //for (i = 0 ; i < CURRENT_TASK->children.n ; ++i)
-    //{
-    //    // link them with the new barrier
-    //    task_t * task = CURRENT_TASK->children.tasks[i];
-    //    if (task->access_successors.n == 0)
-    //        task_link_access(task, barrier);
-    //}
+    // // for each children task of the current task
+    // int i;
+    // for (i = 0 ; i < CURRENT_TASK->children.n ; ++i)
+    // {
+    //     // link them with the new barrier
+    //     task_t * task = CURRENT_TASK->children.tasks[i];
+    //     if (task->access_successors.n == 0)
+    //         task_link_access(task, barrier);
+    // }
 
-    // TODO: link each future children with this barrier
+    // // TODO: link each future children with this barrier
 }
+
+// TODO : memory accesses outside of outlined functions has to be filtered out
 
 // memory accesses
 void
 task_mem_load(Addr addr, SizeT size)
 {
 #if 0
-    TASKGRIND_DEBUG("(task=%p) LOAD  0x%010lX %lu", CURRENT_TASK, addr, size);
+    TASKGRIND_DEBUG("(task=%p) LOAD  0x%010lX %lu",
+            (void *) CURRENT_TASK->client_id, addr, size);
+
 #endif
     SPMT_FILL(&CURRENT_TASK->loads, addr, addr + size);
 }
@@ -389,12 +386,84 @@ task_mem_load(Addr addr, SizeT size)
 void
 task_mem_store(Addr addr, SizeT size)
 {
-#if 0
-    TASKGRIND_DEBUG("(task=%p) STORE 0x%010lX %lu", CURRENT_TASK, addr, size);
+#if 1
+    if (CURRENT_TASK->client_id == 3)
+        TASKGRIND_DEBUG("(task=%p) STORE 0x%010lX %lu",
+                (void *) CURRENT_TASK->client_id, addr, size);
 #endif
-    SPMT_FILL(&CURRENT_TASK->loads, addr, addr + size);
+    SPMT_FILL(&CURRENT_TASK->stores, addr, addr + size);
+}
+
+// TODO: analysis code bellow is experimental and temporary
+
+static inline void
+__analyze_useless_dependencies_between(task_t * pred, task_t * succ)
+{
+    TASKGRIND_INFO("--------------------");
+    SPMT_DUMP_FILLED(VG_(printf), &pred->stores);
+    TASKGRIND_INFO("--------------------");
+    SPMT_DUMP_FILLED(VG_(printf), &succ->stores);
+
+    spmt_t inter;
+    SPMT_INTERSECT(&inter, &pred->stores, &succ->stores);
+
+    if (SPMT_IS_EMPTY(&inter))
+    {
+        TASKGRIND_INFO("  %p and %p were declared dependent having no data dependencies",
+                (void *)pred->client_id,
+                (void *)succ->client_id);
+    }
+    else
+    {
+        TASKGRIND_INFO("  %p and %p were declared dependent having data dependencies",
+                (void *)pred->client_id,
+                (void *)succ->client_id);
+    }
+    SPMT_DUMP_FILLED(VG_(printf), &inter);
+
+    SPMT_RELEASE(&inter);
 }
 
 
+static inline void
+__analyze_useless_dependencies(task_t * parent)
+{
+    if (parent->children.n == 0)
+        return ;
 
+    TASKGRIND_INFO("Checking dependencies for children of %p", (void*)parent->client_id);
+    for (int i = 0 ; i < parent->children.n ; ++i)
+    {
+        task_t * pred = parent->children.tasks[i];
+        if (pred->type >= TASK_TYPE_IMPLICIT)
+            continue ;
 
+        for (int j = 0 ; j < pred->access_successors.n ; ++j)
+        {
+            task_t * succ = pred->access_successors.tasks[j];
+
+            // outset tasks are 'empty' and ensure control-flow dependency, not data dependency
+            // data dependency are between their predecessors and successors
+            if (succ->type == TASK_TYPE_IMPLICIT_OUTSET)
+            {
+                for (int k = 0 ; k < succ->access_successors.n ; ++k)
+                    __analyze_useless_dependencies_between(pred, succ->access_successors.tasks[k]);
+            }
+            else
+            {
+                __analyze_useless_dependencies_between(pred, succ);
+            }
+        }
+    }
+}
+
+// Execution terminated, perform analysis and report here
+void
+task_fini(void)
+{
+    TASKGRIND_INFO("Starting analysis...");
+    __analyze_useless_dependencies(CURRENT_TASK);
+    TASKGRIND_INFO("Analysis completed.");
+
+    // taskgrind_export_tcfg(CURRENT_TASK);
+}
