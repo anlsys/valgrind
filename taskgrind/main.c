@@ -112,17 +112,36 @@ taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
 //  Instrumentation
 ///////////////////////////////////////////////////////////////////////////////
 
+# include "pub_tool_threadstate.h"
+# include "pub_tool_stacktrace.h"
+
 typedef enum    taskgrind_mem_access_type_e
 {
     TASKGRIND_TASK_MEM_LOAD,
     TASKGRIND_TASK_MEM_STORE,
 }               taskgrind_mem_access_type_t;
 
+// TODO: currently, this is used as a quick and dirty fix to ignore stack
+// accesses, detecting them if they are 'close' to the current stack pointer
+// (<1Go).  Otherwise, stack accesses causes every tasks to be inter-dependent,
+// as they only execute on the same thread, on the same stack, one after
+// another
+static inline int
+taskgrind_accessing_stack(Addr addr)
+{
+    ThreadId tid = VG_(get_running_tid)();
+    Addr sp  = VG_(get_SP)(tid);
+    Long diff = (Long)(sp < addr ? addr - sp : sp - addr);
+    return (diff < 1024*1024*1024);
+}
+
 static inline void
 taskgrind_instrument_mem_access_helper_load(
     Addr addr,
     SizeT size
 ) {
+    if (taskgrind_accessing_stack(addr))
+        return ;
     task_mem_load(addr, size);
 }
 
@@ -131,6 +150,8 @@ taskgrind_instrument_mem_access_helper_store(
     Addr addr,
     SizeT size
 ) {
+    if (taskgrind_accessing_stack(addr))
+        return ;
     task_mem_store(addr, size);
 }
 
@@ -175,7 +196,7 @@ taskgrind_instrument(
 ) {
     // Accesses in these functions can be ignored
     static const HChar * SUPPRESS_FN[] = {
-        "on_ompt",
+//        "on_ompt",
         "__kmp",
     };
 

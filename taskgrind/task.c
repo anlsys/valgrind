@@ -415,15 +415,15 @@ __analyze_useless_dependencies_between(task_t * pred, task_t * succ)
 
     if (SPMT_IS_EMPTY(&inter))
     {
-//        TASKGRIND_INFO("  %p and %p were declared dependent having no data dependencies",
-//                (void *)pred->client_id,
-//                (void *)succ->client_id);
+        TASKGRIND_INFO("  %p and %p were declared dependent having no data dependencies",
+                (void *)pred->client_id,
+                (void *)succ->client_id);
     }
     else
     {
-//        TASKGRIND_INFO("  %p and %p were declared dependent having data dependencies",
-//                (void *)pred->client_id,
-//                (void *)succ->client_id);
+        TASKGRIND_INFO("  %p and %p were declared dependent having data dependencies",
+                (void *)pred->client_id,
+                (void *)succ->client_id);
     }
 
     TASKGRIND_INFO("--------------------------------");

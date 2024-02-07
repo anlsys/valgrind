@@ -25,12 +25,7 @@ main(void)
         # pragma omp single nowait
         {
             # pragma omp task depend(out: x)
-            {
                 x[0] = 42;
-                int z = 43;
-                (void) z;
-                x[0] = 43;
-            }
 
             # pragma omp task depend(in: x)
                 x[1] = 43;
