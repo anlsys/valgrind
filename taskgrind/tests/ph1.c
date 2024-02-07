@@ -14,8 +14,9 @@ void toto(int * x, int i, int v)
 int
 main(void)
 {
+    int y;
     x = (int *) malloc(2 * sizeof(int));
-    printf("&x[0] == %p\n", x);
+    printf("&x[0] == %p ; &x == %p ; &y == %p\n", x, &x, &y);
 
     # pragma omp parallel
     {
@@ -24,10 +25,15 @@ main(void)
         # pragma omp single nowait
         {
             # pragma omp task depend(out: x)
-                toto(x, 0, 42);
+            {
+                x[0] = 42;
+                int z = 43;
+                (void) z;
+                x[0] = 43;
+            }
 
             # pragma omp task depend(in: x)
-                toto(x, 1, 43);
+                x[1] = 43;
         }
     }
 

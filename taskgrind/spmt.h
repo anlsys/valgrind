@@ -187,7 +187,7 @@ static inline void
 __spmt_dump_filled(int (*print)(const char *, ...), spmt_node_t * parent)
 {
     if (parent->filled)
-        print(", [%p, %p]", parent->begin, parent->end);
+        print(", [%llu, %llu]", parent->begin, parent->end);
 
     int i;
     for (i = 0 ; i < SPMT_N_CHILDREN ; ++i)

@@ -396,30 +396,40 @@ task_mem_store(Addr addr, SizeT size)
 
 // TODO: analysis code bellow is experimental and temporary
 
+// TODO: current problem, LOAD/STORE on the thread's stack
+
 static inline void
 __analyze_useless_dependencies_between(task_t * pred, task_t * succ)
 {
     TASKGRIND_INFO("--------------------");
-    SPMT_DUMP_FILLED(VG_(printf), &pred->stores);
+    TASKGRIND_INFO("Task %p", (void *) pred->client_id);
     TASKGRIND_INFO("--------------------");
-    SPMT_DUMP_FILLED(VG_(printf), &succ->stores);
+    SPMT_DUMP_FILLED(VG_(umsg), &pred->stores);
+    TASKGRIND_INFO("--------------------");
+    TASKGRIND_INFO("Task %p", (void *) succ->client_id);
+    TASKGRIND_INFO("--------------------");
+    SPMT_DUMP_FILLED(VG_(umsg), &succ->stores);
 
     spmt_t inter;
     SPMT_INTERSECT(&inter, &pred->stores, &succ->stores);
 
     if (SPMT_IS_EMPTY(&inter))
     {
-        TASKGRIND_INFO("  %p and %p were declared dependent having no data dependencies",
-                (void *)pred->client_id,
-                (void *)succ->client_id);
+//        TASKGRIND_INFO("  %p and %p were declared dependent having no data dependencies",
+//                (void *)pred->client_id,
+//                (void *)succ->client_id);
     }
     else
     {
-        TASKGRIND_INFO("  %p and %p were declared dependent having data dependencies",
-                (void *)pred->client_id,
-                (void *)succ->client_id);
+//        TASKGRIND_INFO("  %p and %p were declared dependent having data dependencies",
+//                (void *)pred->client_id,
+//                (void *)succ->client_id);
     }
-    SPMT_DUMP_FILLED(VG_(printf), &inter);
+
+    TASKGRIND_INFO("--------------------------------");
+    TASKGRIND_INFO("Intersect tasks %p n %p", (void*)pred->client_id, (void*)succ->client_id);
+    TASKGRIND_INFO("------------------------------");
+    SPMT_DUMP_FILLED(VG_(umsg), &inter);
 
     SPMT_RELEASE(&inter);
 }
