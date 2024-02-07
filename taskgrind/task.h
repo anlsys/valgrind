@@ -3,21 +3,16 @@
 
 #include "pub_tool_basics.h"
 #include "pub_tool_libcbase.h"      /* strstr */
-#include "pub_tool_mallocfree.h"    /* malloc, free */
 
-# define uthash_malloc(size)        VG_(malloc)("taskgrind.uthash", size)
-# define uthash_free(ptr, size)     VG_(free)(ptr)
-# define uthash_exit(c)             VG_(exit)(c)
-# define uthash_memcmp(s1, s2, n)   VG_(memcmp)(s1, s2, n)
-# define uthash_memset(s, c, n)     VG_(memset)(s, c, n)
-
-# include "uthash.h"
+# include "taskgrind_uthash.h"
+# include "taskgrind_spmt.h"
 
 // task types
 typedef enum    task_type_e
 {
     TASK_TYPE_UNKNOWN,
     TASK_TYPE_EXPLICIT,
+    TASK_TYPE_IMPLICIT_ROOT,
     TASK_TYPE_IMPLICIT_OUTSET,
     TASK_TYPE_IMPLICIT_BARRIER,
     TASK_TYPE_IMPLICIT_UNKNOWN,
@@ -35,6 +30,8 @@ typedef struct  task_array_s
     // number of tasks set
     UInt n;
 }               task_array_t;
+
+# define TASK_ARRAY_INITIALIZE_STATIC {NULL, 0, 0}
 
 // task accesses hmap for child dependences
 typedef struct  task_accesses_t
@@ -94,9 +91,31 @@ typedef struct  task_s
     // children
     task_array_t children;
 
+    // memory loads
+    spmt_t loads;
+
+    // memory stores
+    spmt_t stores;
+
     // hmap handle
     UT_hash_handle hh;
 }               task_t;
+
+# define TASK_INITIALIZE_STATIC(T)                          \
+    {                                                       \
+        .type               = T,                            \
+        .child_id           = 0,                            \
+        .next_child_id      = 0,                            \
+        .client_id          = TASKGRIND_CLIENT_ID_PRIVATE,  \
+        .access_successors  = TASK_ARRAY_INITIALIZE_STATIC, \
+        .raw_successors     = TASK_ARRAY_INITIALIZE_STATIC, \
+        .accesses           = NULL,                         \
+        .parent             = NULL,                         \
+        .children           = TASK_ARRAY_INITIALIZE_STATIC, \
+        .loads              = SPMT_INITIALIZE_STATIC,       \
+        .stores             = SPMT_INITIALIZE_STATIC,       \
+        .hh                 = {0},                          \
+    }
 
 // GLOBAL VARIABLE MAPPING EXECUTION AS TASKS
 
@@ -106,14 +125,15 @@ extern task_t * TASKS;
 // The current task
 extern task_t * CURRENT_TASK;
 
-// Root tasks in the TCFG
-extern task_array_t ROOTS;
-
 // FUNCTIONS TO BUILD THE MAPPING
 task_t * task_create(UWord client_id, task_type_t type);
 void task_schedule(UWord client_id);
 void task_access(UWord client_id, UWord addr, UWord type);
 void task_sync(void);
+
+// FUNCTIONS FOR MEMORY ACCESSES DETECTED
+void task_mem_load(Addr addr, SizeT size);
+void task_mem_store(Addr addr, SizeT size);
 
 // HELPER FUNCTIONS
 task_t * task_get(UWord client_id);

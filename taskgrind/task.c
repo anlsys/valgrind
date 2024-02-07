@@ -7,11 +7,11 @@
 // The tasks hmap
 task_t * TASKS;
 
-// The current task
-task_t * CURRENT_TASK;
+// Implicit root task of the entire program
+static task_t ROOT_TASK = TASK_INITIALIZE_STATIC(TASK_TYPE_IMPLICIT_ROOT);
 
-// Root tasks in the TCFG
-task_array_t ROOTS;
+// The current task
+task_t * CURRENT_TASK = &ROOT_TASK;
 
 void
 task_array_init(task_array_t * array)
@@ -61,7 +61,7 @@ task_alloc(void)
     task_t * task;
 
     task = (task_t *) VG_(malloc)("task_alloc", sizeof(task_t));
-    task->child_id          = CURRENT_TASK ? ++CURRENT_TASK->next_child_id : 0;
+    task->child_id          = ++CURRENT_TASK->next_child_id;
     task->next_child_id     = 0;
     task->client_id         = TASKGRIND_CLIENT_ID_PRIVATE;
     task->type              = TASK_TYPE_UNKNOWN;
@@ -71,10 +71,7 @@ task_alloc(void)
     task_array_init(&task->raw_successors);
     task_array_init(&task->children);
 
-    if (CURRENT_TASK)
-       task_array_push(&CURRENT_TASK->children, task);
-    else
-        task_array_push(&ROOTS, task);
+    task_array_push(&CURRENT_TASK->children, task);
 
     return task;
 }
@@ -97,6 +94,8 @@ task_create(UWord client_id, task_type_t type)
         task->type = type;
         HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASKS, &(task->client_id), sizeof(UWord), hashv, task);
         TASKGRIND_DEBUG("Task create %p (parent %p)", (void *) client_id, (void *) (task->parent ? task->parent->client_id : TASKGRIND_CLIENT_ID_PRIVATE));
+        SPMT_INITIALIZE(&task->loads);
+        SPMT_INITIALIZE(&task->stores);
     }
 
     tl_assert(task);
@@ -359,9 +358,6 @@ task_access(UWord client_id, UWord addr, UWord type)
 void
 task_sync(void)
 {
-    if (!CURRENT_TASK)
-        return ;
-
     //// create an empty task (the barrier)
     //task_t * barrier = task_alloc();
     //barrier->client_id = TASKGRIND_CLIENT_ID_PRIVATE;
@@ -379,3 +375,26 @@ task_sync(void)
 
     // TODO: link each future children with this barrier
 }
+
+// memory accesses
+void
+task_mem_load(Addr addr, SizeT size)
+{
+#if 0
+    TASKGRIND_DEBUG("(task=%p) LOAD  0x%010lX %lu", CURRENT_TASK, addr, size);
+#endif
+    SPMT_FILL(&CURRENT_TASK->loads, addr, addr + size);
+}
+
+void
+task_mem_store(Addr addr, SizeT size)
+{
+#if 0
+    TASKGRIND_DEBUG("(task=%p) STORE 0x%010lX %lu", CURRENT_TASK, addr, size);
+#endif
+    SPMT_FILL(&CURRENT_TASK->loads, addr, addr + size);
+}
+
+
+
+

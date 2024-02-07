@@ -56,9 +56,9 @@ taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
     {
         case VG_USERREQ__TASKGRIND_CREATE_EVENT:
         {
-            taskgrind_task_type_t ttype = (taskgrind_task_type_t) arg[2];
             task_type_t type;
-            switch (type)
+            taskgrind_task_type_t ttype = (taskgrind_task_type_t) arg[2];
+            switch (ttype)
             {
                 case (TASKGRIND_TASK_TYPE_EXPLICIT):
                 {
@@ -119,24 +119,20 @@ typedef enum    taskgrind_mem_access_type_e
     TASKGRIND_TASK_MEM_STORE,
 }               taskgrind_mem_access_type_t;
 
-static void
+static inline void
 taskgrind_instrument_mem_access_helper_load(
     Addr addr,
     SizeT size
 ) {
-#if 0
-    TASKGRIND_DEBUG("(task=%p) LOAD  0x%010lX %lu", CURRENT_TASK, addr, size);
-#endif
+    task_mem_load(addr, size);
 }
 
-static void
+static inline void
 taskgrind_instrument_mem_access_helper_store(
     Addr addr,
     SizeT size
 ) {
-#if 0
-    TASKGRIND_DEBUG("(task=%p) STORE 0x%010lX %lu", CURRENT_TASK, addr, size);
-#endif
+    task_mem_store(addr, size);
 }
 
 static void
@@ -146,29 +142,26 @@ taskgrind_instrument_mem_access(
     Int size,
     taskgrind_mem_access_type_t access_type
 ) {
-    if (CURRENT_TASK)
+    IRExpr ** argv;
+    IRDirty * di;
+    void * fn;
+    const char * fn_name;
+
+    if (access_type == TASKGRIND_TASK_MEM_LOAD)
     {
-        IRExpr ** argv;
-        IRDirty * di;
-        void * fn;
-        const char * fn_name;
-
-        if (access_type == TASKGRIND_TASK_MEM_LOAD)
-        {
-            fn      = taskgrind_instrument_mem_access_helper_load;
-            fn_name = "taskgrind_instrument_mem_access_helper_load";
-        }
-        else
-        {
-            fn = taskgrind_instrument_mem_access_helper_store;
-            fn_name = "taskgrind_instrument_mem_access_helper_store";
-        }
-
-        argv =  mkIRExprVec_2(addr, mkIRExpr_HWord(size));
-        di   =  unsafeIRDirty_0_N(2, fn_name, VG_(fnptr_to_fnentry)(fn), argv);
-
-        addStmtToIRSB(sb, IRStmt_Dirty(di));
+        fn      = taskgrind_instrument_mem_access_helper_load;
+        fn_name = "taskgrind_instrument_mem_access_helper_load";
     }
+    else
+    {
+        fn = taskgrind_instrument_mem_access_helper_store;
+        fn_name = "taskgrind_instrument_mem_access_helper_store";
+    }
+
+    argv =  mkIRExprVec_2(addr, mkIRExpr_HWord(size));
+    di   =  unsafeIRDirty_0_N(2, fn_name, VG_(fnptr_to_fnentry)(fn), argv);
+
+    addStmtToIRSB(sb, IRStmt_Dirty(di));
 }
 
 static IRSB *
@@ -196,7 +189,7 @@ taskgrind_instrument(
     if (!ENV.name)
         taskgrind_env_detect(&ENV);
 
-    if (!ENV.name || !CURRENT_TASK)
+    if (!ENV.name)
         return sb_in;
 
     // instrument code
@@ -474,16 +467,13 @@ taskgrind_post_clo_init(void)
     if (!clo_record && !clo_compare)
        taskgrind_clo_error("at least one command line option must be passed");
 #endif
-    task_array_init(&ROOTS);
 }
 
 static void
 taskgrind_fini(Int exitcode)
 {
-    int i;
-    for (i = 0 ; i < ROOTS.n ; ++i)
-        taskgrind_export_tcfg(ROOTS.tasks[i]);
-    task_array_deinit(&ROOTS);
+    // CURRENT_task should be 'ROOT' to that point
+    taskgrind_export_tcfg(CURRENT_TASK);
 }
 
 ///////////////////////////////////////////////////////////////////////////////

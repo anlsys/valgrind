@@ -6,8 +6,7 @@
 # include "valgrind.h"
 
 // RESERVED ids that client cannot use for TASKGRIND tasks
-# define TASKGRIND_CLIENT_ID_NULL       ((UWord)-1)
-# define TASKGRIND_CLIENT_ID_PRIVATE    ((UWord)-2)
+# define TASKGRIND_CLIENT_ID_PRIVATE    ((UWord)-1)
 
 // task types
 typedef enum    taskgrind_task_type_e
