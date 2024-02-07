@@ -14,7 +14,11 @@
  */
 
 /* SPMT pointer type */
-# define SPMT_PTR_T uintptr_t
+# ifndef SPMT_PTR_T
+#  define SPMT_PTR_T uintptr_t
+# endif
+
+# define SPMT_NULL  ((void *) 0)
 
 /* Default value is 1TB */
 # ifndef SPMT_SPACE
@@ -64,7 +68,7 @@ typedef spmt_node_t spmt_t;
                                 (T)->filled = 0;                            \
                             } while (0);
 
-# define SPMT_INITIALIZE_STATIC {0, SPMT_SPACE, 0, {(void*) 0, (void*) 0}}
+# define SPMT_INITIALIZE_STATIC {0, SPMT_SPACE, 0, {SPMT_NULL, SPMT_NULL}}
 
 static inline void
 __spmt_release_children(spmt_t * parent)
@@ -76,7 +80,7 @@ __spmt_release_children(spmt_t * parent)
         {
             __spmt_release_children(parent->children[i]);
             SPMT_F_FREE_NODE(parent->children[i]);
-            parent->children[i] = (spmt_node_t *) 0;
+            parent->children[i] = SPMT_NULL;
         }
     }
 }
@@ -174,8 +178,65 @@ __spmt_dump(int (*print)(const char *, ...), spmt_node_t * parent, int depth)
     }
 }
 
-# define SPMT_DUMP(F, T)    do {                        \
-                                __spmt_dump(F, T, 0);   \
-                            } while (0);
+# define SPMT_DUMP(F, T)        \
+    do {                        \
+        __spmt_dump(F, T, 0);   \
+    } while (0);
+
+static inline void
+__spmt_intersect(spmt_node_t * dst, spmt_node_t * a, spmt_node_t * b, char a_filled, char  b_filled)
+{
+    if (a_filled && b_filled)
+    {
+        dst->filled = 1;
+        return ;
+    }
+
+    uintptr_t begin = (a != SPMT_NULL) ? a->begin : b->begin;
+    uintptr_t end   = (a != SPMT_NULL) ? a->end   : b->end;
+    uintptr_t unit  = (end - begin) / SPMT_N_CHILDREN;
+
+    for (int i = 0 ; i < SPMT_N_CHILDREN ; ++i)
+    {
+        if (
+                (a_filled || (a != SPMT_NULL && a->children[i])) &&
+                (b_filled || (b != SPMT_NULL && b->children[i]))
+        ) {
+            __spmt_alloc_child(dst, i, begin + i * unit, begin + (i+1) * unit);
+            __spmt_intersect(
+                    dst->children[i],
+                    a ? a->children[i] : SPMT_NULL,
+                    b ? b->children[i] : SPMT_NULL,
+                    a_filled || (a != SPMT_NULL && a->children[i]->filled),
+                    b_filled || (b != SPMT_NULL && b->children[i]->filled)
+            );
+        }
+    }
+}
+
+# define SPMT_INTERSECT(DST, A, B)                              \
+    do {                                                        \
+        SPMT_INITIALIZE(DST);                                   \
+        SPMT_F_ASSERT((DST)->begin == (A)->begin);              \
+        SPMT_F_ASSERT((DST)->begin == (B)->begin);              \
+        SPMT_F_ASSERT((DST)->end   == (A)->end);                \
+        SPMT_F_ASSERT((DST)->end   == (B)->end);                \
+        for (int i = 0 ; i < SPMT_N_CHILDREN ; ++i)             \
+            SPMT_F_ASSERT((DST)->children[i] == SPMT_NULL);     \
+        __spmt_intersect(DST, A, B, (A)->filled, (B)->filled);  \
+    } while (0);
+
+static inline int
+__spmt_is_empty(spmt_node_t * node)
+{
+    for (int i = 0 ; i < SPMT_N_CHILDREN ; ++i)
+    {
+        if (node->children[i] != SPMT_NULL)
+            return 0;
+    }
+    return !node->filled;
+}
+
+# define SPMT_IS_EMPTY(T) __spmt_is_empty(T)
 
 #endif /* __SPMT_H__ */
