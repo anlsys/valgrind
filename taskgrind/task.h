@@ -92,6 +92,9 @@ typedef struct  task_s
     // children
     task_array_t children;
 
+    // barriers
+    task_array_t barriers;
+
     // memory loads
     spmt_t loads;
 

@@ -72,6 +72,7 @@ task_new(UWord client_id, task_type_t type)
     task_array_init(&task->access_successors);
     task_array_init(&task->raw_successors);
     task_array_init(&task->children);
+    task_array_init(&task->barriers);
     SPMT_INITIALIZE(&task->loads);
     SPMT_INITIALIZE(&task->stores);
 
@@ -80,9 +81,21 @@ task_new(UWord client_id, task_type_t type)
     return task;
 }
 
+// set the edge pred -> succ
+static inline void
+task_link_access(task_t * pred, task_t * succ)
+{
+    // filter out multiple edges
+    if (task_array_last(&pred->access_successors) == succ)
+        return ;
+    task_array_push(&pred->access_successors, succ);
+    TASKGRIND_DEBUG("   Added edge %p -> %p", (void *)pred->client_id, (void *)succ->client_id);
+}
+
 task_t *
 task_create(UWord client_id, task_type_t type)
 {
+    // ensure this client_id has not already been used
     task_t * task;
     unsigned hashv;
 
@@ -91,6 +104,7 @@ task_create(UWord client_id, task_type_t type)
 
     tl_assert(task == NULL);
 
+    // create the task
     if (task == NULL)
     {
         task = task_new(client_id, type);
@@ -99,6 +113,15 @@ task_create(UWord client_id, task_type_t type)
     }
 
     tl_assert(task);
+
+    // add edges with respect to previous synchronizations
+    // TODO: optimize this, maybe there will be a dependency path between
+    // 'barrier' and 'task' so there is no need to set the barrier edge here
+    for (int i = 0 ; i < CURRENT_TASK->barriers.n ; ++i)
+    {
+        task_t * barrier = CURRENT_TASK->barriers.tasks[i];
+        task_link_access(barrier, task);
+    }
 
     return task;
 }
@@ -200,17 +223,6 @@ task_access_is_redundant(
             return False;
         }
     }
-}
-
-// set the edge pred -> succ
-static inline void
-task_link_access(task_t * pred, task_t * succ)
-{
-    // filter out multiple edges
-    if (task_array_last(&pred->access_successors) == succ)
-        return ;
-    task_array_push(&pred->access_successors, succ);
-    TASKGRIND_DEBUG("   Added edge %p -> %p", (void *)pred->client_id, (void *)succ->client_id);
 }
 
 // add a dependency to the task following RaW constraints
@@ -355,20 +367,26 @@ task_access(UWord client_id, UWord addr, UWord type)
 void
 task_sync(void)
 {
-    // // create an empty task (the barrier)
-    // task_t * barrier = task_new(TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_BARRIER);
+    // create an empty task (the barrier)
+    task_t * barrier = task_new(TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_BARRIER);
+    task_array_push(&CURRENT_TASK->barriers, barrier);
 
-    // // for each children task of the current task
-    // int i;
-    // for (i = 0 ; i < CURRENT_TASK->children.n ; ++i)
-    // {
-    //     // link them with the new barrier
-    //     task_t * task = CURRENT_TASK->children.tasks[i];
-    //     if (task->access_successors.n == 0)
-    //         task_link_access(task, barrier);
-    // }
+    // for each children task of the current task
+    int i;
+    for (i = 0 ; i < CURRENT_TASK->children.n ; ++i)
+    {
+        // link them with the new barrier
+        task_t * task = CURRENT_TASK->children.tasks[i];
 
-    // // TODO: link each future children with this barrier
+        // skip the newly inserted barrier
+        if (task == barrier)
+            continue ;
+
+        if (task->access_successors.n == 0)
+            task_link_access(task, barrier);
+    }
+
+    // TODO: link each future children with this barrier
 }
 
 // TODO : memory accesses outside of outlined functions has to be filtered out

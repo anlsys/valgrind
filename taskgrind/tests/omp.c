@@ -54,14 +54,19 @@ main(void)
 
             # pragma omp task
                 {}
+
+            # pragma omp taskwait
+
+            # pragma omp task
+                {}
         }
 
-        # pragma omp taskwait
 
+        # if 0
         # pragma omp for
         for (int i = 0 ; i < 4096 ; ++i)
         {}
-
+        #endif
     }
     return 0;
 }
