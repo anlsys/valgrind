@@ -1,17 +1,33 @@
 #ifndef __SPMT_H__
 # define __SPMT_H__
 
-# include <stdint.h>
-
 /**
- * A sparse memory tree structure must be declared with
- *
- *  struct {
- *      [...]
- *      spmt_node_t spmt_node;
- *      [...]
- *  };
- */
+
+                                  begin  = 0
+                                  end    = SPMT_SPACE (= 8)
+                                  filled = 0
+                         +----------------------------------------+
+                         |  1    0    0    0    1    1    0    1  |
+     begin  = 0          +----------------------------------------+     begin  = 4
+     end    = 4                  /                      \               end    = 8
+     filled = 0   +------------------+            +------------------+  filled = 0
+                  | 1    0    0    0 |            | 1    1    0    1 |
+                  +------------------+            +------------------+
+ begin  = 0         /             \                   /            \         begin  = 6
+ end    = 2   +--------+           \            +--------+       +--------+  end    = 8
+ filled = 0   | 1    0 |          NULL          | 1    1 |       | 0    1 |  filled = 0
+              +--------+                        +--------+       +--------+
+             /       \                         begin  = 4        /        \
+         +---+        \                        end    = 6       /        +---+
+         | 1 |        NULL                     filled = 1     NULL       | 1 |
+         +---+                                                           +---+
+      begin  = 0                                                      begin  = 7
+      end    = 1                                                      end    = 8
+      filled = 1                                                      filled = 1
+
+*/
+
+# include <stdint.h>
 
 /* SPMT pointer type */
 # ifndef SPMT_PTR_T
