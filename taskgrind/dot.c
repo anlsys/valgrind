@@ -82,25 +82,14 @@ dump_task(VgFile * fp, task_t * task)
 }
 
 // TDG
-static void
-dump_access_tdg(VgFile * fp, task_t * pred)
-{
-    dump_task(fp, pred);
-
-    int i;
-    for (i = 0 ; i < pred->access_successors.n ; ++i)
-    {
-        task_t * succ = pred->access_successors.tasks[i];
-        dump_access_tdg(fp, succ);
-        VG_(fprintf)(fp, "    \"%p\" -> \"%p\" ;\n", pred, succ);
-    }
-}
-
 void
-taskgrind_export_access_tdg(task_t * task)
+taskgrind_export_access_tdg(task_t * parent)
 {
+    if (parent->children.n == 0)
+        return ;
+
     HChar * filename = (HChar *) VG_(malloc)("taskgrind_export_access_tdg", sizeof(UChar) * 256);
-    VG_(snprintf)(filename, 256, "tdg-%p.dot", task);
+    VG_(snprintf)(filename, 256, "tdg-%p.dot", parent);
 
     TASKGRIND_INFO("Exporting %s", filename);
 
@@ -113,11 +102,32 @@ taskgrind_export_access_tdg(task_t * task)
     VG_(free)(filename);
 
     VG_(fprintf)(fp, "digraph G {\n");
-    dump_access_tdg(fp, task);
+
+    // dump tasks
+    for (int i = 0 ; i < parent->children.n ; ++i)
+        dump_task(fp, parent->children.tasks[i]);
+
+    // dump edges
+    for (int i = 0 ; i < parent->children.n ; ++i)
+    {
+        task_t * pred = parent->children.tasks[i];
+        for (int j = 0 ; j < pred->access_successors.n ; ++j)
+        {
+            task_t * succ = pred->access_successors.tasks[j];
+            VG_(fprintf)(fp, "    \"%p\" -> \"%p\" ;\n", pred, succ);
+        }
+    }
+
     VG_(fprintf)(fp, "}\n");
-
     VG_(fclose)(fp);
+}
 
+void
+taskgrind_export_access_tdg_recursive(task_t * task)
+{
+    taskgrind_export_access_tdg(task);
+    for (int i = 0 ; i < task->children.n ; ++i)
+        taskgrind_export_access_tdg_recursive(task->children.tasks[i]);
 }
 
 // TCFG
@@ -125,9 +135,6 @@ static void
 dump_tcfg(VgFile * fp, task_t * parent)
 {
     // TODO: debug remove me
-    if (parent->access_successors.n)
-        taskgrind_export_access_tdg(parent);
-
     dump_task(fp, parent);
 
     int i;

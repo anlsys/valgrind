@@ -51,6 +51,9 @@ main(void)
                 *x = V + 2;
                 *y = *x;
             }
+
+            # pragma omp task
+                {}
         }
 
         # pragma omp taskwait

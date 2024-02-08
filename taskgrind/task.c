@@ -403,6 +403,7 @@ task_fini(void)
     TASKGRIND_INFO("Starting analysis...");
     // __analyze_useless_dependencies(CURRENT_TASK);
     taskgrind_export_tcfg(&ROOT_TASK);
+    taskgrind_export_access_tdg_recursive(&ROOT_TASK);
     taskgrind_pass_ph1(&ROOT_TASK);
     TASKGRIND_INFO("Analysis completed.");
 
