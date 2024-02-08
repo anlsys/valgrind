@@ -224,9 +224,6 @@ taskgrind_instrument(
             if (VG_(strstr)(fn, SUPPRESS_FN[i]))
                 return sb_in;
 
-    if (CURRENT_TASK->client_id == 3)
-        TASKGRIND_INFO("Instrumenting %s", fn);
-
     // deep copy code until marker
     IRSB * sb_out = deepCopyIRSBExceptStmts(sb_in);
     Int i;

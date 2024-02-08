@@ -126,6 +126,9 @@ extern task_t * TASKS;
 // The current task
 extern task_t * CURRENT_TASK;
 
+// The root task
+extern task_t ROOT_TASK;
+
 // FUNCTIONS TO BUILD THE MAPPING
 task_t * task_create(UWord client_id, task_type_t type);
 void task_schedule(UWord client_id);

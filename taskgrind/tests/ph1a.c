@@ -4,24 +4,15 @@
 # include <stdlib.h>
 # include <stdint.h>
 
-static int * x;
-
-void toto(int * x, int i, int v)
-{
-    x[i] = v;
-}
+// should report: declared dependent having no data dependencies
 
 int
 main(void)
 {
-    int y;
-    x = (int *) malloc(2 * sizeof(int));
-    printf("&x[0] == %p ; &x == %p ; &y == %p\n", x, &x, &y);
+    int * x = (int *) malloc(2 * sizeof(int));
 
     # pragma omp parallel
     {
-        assert(omp_get_num_threads() == 1);
-
         # pragma omp single nowait
         {
             # pragma omp task depend(out: x)
@@ -31,8 +22,6 @@ main(void)
                 x[1] = 43;
         }
     }
-
-    printf("x[0]=%d, x[1]=%d\n", x[0], x[1]);
 
     return 0;
 }

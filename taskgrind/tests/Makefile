@@ -7,7 +7,7 @@ CFLAGS+=-O0 -g
 
 LDFLAGS=
 
-SRC=omp.c ph1.c $(wildcard spmt/*.c)
+SRC=$(wildcard *.c spmt/*.c)
 EXE=$(SRC:.c=.exe)
 
 all: $(EXE)

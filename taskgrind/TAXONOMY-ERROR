@@ -32,3 +32,5 @@ IDEE A CREUSER
 
     PH7 - consommation énergétique
             - intensité arithmétique et ordonnancement ?
+
+    E2 - detect access to uninitialized memory on device (executing target tasks on CPU) - would require shadow memory similarly to memcheck

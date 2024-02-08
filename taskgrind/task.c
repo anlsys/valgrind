@@ -1,3 +1,5 @@
+#include "dot.h"
+#include "pass/pass.h"
 #include "print.h"
 #include "task.h"
 #include "taskgrind.h"
@@ -8,7 +10,7 @@
 task_t * TASKS;
 
 // Implicit root task of the entire program
-static task_t ROOT_TASK = TASK_INITIALIZE_STATIC(TASK_TYPE_IMPLICIT_ROOT);
+task_t ROOT_TASK = TASK_INITIALIZE_STATIC(TASK_TYPE_IMPLICIT_ROOT);
 
 // The current task
 task_t * CURRENT_TASK = &ROOT_TASK;
@@ -394,85 +396,14 @@ task_mem_store(Addr addr, SizeT size)
     SPMT_FILL(&CURRENT_TASK->stores, addr, addr + size);
 }
 
-// TODO: analysis code bellow is experimental and temporary
-
-// TODO: current problem, LOAD/STORE on the thread's stack
-
-static inline void
-__analyze_useless_dependencies_between(task_t * pred, task_t * succ)
-{
-    TASKGRIND_INFO("--------------------");
-    TASKGRIND_INFO("Task %p", (void *) pred->client_id);
-    TASKGRIND_INFO("--------------------");
-    SPMT_DUMP_FILLED(VG_(umsg), &pred->stores);
-    TASKGRIND_INFO("--------------------");
-    TASKGRIND_INFO("Task %p", (void *) succ->client_id);
-    TASKGRIND_INFO("--------------------");
-    SPMT_DUMP_FILLED(VG_(umsg), &succ->stores);
-
-    spmt_t inter;
-    SPMT_INTERSECT(&inter, &pred->stores, &succ->stores);
-
-    if (SPMT_IS_EMPTY(&inter))
-    {
-        TASKGRIND_INFO("  %p and %p were declared dependent having no data dependencies",
-                (void *)pred->client_id,
-                (void *)succ->client_id);
-    }
-    else
-    {
-        TASKGRIND_INFO("  %p and %p were declared dependent having data dependencies",
-                (void *)pred->client_id,
-                (void *)succ->client_id);
-    }
-
-    TASKGRIND_INFO("--------------------------------");
-    TASKGRIND_INFO("Intersect tasks %p n %p", (void*)pred->client_id, (void*)succ->client_id);
-    TASKGRIND_INFO("------------------------------");
-    SPMT_DUMP_FILLED(VG_(umsg), &inter);
-
-    SPMT_RELEASE(&inter);
-}
-
-
-static inline void
-__analyze_useless_dependencies(task_t * parent)
-{
-    if (parent->children.n == 0)
-        return ;
-
-    TASKGRIND_INFO("Checking dependencies for children of %p", (void*)parent->client_id);
-    for (int i = 0 ; i < parent->children.n ; ++i)
-    {
-        task_t * pred = parent->children.tasks[i];
-        if (pred->type >= TASK_TYPE_IMPLICIT)
-            continue ;
-
-        for (int j = 0 ; j < pred->access_successors.n ; ++j)
-        {
-            task_t * succ = pred->access_successors.tasks[j];
-
-            // outset tasks are 'empty' and ensure control-flow dependency, not data dependency
-            // data dependency are between their predecessors and successors
-            if (succ->type == TASK_TYPE_IMPLICIT_OUTSET)
-            {
-                for (int k = 0 ; k < succ->access_successors.n ; ++k)
-                    __analyze_useless_dependencies_between(pred, succ->access_successors.tasks[k]);
-            }
-            else
-            {
-                __analyze_useless_dependencies_between(pred, succ);
-            }
-        }
-    }
-}
-
 // Execution terminated, perform analysis and report here
 void
 task_fini(void)
 {
     TASKGRIND_INFO("Starting analysis...");
-    __analyze_useless_dependencies(CURRENT_TASK);
+    // __analyze_useless_dependencies(CURRENT_TASK);
+    taskgrind_export_tcfg(&ROOT_TASK);
+    taskgrind_pass_ph1(&ROOT_TASK);
     TASKGRIND_INFO("Analysis completed.");
 
     // taskgrind_export_tcfg(CURRENT_TASK);

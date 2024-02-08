@@ -289,14 +289,8 @@ static inline int
 __spmt_is_empty(spmt_node_t * node)
 {
     for (int i = 0 ; i < SPMT_N_CHILDREN ; ++i)
-    {
         if (node->children[i] != SPMT_NULL)
-        {
-            SPMT_F_PRINTF("return 0 (%d is %p)\n", i, node->children[i]);
             return 0;
-        }
-    }
-    SPMT_F_PRINTF("return node->filled\n");
     return !node->filled;
 }
 
