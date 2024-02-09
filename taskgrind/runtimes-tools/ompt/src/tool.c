@@ -97,9 +97,7 @@ on_ompt_callback_task_create(
 ) {
     // INFO("[CREATE] encountering_task_data, = %p, new_task_data = %p, codeptr_ra = %p", encountering_task_data, new_task_data, codeptr_ra);
 
-    client_id_t * client_id;
-
-    client_id = client_id_insert(new_task_data);
+    client_id_t * client_id = client_id_insert(new_task_data);
     client_id->value = ++NEXT_CLIENT_ID;
     TASKGRIND_CREATE_EVENT(client_id->value, TASKGRIND_TASK_TYPE_EXPLICIT);
 }
@@ -194,6 +192,51 @@ on_ompt_callback_dependences(
     }
 }
 
+// The ompt_callback_dispatch_t type is used for callbacks that are dispatched
+// when a thread begins to execute a section or loop iteration.
+void
+on_ompt_callback_dispatch(
+    ompt_data_t * parallel_data,
+    ompt_data_t * task_data,
+    ompt_dispatch_t kind,
+    ompt_data_t instance
+) {
+    switch (kind)
+    {
+        case (ompt_dispatch_iteration):
+        {
+            assert("Not implemented" && 0);
+            break ;
+        }
+
+        case (ompt_dispatch_section):
+        {
+            // assert("Not implemented" && 0);
+            break ;
+        }
+
+        case (ompt_dispatch_ws_loop_chunk):
+        {
+            // ompt_dispatch_chunk_t * chunk = (ompt_dispatch_chunk_t *) instance.ptr;
+            // printf("%lu %lu\n", chunk->start, chunk->iterations);
+            // assert("Not implemented" && 0);
+            break ;
+        }
+
+        case (ompt_dispatch_taskloop_chunk):
+        {
+            assert("Not implemented" && 0);
+            break ;
+        }
+
+        case (ompt_dispatch_distribute_chunk):
+        {
+            assert("Not implemented" && 0);
+            break ;
+        }
+    }
+}
+
 void
 on_ompt_callback_sync_region(
     ompt_sync_region_t kind,
@@ -206,7 +249,6 @@ on_ompt_callback_sync_region(
     {
         case (ompt_scope_begin):
         {
-            DEBUG("sync region kind=%d", kind);
             TASKGRIND_SYNC_EVENT();
             break ;
         }
@@ -220,6 +262,8 @@ on_ompt_callback_sync_region(
     }
 }
 
+// "The ompt_callback_work_t type is used for callbacks that are dispatched
+// when worksharing regions and taskloop regions begin and end. "
 void
 on_ompt_callback_work(
     ompt_work_t work_type,
@@ -229,7 +273,139 @@ on_ompt_callback_work(
     uint64_t count,
     const void * codeptr_ra
 ) {
+    switch (work_type)
+    {
+        // "Each thread executes its assigned chunks in the context of its
+        // implicit task."
+        //
+        // ompt_work_loop unknown at runtime
+        // ompt_work_loop_static static
+        // ompt_work_loop_dynamic dynamic
+        // ompt_work_loop_guided guided
+        // ompt_work_loop_other implementation specific
+        case (ompt_work_loop):
+        {
+            switch (endpoint)
+            {
+                case (ompt_scope_beginend):
+                {
+                    assert("Not implemented" && 0);
+                    break ;
+                }
 
+                case (ompt_scope_begin):
+                {
+                    // OpenMP semantics to taskgrind:
+                    // 1) Create an implicit node
+                    // 2) Schedule it (instead of the current implicit task)
+                    void * new_task_data = (void *) malloc(1);
+                    client_id_t * client_id = client_id_insert(new_task_data);
+                    client_id->value = ++NEXT_CLIENT_ID;
+                    TASKGRIND_CREATE_EVENT(client_id->value, TASKGRIND_TASK_TYPE_IMPLICIT);
+
+                    // TODO: schedule should be in 'dispatch' instead probably
+                    TASKGRIND_SCHEDULE_EVENT(client_id->value);
+
+                    break ;
+                }
+
+                case (ompt_scope_end):
+                {
+                    // OpenMP semantics to taskgrind: reschedule implicit task
+                    client_id_t * client_id = client_id_get(task_data);
+                    TASKGRIND_SCHEDULE_EVENT(client_id->value);
+                    break ;
+                }
+            }
+            break ;
+        }
+
+        case (ompt_work_loop_static):
+        {
+            assert("Not implemented" && 0);
+            break ;
+        }
+
+        case (ompt_work_loop_dynamic):
+        {
+            assert("Not implemented" && 0);
+            break ;
+        }
+
+        case (ompt_work_loop_guided):
+        {
+            assert("Not implemented" && 0);
+            break ;
+        }
+
+        case (ompt_work_loop_other):
+        {
+            assert("Not implemented" && 0);
+            break ;
+        }
+
+        case (ompt_work_sections):
+        {
+            // Nothing to do
+            break ;
+        }
+
+        // "The single construct specifies that the associated structured block
+        // is executed [...] in the context of its [thread] implicit task."
+        //
+        // -> so, there is nothing to do for taskgrind (?)
+        case (ompt_work_single_executor):
+        {
+            switch (endpoint)
+            {
+                case (ompt_scope_begin):
+                case (ompt_scope_end):
+                case (ompt_scope_beginend):
+                default:
+                {
+                    break ;
+                }
+            }
+            break ;
+        }
+
+        case (ompt_work_single_other):
+        {
+//            assert("There should not be any other thread, we run in single-thread only" && 0);
+            break ;
+        }
+
+        case (ompt_work_workshare):
+        {
+            assert("Not implemented" && 0);
+            break ;
+        }
+
+        case (ompt_work_distribute):
+        {
+            assert("Not implemented" && 0);
+            break ;
+        }
+
+        case (ompt_work_taskloop):
+        {
+            // Nothing to do
+            // Maybe add an empty implicit taskgrind task for dependency with previous barriers
+            break ;
+        }
+
+        case (ompt_work_scope):
+        {
+            assert("Not implemented" && 0);
+            break ;
+        }
+
+        default:
+        {
+            assert("Unknown event" && 0);
+            break ;
+        }
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -255,6 +431,7 @@ int ompt_initialize(
     register_callback(ompt_callback_dependences);
     register_callback(ompt_callback_sync_region);
     register_callback(ompt_callback_work);
+    register_callback(ompt_callback_dispatch);
     return 1;
 }
 

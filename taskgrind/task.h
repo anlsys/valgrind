@@ -92,14 +92,20 @@ typedef struct  task_s
     // children
     task_array_t children;
 
-    // barriers
-    task_array_t barriers;
+    // last synchronization node
+    struct task_s * last_sync;
 
     // memory loads
     spmt_t loads;
 
     // memory stores
     spmt_t stores;
+
+    // task color for debugging
+    UInt color;
+
+    // task label for debugging
+    char * label;
 
     // hmap handle
     UT_hash_handle hh;

@@ -21,25 +21,16 @@
 //  The application
 ///////////////////////////////////////////////////////////////////////////////
 
-void
-toto(int * x, int * y)
-{
-    printf("function address is %p\n", toto);
-    printf("variable values and addresses are x=%p, y=%p, &x=%p, &y=%p\n", x, y, &x, &y);
-}
-
 int
 main(void)
 {
     int * x = (int *) malloc(sizeof(int));
     int * y = (int *) malloc(sizeof(int));
-    toto(x, y);
+
     # pragma omp parallel shared(x, y)
     {
         # pragma omp single nowait
         {
-            assert(omp_get_num_threads() == 1);
-
             # pragma omp task shared(x, y) depend(in: x)
             {
                 *x = V + 0;
@@ -61,12 +52,34 @@ main(void)
                 {}
         }
 
-
-        # if 0
-        # pragma omp for
-        for (int i = 0 ; i < 4096 ; ++i)
+        # pragma omp for schedule(static, 1)
+        for (int i = 0 ; i < 4 ; ++i)
         {}
-        #endif
+
+        # pragma omp for schedule(dynamic, 1)
+        for (int i = 0 ; i < 4 ; ++i)
+        {}
+
+        # pragma omp single nowait
+        {
+            # pragma omp taskloop num_tasks(4)
+            for (int i = 0 ; i < 4 ; ++i)
+            {}
+        }
+
+        # pragma omp sections nowait
+        {
+            # pragma omp section
+            {
+            }
+
+            # pragma omp section
+            {
+            }
+        }
+
+        // in single thread, LLVM does not seem to raise it in parallel region
+        # pragma omp barrier
     }
     return 0;
 }

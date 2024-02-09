@@ -72,7 +72,7 @@ task_new(UWord client_id, task_type_t type)
     task_array_init(&task->access_successors);
     task_array_init(&task->raw_successors);
     task_array_init(&task->children);
-    task_array_init(&task->barriers);
+    task->last_sync         = NULL;
     SPMT_INITIALIZE(&task->loads);
     SPMT_INITIALIZE(&task->stores);
 
@@ -115,13 +115,8 @@ task_create(UWord client_id, task_type_t type)
     tl_assert(task);
 
     // add edges with respect to previous synchronizations
-    // TODO: optimize this, maybe there will be a dependency path between
-    // 'barrier' and 'task' so there is no need to set the barrier edge here
-    for (int i = 0 ; i < CURRENT_TASK->barriers.n ; ++i)
-    {
-        task_t * barrier = CURRENT_TASK->barriers.tasks[i];
-        task_link_access(barrier, task);
-    }
+    if (CURRENT_TASK->last_sync)
+        task_link_access(CURRENT_TASK->last_sync, task);
 
     return task;
 }
@@ -361,32 +356,32 @@ task_access(UWord client_id, UWord addr, UWord type)
     } // redundant check
 }
 
-// a task barrier: wait for the completion of children tasks, represented by
+// a task sync: wait for the completion of sibling tasks, represented by
 // adding an empty task node which depends on all previously created tasks with
 // no successors (leaves)
 void
 task_sync(void)
 {
-    // create an empty task (the barrier)
-    task_t * barrier = task_new(TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_BARRIER);
-    task_array_push(&CURRENT_TASK->barriers, barrier);
+    // create an empty task (the sync barrier)
+    task_t * sync = task_new(TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_BARRIER);
 
     // for each children task of the current task
     int i;
     for (i = 0 ; i < CURRENT_TASK->children.n ; ++i)
     {
-        // link them with the new barrier
+        // link them with the new sync barrier
         task_t * task = CURRENT_TASK->children.tasks[i];
 
-        // skip the newly inserted barrier
-        if (task == barrier)
+        // skip the newly inserted sync barrier
+        if (task == sync)
             continue ;
 
         if (task->access_successors.n == 0)
-            task_link_access(task, barrier);
+            task_link_access(task, sync);
     }
 
-    // TODO: link each future children with this barrier
+    // in the future, link each next children with this barrier
+    CURRENT_TASK->last_sync = sync;
 }
 
 // TODO : memory accesses outside of outlined functions has to be filtered out
