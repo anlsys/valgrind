@@ -31,10 +31,10 @@ typedef struct  task_accesses_t
     struct task_s * out;
 
     // last task that had an 'in' for this address
-    task_array_t ins;
+    array_t ins;
 
     // last task that had an 'outset' for this address
-    task_array_t outsets;
+    array_t outsets;
 
     // the last successor task that matched the 'out' dependency (for redundancy filtering)
     struct task_s * last_out;
@@ -65,10 +65,7 @@ typedef struct  task_s
     UWord client_id;
 
     // task successors infered from dependences provided by user program
-    task_array_t access_successors;
-
-    // real successors using RaW on load/stores
-    task_array_t raw_successors;
+    array_t successors;
 
     // task hmap for child dependencies
     task_accesses_t * accesses;
@@ -77,10 +74,23 @@ typedef struct  task_s
     struct task_s * parent;
 
     // children
-    task_array_t children;
+    array_t children;
 
     // last synchronization node
     struct task_s * last_sync;
+
+    // parts
+    array_t parts;
+
+    // hmap handle
+    UT_hash_handle hh;
+}               task_t;
+
+// a task part
+typedef struct  task_part_s
+{
+    // the client task
+    task_t * task;
 
     // memory loads
     spmt_t loads;
@@ -88,31 +98,9 @@ typedef struct  task_s
     // memory stores
     spmt_t stores;
 
-    // task color for debugging
-    UInt color;
-
-    // task label for debugging
-    char * label;
-
-    // hmap handle
-    UT_hash_handle hh;
-}               task_t;
-
-# define TASK_INITIALIZE_STATIC(T)                          \
-    {                                                       \
-        .type               = T,                            \
-        .child_id           = 0,                            \
-        .next_child_id      = 0,                            \
-        .client_id          = TASKGRIND_CLIENT_ID_PRIVATE,  \
-        .access_successors  = TASK_ARRAY_INITIALIZE_STATIC, \
-        .raw_successors     = TASK_ARRAY_INITIALIZE_STATIC, \
-        .accesses           = NULL,                         \
-        .parent             = NULL,                         \
-        .children           = TASK_ARRAY_INITIALIZE_STATIC, \
-        .loads              = SPMT_INITIALIZE_STATIC,       \
-        .stores             = SPMT_INITIALIZE_STATIC,       \
-        .hh                 = {0},                          \
-    }
+    // successors expressed by the client
+    array_t successors;
+}               task_part_t;
 
 typedef enum    task_mem_access_type_e
 {
@@ -147,11 +135,9 @@ void task_mem_store_atomic(Addr addr, SizeT size);
 
 // HELPER FUNCTIONS
 task_t * task_get(UWord client_id);
-void task_array_init(task_array_t * array);
-void task_array_push(task_array_t * array, struct task_s * task);
-struct task_s * task_array_last(task_array_t * array);
-void task_array_clear(task_array_t * array);
-void task_array_deinit(task_array_t * array);
+
+// INIT -> setup root task
+void task_init(void);
 
 // FINILIZE -> generate analysis and report
 void task_fini(void);

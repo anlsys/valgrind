@@ -5,7 +5,9 @@
 
 void taskgrind_export_tcfg(task_t * task);
 
-void taskgrind_export_access_tdgx(task_t * task);
-void taskgrind_export_access_tdgx_recursive(task_t * task);
+void taskgrind_export_tdgx(task_t * task);
+void taskgrind_export_tdgx_recursive(task_t * task);
+
+void taskgrind_export_tdgxf(task_part_t * part);
 
 #endif /* __DOT_H__ */

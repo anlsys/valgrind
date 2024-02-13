@@ -7,6 +7,7 @@
 static inline void
 __analyze_useless_dependencies_between(task_t * pred, task_t * succ)
 {
+    #if 0
     # if 0
     TASKGRIND_INFO("--------------------");
     TASKGRIND_INFO("Task %p", (void *) pred->client_id);
@@ -42,11 +43,13 @@ __analyze_useless_dependencies_between(task_t * pred, task_t * succ)
     #endif
 
     SPMT_RELEASE(&inter);
+    #endif
 }
 
 void
 taskgrind_pass_ph1(task_t * parent)
 {
+    #if 0
     if (parent->children.n == 0)
         return ;
 
@@ -56,15 +59,15 @@ taskgrind_pass_ph1(task_t * parent)
         if (pred->type >= TASK_TYPE_IMPLICIT)
             continue ;
 
-        for (int j = 0 ; j < pred->access_successors.n ; ++j)
+        for (int j = 0 ; j < pred->successors.n ; ++j)
         {
-            task_t * succ = pred->access_successors.tasks[j];
+            task_t * succ = pred->successors.tasks[j];
 
             // outset tasks are 'empty' and ensure control-flow dependency, not data dependency
             // data dependency are between their predecessors and successors
             if (succ->type == TASK_TYPE_IMPLICIT_OUTSET)
-                for (int k = 0 ; k < succ->access_successors.n ; ++k)
-                    __analyze_useless_dependencies_between(pred, succ->access_successors.tasks[k]);
+                for (int k = 0 ; k < succ->successors.n ; ++k)
+                    __analyze_useless_dependencies_between(pred, succ->successors.tasks[k]);
             else
                 __analyze_useless_dependencies_between(pred, succ);
         }
@@ -72,4 +75,6 @@ taskgrind_pass_ph1(task_t * parent)
 
     for (int i = 0 ; i < parent->children.n ; ++i)
         taskgrind_pass_ph1(parent->children.tasks[i]);
+
+    #endif
 }

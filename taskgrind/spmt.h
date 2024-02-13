@@ -267,9 +267,6 @@ __spmt_intersect(
         int rr = __spmt_intersect(dst->children[i], next_a, next_b);
         if (rr == 0)
         {
-            #if 0
-            SPMT_F_PRINTF("empty intersect this way bellow %lu %lu for %lu %lu\n", begin, end, next_begin, next_end);
-            #endif
             SPMT_F_FREE_NODE(dst->children[i]);
             dst->children[i] = SPMT_NULL;
         }

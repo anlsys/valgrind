@@ -493,6 +493,7 @@ taskgrind_post_clo_init(void)
     if (!clo_record && !clo_compare)
        taskgrind_clo_error("at least one command line option must be passed");
 #endif
+    task_init();
 }
 
 static void

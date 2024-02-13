@@ -10,10 +10,39 @@
 task_t * TASKS;
 
 // Implicit root task of the entire program
-task_t ROOT_TASK = TASK_INITIALIZE_STATIC(TASK_TYPE_IMPLICIT_ROOT);
+task_t ROOT_TASK;
 
 // The current task
-task_t * CURRENT_TASK = &ROOT_TASK;
+task_t * CURRENT_TASK = NULL;
+
+static inline void
+task_new_init(task_t * task, UWord client_id, task_type_t type)
+{
+    // set attributes
+    task->type              = type;
+    task->child_id          = CURRENT_TASK ? ++CURRENT_TASK->next_child_id : -1;
+    task->next_child_id     = 0;
+    task->client_id         = client_id;
+    array_init(&task->successors, 0, sizeof(task_t *));
+    task->accesses          = NULL;
+    task->parent            = CURRENT_TASK;
+    array_init(&task->children, 0, sizeof(task_t *));
+    task->last_sync         = NULL;
+    task_part_array_init(&task->parts);
+
+    // add an initial part
+    task_part_t * part;
+
+    part = task_part_array_push(&task->parts);
+    part->task = task;
+    SPMT_INITIALIZE(&part->loads);
+    SPMT_INITIALIZE(&part->stores);
+    array_init(&part->successors, 0, sizeof(task_part_t *));
+
+    // tcfg parent reference
+    if (CURRENT_TASK)
+        array_push(&CURRENT_TASK->children, &task);
+}
 
 static inline task_t *
 task_new(UWord client_id, task_type_t type)
@@ -21,21 +50,7 @@ task_new(UWord client_id, task_type_t type)
     task_t * task;
 
     task = (task_t *) VG_(malloc)("task_new", sizeof(task_t));
-    task->child_id          = ++CURRENT_TASK->next_child_id;
-    task->next_child_id     = 0;
-    task->client_id         = client_id;
-    task->type              = type;
-    task->accesses          = NULL;
-    task->parent            = CURRENT_TASK;
-    task_array_init(&task->access_successors);
-    task_array_init(&task->raw_successors);
-    task_array_init(&task->children);
-    task->last_sync         = NULL;
-    SPMT_INITIALIZE(&task->loads);
-    SPMT_INITIALIZE(&task->stores);
-
-    array_push(&CURRENT_TASK->children, task);
-
+    task_new_init(task, client_id, type);
     return task;
 }
 
@@ -44,9 +59,9 @@ static inline void
 task_link_access(task_t * pred, task_t * succ)
 {
     // filter out multiple edges
-    if (task_array_last(&pred->access_successors) == succ)
+    if (task_array_last(&pred->successors) == succ)
         return ;
-    array_push(&pred->access_successors, succ);
+    task_array_push(&pred->successors, succ);
     TASKGRIND_DEBUG("   Added edge %p -> %p", (void *)pred->client_id, (void *)succ->client_id);
 }
 
@@ -91,21 +106,26 @@ task_get(UWord client_id)
     return task;
 }
 
+static inline task_part_t *
+task_part_get_current(void)
+{
+    tl_assert(CURRENT_TASK);
+    return task_part_array_last(&CURRENT_TASK->parts);
+}
+
 // schedule
 void
 task_schedule(UWord client_id)
 {
-    // DEBUG REMOVE ME
-    UWord old = CURRENT_TASK ? CURRENT_TASK->client_id : TASKGRIND_CLIENT_ID_PRIVATE;
+    task_t * prev, * next;
 
-    CURRENT_TASK = task_get(client_id);
-    tl_assert(CURRENT_TASK);
+    prev    = CURRENT_TASK;
+    next    = task_get(client_id);
+    tl_assert(prev);
+    tl_assert(next);
+    tl_assert(prev != next);
 
-    if (old != CURRENT_TASK->client_id)
-    {
-        TASKGRIND_DEBUG("Task switch %p -> %p", (void *)old, (void *)CURRENT_TASK->client_id);
-    }
-    // DEBUG REMOVE ME
+    CURRENT_TASK = next;
 }
 
 // accesses
@@ -286,21 +306,21 @@ task_access(UWord client_id, UWord addr, UWord type)
         {
             case (TASKGRIND_IN):
             {
-                array_push(&accesses->ins, task);
+                task_array_push(&accesses->ins, task);
                 break ;
             }
 
             case (TASKGRIND_OUT):
             {
-                array_clear(&accesses->ins);
-                array_clear(&accesses->outsets);
+                task_array_clear(&accesses->ins);
+                task_array_clear(&accesses->outsets);
                 accesses->out = task;
                 break ;
             }
 
             case (TASKGRIND_OUTSET):
             {
-                array_push(&accesses->outsets, task);
+                array_push(&accesses->outsets, &task);
                 break ;
             }
 
@@ -334,7 +354,7 @@ task_sync(void)
         if (task == sync)
             continue ;
 
-        if (task->access_successors.n == 0)
+        if (task->successors.n == 0)
             task_link_access(task, sync);
     }
 
@@ -352,18 +372,26 @@ task_mem_load(Addr addr, SizeT size)
                 (void *) CURRENT_TASK->client_id, addr, size);
 
 #endif
-    SPMT_FILL(&CURRENT_TASK->loads, addr, addr + size);
+    task_part_t * part;
+
+    part = task_part_get_current();
+    tl_assert(part);
+    SPMT_FILL(&part->loads, addr, addr + size);
 }
 
 void
 task_mem_store(Addr addr, SizeT size)
 {
-#if 0
-    if (CURRENT_TASK->client_id == 3)
-        TASKGRIND_DEBUG("(task=%p) STORE        0x%010lX %lu",
-                (void *) CURRENT_TASK->client_id, addr, size);
-#endif
-    SPMT_FILL(&CURRENT_TASK->stores, addr, addr + size);
+    #if 0
+    TASKGRIND_DEBUG("(task=%p) STORE        0x%010lX %lu",
+            (void *) CURRENT_TASK->client_id, addr, size);
+    #endif
+
+    task_part_t * part;
+
+    part = task_part_get_current();
+    tl_assert(part);
+    SPMT_FILL(&part->stores, addr, addr + size);
 }
 
 void
@@ -386,6 +414,14 @@ task_mem_store_atomic(Addr addr, SizeT size)
 #endif
 }
 
+// Initialize execution
+void
+task_init(void)
+{
+    task_new_init(&ROOT_TASK, TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_ROOT);
+    CURRENT_TASK = &ROOT_TASK;
+}
+
 // Execution terminated, perform analysis and report here
 void
 task_fini(void)
@@ -393,7 +429,8 @@ task_fini(void)
     TASKGRIND_INFO("Starting analysis...");
     // __analyze_useless_dependencies(CURRENT_TASK);
     taskgrind_export_tcfg(&ROOT_TASK);
-    taskgrind_export_access_tdgx_recursive(&ROOT_TASK);
+    taskgrind_export_tdgx_recursive(&ROOT_TASK);
+    taskgrind_export_tdgxf(task_part_array_first(&ROOT_TASK.parts));
     taskgrind_pass_ph1(&ROOT_TASK);
     TASKGRIND_INFO("Analysis completed.");
 

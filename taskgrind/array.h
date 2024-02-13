@@ -11,9 +11,9 @@ typedef struct  array_s
 {
     // tasks
     union {
-        void ** objs;
+        UChar * objs;
         struct task_s ** tasks;
-        struct task_part_s ** parts;
+        struct task_part_s * parts;
     };
 
     // capacity
@@ -26,18 +26,27 @@ typedef struct  array_s
     UInt objsize;
 }               array_t;
 
-# define TASK_ARRAY_INITIALIZE_STATIC {{NULL}, 0, 0}
+# define ARRAY_INITIALIZE_STATIC {{NULL}, 0, 0}
 
-typedef array_t task_array_t;
-typedef array_t task_part_array_t;
-
-void array_init(array_t * array, UInt objsize);
-void array_push(task_array_t * array, void * obj);
+void array_init(array_t * array, UInt default_capacity, UInt objsize);
+void * array_push(array_t * array, void * obj);
 void * array_last(array_t * array);
 void array_clear(array_t * array);
 void array_deinit(array_t * array);
 
-struct task_s * task_array_last(task_array_t * array);
+typedef array_t task_array_t;
 void task_array_init(task_array_t * array);
+void task_array_push(task_array_t * array, struct task_s * task);
+struct task_s * task_array_last(array_t * array);
+void task_array_clear(task_array_t * array);
+void task_array_deinit(task_array_t * array);
+
+typedef array_t task_part_array_t;
+void task_part_array_init(task_part_array_t * array);
+struct task_part_s * task_part_array_push(task_part_array_t * array);
+struct task_part_s * task_part_array_last(task_part_array_t * array);
+void task_part_array_clear(task_part_array_t * array);
+void task_part_array_deinit(task_part_array_t * array);
+struct task_part_s * task_part_array_first(task_part_array_t * array);
 
 #endif /* __ARRAY_H__ */

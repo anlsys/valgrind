@@ -15,6 +15,20 @@ void dot_file_err(void)
     VG_(exit)(1);
 }
 
+static VgFile *
+create_file(const HChar * filename)
+{
+    TASKGRIND_INFO("Creating %s", filename);
+
+    VgFile * fp = VG_(fopen)(filename, VKI_O_WRONLY|VKI_O_TRUNC, 0);
+    if (fp == NULL) {
+        fp = VG_(fopen)(filename, VKI_O_CREAT|VKI_O_WRONLY, VKI_S_IRUSR|VKI_S_IWUSR);
+        if (fp == NULL)
+            dot_file_err();
+    }
+    return fp;
+}
+
 // dump a task
 static inline void
 dump_task(VgFile * fp, task_t * task)
@@ -81,24 +95,24 @@ dump_task(VgFile * fp, task_t * task)
 
 }
 
-// TDG
+static void
+dump_task_part(VgFile * fp, task_part_t * part)
+{
+    dump_task(fp, part->task);
+}
+
+// TDG (task dependency graph)
 void
-taskgrind_export_access_tdgx(task_t * parent)
+taskgrind_export_tdgx(task_t * parent)
 {
     if (parent->children.n == 0)
         return ;
 
-    HChar * filename = (HChar *) VG_(malloc)("taskgrind_export_access_tdgx", sizeof(UChar) * 256);
+    HChar * filename = (HChar *) VG_(malloc)("taskgrind_export_tdgx", sizeof(UChar) * 256);
     VG_(snprintf)(filename, 256, "tdgx-%p.dot", parent);
 
-    TASKGRIND_INFO("Exporting %s", filename);
+    VgFile * fp = create_file(filename);
 
-    VgFile * fp = VG_(fopen)(filename, VKI_O_WRONLY|VKI_O_TRUNC, 0);
-    if (fp == NULL) {
-        fp = VG_(fopen)(filename, VKI_O_CREAT|VKI_O_WRONLY, VKI_S_IRUSR|VKI_S_IWUSR);
-        if (fp == NULL)
-            dot_file_err();
-    }
     VG_(free)(filename);
 
     VG_(fprintf)(fp, "digraph G {\n");
@@ -111,9 +125,9 @@ taskgrind_export_access_tdgx(task_t * parent)
     for (int i = 0 ; i < parent->children.n ; ++i)
     {
         task_t * pred = parent->children.tasks[i];
-        for (int j = 0 ; j < pred->access_successors.n ; ++j)
+        for (int j = 0 ; j < pred->successors.n ; ++j)
         {
-            task_t * succ = pred->access_successors.tasks[j];
+            task_t * succ = pred->successors.tasks[j];
             VG_(fprintf)(fp, "    \"%p\" -> \"%p\" ;\n", pred, succ);
         }
     }
@@ -123,18 +137,17 @@ taskgrind_export_access_tdgx(task_t * parent)
 }
 
 void
-taskgrind_export_access_tdgx_recursive(task_t * task)
+taskgrind_export_tdgx_recursive(task_t * task)
 {
-    taskgrind_export_access_tdgx(task);
+    taskgrind_export_tdgx(task);
     for (int i = 0 ; i < task->children.n ; ++i)
-        taskgrind_export_access_tdgx_recursive(task->children.tasks[i]);
+        taskgrind_export_tdgx_recursive(task->children.tasks[i]);
 }
 
-// TCFG
+// TCFG (task control flow graph)
 static void
 dump_tcfg(VgFile * fp, task_t * parent)
 {
-    // TODO: debug remove me
     dump_task(fp, parent);
 
     int i;
@@ -149,20 +162,39 @@ dump_tcfg(VgFile * fp, task_t * parent)
 void
 taskgrind_export_tcfg(task_t * task)
 {
-    const HChar * filename = "tcfg.dot";
-
-    TASKGRIND_INFO("Exporting %s", filename);
-
-    VgFile * fp = VG_(fopen)(filename, VKI_O_WRONLY|VKI_O_TRUNC, 0);
-    if (fp == NULL) {
-        fp = VG_(fopen)(filename, VKI_O_CREAT|VKI_O_WRONLY, VKI_S_IRUSR|VKI_S_IWUSR);
-        if (fp == NULL)
-            dot_file_err();
-    }
+    VgFile * fp = create_file("tcfg.dot");
 
     VG_(fprintf)(fp, "digraph G {\n");
     dump_tcfg(fp, task);
     VG_(fprintf)(fp, "}\n");
 
     VG_(fclose)(fp);
+}
+
+// TDXF (task dependnecy graph flatten)
+static void
+dump_tdgxf(VgFile * fp, task_part_t * pred)
+{
+    dump_task_part(fp, pred);
+
+    int i;
+    for (i = 0 ; i < pred->successors.n ; ++i)
+    {
+        task_part_t * succ = pred->successors.parts + i;
+        dump_tdgxf(fp, succ);
+        VG_(fprintf)(fp, "    \"%p\" -> \"%p\" ;\n", pred, succ);
+    }
+}
+
+void
+taskgrind_export_tdgxf(task_part_t * part)
+{
+    VgFile * fp = create_file("tdgxf.dot");
+
+    VG_(fprintf)(fp, "digraph G {\n");
+    dump_tdgxf(fp, part);
+    VG_(fprintf)(fp, "}\n");
+
+    VG_(fclose)(fp);
+
 }
