@@ -7,6 +7,8 @@
 # include "taskgrind_uthash.h"
 # include "taskgrind_spmt.h"
 
+# include "array.h"
+
 // task types
 typedef enum    task_type_e
 {
@@ -18,21 +20,6 @@ typedef enum    task_type_e
     TASK_TYPE_IMPLICIT_BARRIER,
     TASK_TYPE_IMPLICIT_UNKNOWN,
 }               task_type_t;
-
-// list of tasks
-typedef struct  task_array_s
-{
-    // tasks
-    struct task_s ** tasks;
-
-    // capacity
-    UInt capacity;
-
-    // number of tasks set
-    UInt n;
-}               task_array_t;
-
-# define TASK_ARRAY_INITIALIZE_STATIC {NULL, 0, 0}
 
 // task accesses hmap for child dependences
 typedef struct  task_accesses_t

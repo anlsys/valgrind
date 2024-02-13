@@ -15,48 +15,6 @@ task_t ROOT_TASK = TASK_INITIALIZE_STATIC(TASK_TYPE_IMPLICIT_ROOT);
 // The current task
 task_t * CURRENT_TASK = &ROOT_TASK;
 
-void
-task_array_init(task_array_t * array)
-{
-    array->tasks    = NULL;
-    array->capacity = 0;
-    array->n        = 0;
-}
-
-void
-task_array_push(task_array_t * array, struct task_s * task)
-{
-    if (array->n == array->capacity)
-    {
-        UInt capacity = (UInt)((array->n + 1) * 3 / 2);
-        array->tasks = VG_(realloc)("task_array_t", array->tasks, sizeof(struct task_s *) * capacity);
-        array->capacity = capacity;
-    }
-    array->tasks[array->n++] = task;
-}
-
-struct task_s *
-task_array_last(task_array_t * array)
-{
-    if (array->n == 0)
-        return NULL;
-    return array->tasks[array->n - 1];
-}
-
-void
-task_array_clear(task_array_t * array)
-{
-    array->n = 0;
-}
-
-void
-task_array_deinit(task_array_t * array)
-{
-    VG_(free)(array->tasks);
-    array->n        = 0;
-    array->capacity = 0;
-}
-
 static inline task_t *
 task_new(UWord client_id, task_type_t type)
 {
@@ -76,7 +34,7 @@ task_new(UWord client_id, task_type_t type)
     SPMT_INITIALIZE(&task->loads);
     SPMT_INITIALIZE(&task->stores);
 
-    task_array_push(&CURRENT_TASK->children, task);
+    array_push(&CURRENT_TASK->children, task);
 
     return task;
 }
@@ -88,7 +46,7 @@ task_link_access(task_t * pred, task_t * succ)
     // filter out multiple edges
     if (task_array_last(&pred->access_successors) == succ)
         return ;
-    task_array_push(&pred->access_successors, succ);
+    array_push(&pred->access_successors, succ);
     TASKGRIND_DEBUG("   Added edge %p -> %p", (void *)pred->client_id, (void *)succ->client_id);
 }
 
@@ -266,7 +224,7 @@ task_access(UWord client_id, UWord addr, UWord type)
                         task_link_access(in, accesses->out);
                 }
                 task_link_access(accesses->out, task);
-                task_array_clear(&accesses->ins);
+                array_clear(&accesses->ins);
             }
             else
             {
@@ -297,7 +255,7 @@ task_access(UWord client_id, UWord addr, UWord type)
                     task_link_access(outset, accesses->out);
                 }
                 task_link_access(accesses->out, task);
-                task_array_clear(&accesses->outsets);
+                array_clear(&accesses->outsets);
             }
             else
             {
@@ -328,21 +286,21 @@ task_access(UWord client_id, UWord addr, UWord type)
         {
             case (TASKGRIND_IN):
             {
-                task_array_push(&accesses->ins, task);
+                array_push(&accesses->ins, task);
                 break ;
             }
 
             case (TASKGRIND_OUT):
             {
-                task_array_clear(&accesses->ins);
-                task_array_clear(&accesses->outsets);
+                array_clear(&accesses->ins);
+                array_clear(&accesses->outsets);
                 accesses->out = task;
                 break ;
             }
 
             case (TASKGRIND_OUTSET):
             {
-                task_array_push(&accesses->outsets, task);
+                array_push(&accesses->outsets, task);
                 break ;
             }
 
