@@ -112,70 +112,53 @@ taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
 //  Instrumentation
 ///////////////////////////////////////////////////////////////////////////////
 
-# include "pub_tool_threadstate.h"
-# include "pub_tool_stacktrace.h"
-
-typedef enum    taskgrind_mem_access_type_e
-{
-    TASKGRIND_TASK_MEM_LOAD,
-    TASKGRIND_TASK_MEM_STORE,
-}               taskgrind_mem_access_type_t;
-
-// TODO: currently, this is used as a quick and dirty fix to ignore stack
-// accesses, detecting them if they are 'close' to the current stack pointer
-// (<1Go).  Otherwise, stack accesses causes every tasks to be inter-dependent,
-// as they only execute on the same thread, on the same stack, one after
-// another
-static inline int
-taskgrind_accessing_stack(Addr addr)
-{
-    ThreadId tid = VG_(get_running_tid)();
-    Addr sp  = VG_(get_SP)(tid);
-    Long diff = (Long)(sp < addr ? addr - sp : sp - addr);
-    return (diff < 1024*1024*1024);
-}
-
-static inline void
-taskgrind_instrument_mem_access_helper_load(
-    Addr addr,
-    SizeT size
-) {
-    if (taskgrind_accessing_stack(addr))
-        return ;
-    task_mem_load(addr, size);
-}
-
-static inline void
-taskgrind_instrument_mem_access_helper_store(
-    Addr addr,
-    SizeT size
-) {
-    if (taskgrind_accessing_stack(addr))
-        return ;
-    task_mem_store(addr, size);
-}
-
 static void
 taskgrind_instrument_mem_access(
     IRSB * sb,
     IRExpr * addr,
     Int size,
-    taskgrind_mem_access_type_t access_type
+    task_mem_access_type_t access_type
 ) {
     IRExpr ** argv;
     IRDirty * di;
     void * fn;
     const char * fn_name;
 
-    if (access_type == TASKGRIND_TASK_MEM_LOAD)
+    switch (access_type)
     {
-        fn      = taskgrind_instrument_mem_access_helper_load;
-        fn_name = "taskgrind_instrument_mem_access_helper_load";
-    }
-    else
-    {
-        fn = taskgrind_instrument_mem_access_helper_store;
-        fn_name = "taskgrind_instrument_mem_access_helper_store";
+        case (TASKGRIND_TASK_MEM_LOAD):
+        {
+            fn      = task_mem_load;
+            fn_name = "task_mem_load";
+            break ;
+        }
+
+        case (TASKGRIND_TASK_MEM_STORE):
+        {
+            fn      = task_mem_store;
+            fn_name = "task_mem_store";
+            break ;
+        }
+
+        case (TASKGRIND_TASK_MEM_LOAD_ATOMIC):
+        {
+            fn      = task_mem_load_atomic;
+            fn_name = "task_mem_load_atomic";
+            break ;
+        }
+
+        case (TASKGRIND_TASK_MEM_STORE_ATOMIC):
+        {
+            fn      = task_mem_store_atomic;
+            fn_name = "task_mem_store_atomic";
+            break ;
+        }
+
+        default:
+        {
+            tl_assert("Unknown memory access type" && 0);
+            break ;
+        }
     }
 
     argv =  mkIRExprVec_2(addr, mkIRExpr_HWord(size));
@@ -196,7 +179,7 @@ taskgrind_instrument(
 ) {
     // Accesses in these functions can be ignored
     static const HChar * SUPPRESS_FN[] = {
-//        "on_ompt",
+        "on_ompt",
         "__kmp",
     };
 
@@ -305,6 +288,7 @@ taskgrind_instrument(
                     sizeofIRType(typeOfIRExpr(sb_out->tyenv, st->Ist.Store.data)),
                     TASKGRIND_TASK_MEM_STORE
                 );
+
                 addStmtToIRSB(sb_out, st);
                 break ;
             }
@@ -348,7 +332,7 @@ taskgrind_instrument(
                     sb_out,
                     cas->addr,
                     isDCAS ? 2 : 1,
-                    TASKGRIND_TASK_MEM_STORE
+                    TASKGRIND_TASK_MEM_STORE_ATOMIC
                 );
 
                 addStmtToIRSB(sb_out, st);
@@ -366,7 +350,7 @@ taskgrind_instrument(
             {
                 IRDirty * d;
                 Int data_size;
-                taskgrind_mem_access_type_t access_type;
+                task_mem_access_type_t access_type;
 
                 d = st->Ist.Dirty.details;
                 if (d->mFx != Ifx_None)
@@ -554,11 +538,9 @@ taskgrind_prepare_env(HChar *** envp)
     VG_(strcpy)(absolute_so, VG_(libdir));
     VG_(strcat)(absolute_so, relative_so);
 
-    TASKGRIND_DEBUG("Set OMP_TOOL_LIBRARIES=%s (%lu chars)", absolute_so, VG_(strlen(absolute_so)));
     VG_(env_setenv)(envp, "OMP_TOOL_LIBRARIES", absolute_so);
-
-    TASKGRIND_DEBUG("Set OMP_NUM_THREADS=1");
     VG_(env_setenv)(envp, "OMP_NUM_THREADS", "1");
+    VG_(env_setenv)(envp, "LIBOMP_USE_HIDDEN_HELPER_TASK", "0");
 }
 
 VG_DETERMINE_INTERFACE_VERSION_WITH_ENV(taskgrind_pre_clo_init, taskgrind_prepare_env)

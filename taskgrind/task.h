@@ -127,6 +127,14 @@ typedef struct  task_s
         .hh                 = {0},                          \
     }
 
+typedef enum    task_mem_access_type_e
+{
+    TASKGRIND_TASK_MEM_LOAD,
+    TASKGRIND_TASK_MEM_STORE,
+    TASKGRIND_TASK_MEM_LOAD_ATOMIC,
+    TASKGRIND_TASK_MEM_STORE_ATOMIC,
+}               task_mem_access_type_t;
+
 // GLOBAL VARIABLE MAPPING EXECUTION AS TASKS
 
 // The tasks hmap
@@ -147,6 +155,8 @@ void task_sync(void);
 // FUNCTIONS FOR MEMORY ACCESSES DETECTED
 void task_mem_load(Addr addr, SizeT size);
 void task_mem_store(Addr addr, SizeT size);
+void task_mem_load_atomic(Addr addr, SizeT size);
+void task_mem_store_atomic(Addr addr, SizeT size);
 
 // HELPER FUNCTIONS
 task_t * task_get(UWord client_id);

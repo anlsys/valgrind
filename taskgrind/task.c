@@ -384,15 +384,14 @@ task_sync(void)
     CURRENT_TASK->last_sync = sync;
 }
 
-// TODO : memory accesses outside of outlined functions has to be filtered out
-
 // memory accesses
 void
 task_mem_load(Addr addr, SizeT size)
 {
 #if 0
-    TASKGRIND_DEBUG("(task=%p) LOAD  0x%010lX %lu",
-            (void *) CURRENT_TASK->client_id, addr, size);
+    if (CURRENT_TASK->client_id == 3)
+        TASKGRIND_DEBUG("(task=%p) LOAD         0x%010lX %lu",
+                (void *) CURRENT_TASK->client_id, addr, size);
 
 #endif
     SPMT_FILL(&CURRENT_TASK->loads, addr, addr + size);
@@ -401,12 +400,32 @@ task_mem_load(Addr addr, SizeT size)
 void
 task_mem_store(Addr addr, SizeT size)
 {
-#if 1
+#if 0
     if (CURRENT_TASK->client_id == 3)
-        TASKGRIND_DEBUG("(task=%p) STORE 0x%010lX %lu",
+        TASKGRIND_DEBUG("(task=%p) STORE        0x%010lX %lu",
                 (void *) CURRENT_TASK->client_id, addr, size);
 #endif
     SPMT_FILL(&CURRENT_TASK->stores, addr, addr + size);
+}
+
+void
+task_mem_load_atomic(Addr addr, SizeT size)
+{
+#if 0
+    if (CURRENT_TASK->client_id == 3)
+        TASKGRIND_DEBUG("(task=%p) LOAD ATOMIC  0x%010lX %lu",
+                (void *) CURRENT_TASK->client_id, addr, size);
+#endif
+}
+
+void
+task_mem_store_atomic(Addr addr, SizeT size)
+{
+#if 0
+    if (CURRENT_TASK->client_id == 3)
+        TASKGRIND_DEBUG("(task=%p) STORE ATOMIC 0x%010lX %lu",
+                (void *) CURRENT_TASK->client_id, addr, size);
+#endif
 }
 
 // Execution terminated, perform analysis and report here
@@ -416,7 +435,7 @@ task_fini(void)
     TASKGRIND_INFO("Starting analysis...");
     // __analyze_useless_dependencies(CURRENT_TASK);
     taskgrind_export_tcfg(&ROOT_TASK);
-    taskgrind_export_access_tdg_recursive(&ROOT_TASK);
+    taskgrind_export_access_tdgx_recursive(&ROOT_TASK);
     taskgrind_pass_ph1(&ROOT_TASK);
     TASKGRIND_INFO("Analysis completed.");
 

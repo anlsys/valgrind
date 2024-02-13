@@ -7,19 +7,13 @@
 # define V 42
 
 ///////////////////////////////////////////////////////////////////////////////
-//  Symbols for taskgrind, in case environment functions are explicitely
-//  declared by the programmer
-///////////////////////////////////////////////////////////////////////////////
-
-// uint64_t
-// __taskgrind_get_current_task_id(void)
-// {
-//     return (i++ / 10000);   // just a simple trick to test taskgrind
-// }
-
-///////////////////////////////////////////////////////////////////////////////
 //  The application
 ///////////////////////////////////////////////////////////////////////////////
+
+# define Nfor       4
+# define Nz         8
+
+# define DEVICE_ID  0
 
 int
 main(void)
@@ -53,17 +47,17 @@ main(void)
         }
 
         # pragma omp for schedule(static, 1)
-        for (int i = 0 ; i < 4 ; ++i)
+        for (int i = 0 ; i < Nfor ; ++i)
         {}
 
         # pragma omp for schedule(dynamic, 1)
-        for (int i = 0 ; i < 4 ; ++i)
+        for (int i = 0 ; i < Nfor ; ++i)
         {}
 
         # pragma omp single nowait
         {
-            # pragma omp taskloop num_tasks(4)
-            for (int i = 0 ; i < 4 ; ++i)
+            # pragma omp taskloop num_tasks(Nfor)
+            for (int i = 0 ; i < Nfor ; ++i)
             {}
         }
 
@@ -78,7 +72,24 @@ main(void)
             }
         }
 
-        // in single thread, LLVM does not seem to raise it in parallel region
+        #if 0
+        # pragma omp single nowait
+        {
+            int * z = (int *) malloc(sizeof(int) * Nz);
+            # pragma omp target enter data map(alloc: z[0:Nz]) device(DEVICE_ID) depend(out: z)
+
+            # pragma omp target teams distribute parallel for nowait device(DEVICE_ID) depend(in: z)
+            for (int i = 0 ; i < Nz ; ++i)
+                {}
+
+            # pragma omp target exit data map(release: z[0:Nz]) device(DEVICE_ID) depend(out: z)
+
+            # pragma omp taskwait
+        }
+        #endif
+
+
+        // TODO: in single thread, LLVM does not seem to raise barrier OMPT callback in parallel region
         # pragma omp barrier
     }
     return 0;

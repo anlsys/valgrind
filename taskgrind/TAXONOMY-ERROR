@@ -8,6 +8,7 @@ ERROR
     E1 - 2 tâches soeurs sont déclarés indépendantes alors que non niveau accès donnée
     E2 - 2 tâches cousines indépendantes alors que non niveua accès donnée (weak dependecy)
     E3 - une tâche fille accède aux données de sa tâche parente après sa terminaison
+    E4 - une tâche GPU lit une donnée qui n'a jamais été écrite
 
     QUESTION: E1 et E2 mergeable en 1 seul et même analyse ?
 

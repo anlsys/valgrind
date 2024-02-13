@@ -50,7 +50,6 @@ taskgrind_pass_ph1(task_t * parent)
     if (parent->children.n == 0)
         return ;
 
-    TASKGRIND_INFO("Checking dependencies for children of %p", (void*)parent->client_id);
     for (int i = 0 ; i < parent->children.n ; ++i)
     {
         task_t * pred = parent->children.tasks[i];
@@ -64,14 +63,10 @@ taskgrind_pass_ph1(task_t * parent)
             // outset tasks are 'empty' and ensure control-flow dependency, not data dependency
             // data dependency are between their predecessors and successors
             if (succ->type == TASK_TYPE_IMPLICIT_OUTSET)
-            {
                 for (int k = 0 ; k < succ->access_successors.n ; ++k)
                     __analyze_useless_dependencies_between(pred, succ->access_successors.tasks[k]);
-            }
             else
-            {
                 __analyze_useless_dependencies_between(pred, succ);
-            }
         }
     }
 

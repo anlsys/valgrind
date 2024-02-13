@@ -83,13 +83,13 @@ dump_task(VgFile * fp, task_t * task)
 
 // TDG
 void
-taskgrind_export_access_tdg(task_t * parent)
+taskgrind_export_access_tdgx(task_t * parent)
 {
     if (parent->children.n == 0)
         return ;
 
-    HChar * filename = (HChar *) VG_(malloc)("taskgrind_export_access_tdg", sizeof(UChar) * 256);
-    VG_(snprintf)(filename, 256, "tdg-%p.dot", parent);
+    HChar * filename = (HChar *) VG_(malloc)("taskgrind_export_access_tdgx", sizeof(UChar) * 256);
+    VG_(snprintf)(filename, 256, "tdgx-%p.dot", parent);
 
     TASKGRIND_INFO("Exporting %s", filename);
 
@@ -123,11 +123,11 @@ taskgrind_export_access_tdg(task_t * parent)
 }
 
 void
-taskgrind_export_access_tdg_recursive(task_t * task)
+taskgrind_export_access_tdgx_recursive(task_t * task)
 {
-    taskgrind_export_access_tdg(task);
+    taskgrind_export_access_tdgx(task);
     for (int i = 0 ; i < task->children.n ; ++i)
-        taskgrind_export_access_tdg_recursive(task->children.tasks[i]);
+        taskgrind_export_access_tdgx_recursive(task->children.tasks[i]);
 }
 
 // TCFG
