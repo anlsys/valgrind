@@ -513,7 +513,7 @@ taskgrind_pre_clo_init(void)
    VG_(details_description)     ("a debugger for dependent tasks order of execution");
    VG_(details_copyright_author)(
       "Copyright (C) 2023, and GNU GPL'd, by Romain Pereira et al.");
-   VG_(details_bug_reports_to)  ("romain.pereira@outlook.com");
+   VG_(details_bug_reports_to)  ("romain.pereira@inria.fr");
 
    VG_(details_avg_translation_sizeB) ( 500 ); // TODO: adjust this
 

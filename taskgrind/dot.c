@@ -29,76 +29,87 @@ create_file(const HChar * filename)
     return fp;
 }
 
-// dump a task
+// get the type string and label for a given task
 static inline void
-dump_task(VgFile * fp, task_t * task)
+get_task_infos(task_t * task, const char ** type, const char ** shape)
 {
-    const char * type, * shape;
-
     switch (task->type)
     {
         case (TASK_TYPE_IMPLICIT):
         {
-            type = "imp(?)";
-            shape = "diamond";
+            *type = "imp(?)";
+            *shape = "diamond";
             break ;
         }
 
         case (TASK_TYPE_IMPLICIT_ROOT):
         {
-            type = "imp(root)";
-            shape = "diamond";
+            *type = "imp(root)";
+            *shape = "diamond";
             break ;
         }
 
         case (TASK_TYPE_IMPLICIT_BARRIER):
         {
-            type = "imp(barrier)";
-            shape = "diamond";
+            *type = "imp(barrier)";
+            *shape = "diamond";
             break ;
         }
 
         case (TASK_TYPE_IMPLICIT_OUTSET):
         {
-            type = "imp(outset)";
-            shape = "diamond";
+            *type = "imp(outset)";
+            *shape = "diamond";
             break ;
         }
 
         case (TASK_TYPE_IMPLICIT_UNKNOWN):
         {
-            type = "imp(unknown)";
-            shape = "diamond";
+            *type = "imp(unknown)";
+            *shape = "diamond";
             break ;
         }
 
-
         case (TASK_TYPE_EXPLICIT):
         {
-            type = "explicit";
-            shape = "circle";
+            *type = "explicit";
+            *shape = "circle";
             break ;
         }
 
         case (TASK_TYPE_UNKNOWN):
         default:
         {
-            type = "unknown";
-            shape = "hexagon";
+            *type = "unknown";
+            *shape = "hexagon";
             TASKGRIND_ERR("Unknown task type %u", task->type);
             tl_assert(0);
             break ;
         }
     }
-    VG_(fprintf)(fp, "    \"%p\" [label=\"type=%s\\nclient=%ld\nchild=%ld\",shape=%s];\n",
-        task, type, (Word)task->client_id, (Word)task->child_id, shape);
+}
 
+// dump a task
+static inline void
+dump_task(VgFile * fp, task_t * task)
+{
+    const char * type, * shape;
+    get_task_infos(task, &type, &shape);
+
+    VG_(fprintf)(fp, "    \"%p\" [label=\"type=%s\\nclient=%ld\\nchild=%ld\",shape=%s];\n",
+        task, type, (Word)task->client_id, (Word)task->child_id, shape);
 }
 
 static void
-dump_task_part(VgFile * fp, task_part_t * part)
+dump_task_part_ref(VgFile * fp, task_part_ref_t * ref)
 {
-    dump_task(fp, part->task);
+    const char * type, * shape;
+    get_task_infos(ref->task, &type, &shape);
+
+    task_t * task = ref->task;
+    task_part_t * part = task->parts.parts + ref->id;
+    VG_(fprintf)(fp, "    \"%p\" [label=\"type=%s\\nclient=%ld\\nchild=%ld\\npart=%u\",shape=%s];\n",
+        part, type, (Word)task->client_id, (Word)task->child_id, ref->id, shape);
 }
 
 // TDG (task dependency graph)
@@ -119,18 +130,20 @@ taskgrind_export_tdgx(task_t * parent)
 
     // dump tasks
     for (int i = 0 ; i < parent->children.n ; ++i)
-        dump_task(fp, parent->children.tasks[i]);
+    ARRAY_FOREACH_BEGIN(&parent->children, task_t **, child)
+        dump_task(fp, *child);
+    ARRAY_FOREACH_END(&parent->children, task_t **, child)
 
     // dump edges
-    for (int i = 0 ; i < parent->children.n ; ++i)
+    ARRAY_FOREACH_BEGIN(&parent->children, task_t **, pred)
     {
-        task_t * pred = parent->children.tasks[i];
-        for (int j = 0 ; j < pred->successors.n ; ++j)
+        ARRAY_FOREACH_BEGIN(&(*pred)->successors, task_t **, succ)
         {
-            task_t * succ = pred->successors.tasks[j];
             VG_(fprintf)(fp, "    \"%p\" -> \"%p\" ;\n", pred, succ);
         }
+        ARRAY_FOREACH_END(&(*pred)->successors, task_t **, succ)
     }
+    ARRAY_FOREACH_END(&parent->children, task_t **, pred)
 
     VG_(fprintf)(fp, "}\n");
     VG_(fclose)(fp);
@@ -140,8 +153,11 @@ void
 taskgrind_export_tdgx_recursive(task_t * task)
 {
     taskgrind_export_tdgx(task);
-    for (int i = 0 ; i < task->children.n ; ++i)
-        taskgrind_export_tdgx_recursive(task->children.tasks[i]);
+    ARRAY_FOREACH_BEGIN(&task->children, task_t **, child)
+    {
+        taskgrind_export_tdgx_recursive(*child);
+    }
+    ARRAY_FOREACH_END(&parent->children, task_t **, child)
 }
 
 // TCFG (task control flow graph)
@@ -150,13 +166,12 @@ dump_tcfg(VgFile * fp, task_t * parent)
 {
     dump_task(fp, parent);
 
-    int i;
-    for (i = 0 ; i < parent->children.n ; ++i)
+    ARRAY_FOREACH_BEGIN(&parent->children, task_t **, child)
     {
-        task_t * child = parent->children.tasks[i];
-        dump_tcfg(fp, child);
-        VG_(fprintf)(fp, "    \"%p\" -> \"%p\" ;\n", parent, child);
+        dump_tcfg(fp, *child);
+        VG_(fprintf)(fp, "    \"%p\" -> \"%p\" ;\n", parent, *child);
     }
+    ARRAY_FOREACH_END(&parent->children, task_t **, child)
 }
 
 void
@@ -171,28 +186,30 @@ taskgrind_export_tcfg(task_t * task)
     VG_(fclose)(fp);
 }
 
-// TDXF (task dependnecy graph flatten)
+// logically parallel graph
 static void
-dump_tdgxf(VgFile * fp, task_part_t * pred)
+dump_lpg(VgFile * fp, task_part_ref_t * pred_ref)
 {
-    dump_task_part(fp, pred);
+    dump_task_part_ref(fp, pred_ref);
 
-    int i;
-    for (i = 0 ; i < pred->successors.n ; ++i)
+    task_part_t * pred = pred_ref->task->parts.parts + pred_ref->id;
+    ARRAY_FOREACH_BEGIN(&pred->successors, task_part_ref_t *, succ_ref)
     {
-        task_part_t * succ = pred->successors.parts + i;
-        dump_tdgxf(fp, succ);
+        dump_lpg(fp, succ_ref);
+
+        task_part_t * succ = succ_ref->task->parts.parts + succ_ref->id;
         VG_(fprintf)(fp, "    \"%p\" -> \"%p\" ;\n", pred, succ);
     }
+    ARRAY_FOREACH_END(&pred->successors, task_part_ref_t *, succ_ref)
 }
 
 void
-taskgrind_export_tdgxf(task_part_t * part)
+taskgrind_export_lpg(task_part_ref_t * root)
 {
-    VgFile * fp = create_file("tdgxf.dot");
+    VgFile * fp = create_file("lpg.dot");
 
     VG_(fprintf)(fp, "digraph G {\n");
-    dump_tdgxf(fp, part);
+    dump_lpg(fp, root);
     VG_(fprintf)(fp, "}\n");
 
     VG_(fclose)(fp);

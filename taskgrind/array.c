@@ -17,7 +17,7 @@ array_init(array_t * array, UInt default_capacity, UInt objsize)
 void
 array_deinit(array_t * array)
 {
-    VG_(free)(array->tasks);
+    VG_(free)(array->objs);
     array->n        = 0;
     array->capacity = 0;
 }
@@ -44,7 +44,29 @@ array_last(array_t * array)
 {
     if (array->n == 0)
         return NULL;
-    return (void *) (array->tasks + (array->n - 1) * array->objsize);
+    return (void *) (array->objs + (array->n - 1) * array->objsize);
+}
+
+void *
+array_penultimate(array_t * array)
+{
+    if (array->n <= 1)
+        return NULL;
+    return (void *) (array->objs + (array->n - 2) * array->objsize);
+}
+
+void *
+array_first(array_t * array)
+{
+    if (array->n == 0)
+        return NULL;
+    return (void *) (array->objs);
+}
+
+int
+array_is_empty(array_t * array)
+{
+    return array->n == 0;
 }
 
 void
@@ -53,6 +75,7 @@ array_clear(array_t * array)
     array->n = 0;
 }
 
+#if 0
 // struct task_s *
 void
 task_array_init(task_array_t * array)
@@ -103,3 +126,4 @@ task_part_array_first(task_part_array_t * array)
 {
     return (struct task_part_s *) (array->n == 0 ? NULL : array->parts);
 }
+# endif

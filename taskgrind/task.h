@@ -86,7 +86,7 @@ typedef struct  task_s
     UT_hash_handle hh;
 }               task_t;
 
-// a task part
+// a logical task part
 typedef struct  task_part_s
 {
     // the client task
@@ -101,6 +101,15 @@ typedef struct  task_part_s
     // successors expressed by the client
     array_t successors;
 }               task_part_t;
+
+typedef struct  task_part_ref_s
+{
+    // the task
+    task_t * task;
+
+    // part id
+    UInt id;
+}               task_part_ref_t;
 
 typedef enum    task_mem_access_type_e
 {
