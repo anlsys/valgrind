@@ -1,4 +1,4 @@
-# define N 2
+# define N 4
 
 int
 main(void)
@@ -17,7 +17,7 @@ main(void)
 
             for (int i = 0 ; i < N ; ++i)
             {
-                # pragma omp task depend(out: x)
+                # pragma omp task depend(in: x)
                 {}
             }
 
