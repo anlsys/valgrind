@@ -1,8 +1,10 @@
-# include "print.h"
-# include "task.h"
-
+# include "pub_tool_debuginfo.h"
 # include "pub_tool_libcfile.h"
 # include "pub_tool_libcassert.h"
+# include "pub_tool_execontext.h"
+
+# include "print.h"
+# include "task.h"
 
 ///////////////////////////////////////////////////////////////////////////////
 //  Export graph to dot file
@@ -27,6 +29,80 @@ create_file(const HChar * filename)
             dot_file_err();
     }
     return fp;
+}
+
+// retrieve a single LoC pointing pointing to the given task part
+static const HChar * UNKNOWN = "(unknown)";
+
+static HChar *
+get_task_part_location_from_ip(DiEpoch ep, Addr ip)
+{
+    const HChar * dir;
+    const HChar * file;
+    UInt line;
+    if (!VG_(get_filename_linenum)(ep, ip, &file, &dir, &line))
+        return (HChar *) UNKNOWN;
+
+    dir = NULL; // don't show directory
+
+    HChar * s;
+    if (dir)
+    {
+        // format is: dir/file:line
+        //      dir : is known
+        //      /   : + 1
+        //      file : is known
+        //      :   : +1
+        //      line : len(str(1 << 32)) == 10
+        //      \0  : +1
+        UInt len = VG_(strlen)(dir) + 1 + VG_(strlen)(file) + 1 + 10 + 1;
+        s = (HChar *) VG_(malloc)("get_task_part_location_from_ip", len);
+        VG_(snprintf)(s, len, "%s%c%s%c%u", dir, '/', file, ':', line);
+    }
+    else
+    {
+        // format is: file:line
+        //      file : is known
+        //      :   : +1
+        //      line : len(str(1 << 32)) == 10
+        //      \0  : +1
+        UInt len = VG_(strlen)(file) + 1 + 10 + 1;
+        s = (HChar *) VG_(malloc)("get_task_part_location_from_ip", len);
+        VG_(snprintf)(s, len, "%s%c%u", file, ':', line);
+    }
+
+    return s;
+}
+
+static HChar *
+get_task_part_location(task_part_t * part)
+{
+    ExeContext * ec = part->ctx;
+
+    if (ec == NULL)
+        return (HChar *) UNKNOWN;
+
+    DiEpoch ep = VG_(get_ExeContext_epoch)(ec);
+    Int n_ips = VG_(get_ExeContext_n_ips)(ec);
+    Addr * ips = VG_(get_ExeContext_ips)(ec);
+
+    Int i;
+    for (i = 0 ; i < n_ips ; ++i)
+    {
+        Addr ip = ips[i];
+
+        const HChar * name;
+        if (VG_(get_fnname)(ep, ip, &name))
+        {
+            // detect LLVM outlined sections
+            if (VG_(strstr)(name, "outline"))
+            {
+                return get_task_part_location_from_ip(ep, ips[i]);
+            }
+        }
+    }
+
+    return get_task_part_location_from_ip(ep, ips[0]);
 }
 
 // get the type string and label for a given task
@@ -108,8 +184,14 @@ dump_task_part_ref(VgFile * fp, task_part_ref_t * ref)
 
     task_t * task = ref->task;
     task_part_t * part = task->parts.parts + ref->id;
-    VG_(fprintf)(fp, "    \"%p\" [label=\"type=%s\\nclient=%ld\\nchild=%ld\\npart=%u\",shape=%s];\n",
-        part, type, (Word)task->client_id, (Word)task->child_id, ref->id, shape);
+
+    HChar * location = get_task_part_location(part);
+
+    VG_(fprintf)(fp, "    \"%p\" [label=\"type=%s\\nclient=%ld\\nchild=%ld\\npart=%u\\nlocation=%s\",shape=%s];\n",
+        part, type, (Word)task->client_id, (Word)task->child_id, ref->id, location, shape);
+
+    if (location != UNKNOWN)
+        VG_(free)(location);
 }
 
 // TDG (task dependency graph)
@@ -139,7 +221,7 @@ taskgrind_export_tdgx(task_t * parent)
     {
         ARRAY_FOREACH_BEGIN(&(*pred)->successors, task_t **, succ)
         {
-            VG_(fprintf)(fp, "    \"%p\" -> \"%p\" ;\n", pred, succ);
+            VG_(fprintf)(fp, "    \"%p\" -> \"%p\" ;\n", *pred, *succ);
         }
         ARRAY_FOREACH_END(&(*pred)->successors, task_t **, succ)
     }
@@ -195,6 +277,11 @@ dump_lpg(VgFile * fp, task_part_ref_t * pred_ref)
     task_part_t * pred = pred_ref->task->parts.parts + pred_ref->id;
     ARRAY_FOREACH_BEGIN(&pred->successors, task_part_ref_t *, succ_ref)
     {
+        // TODO : WARNING, FLAG IS NEVER RESET HERE
+        if (succ_ref->flag)
+            continue ;
+        succ_ref->flag = 1;
+
         dump_lpg(fp, succ_ref);
 
         task_part_t * succ = succ_ref->task->parts.parts + succ_ref->id;

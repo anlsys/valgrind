@@ -1,10 +1,12 @@
-#include "dot.h"
-#include "pass/pass.h"
-#include "print.h"
-#include "task.h"
-#include "taskgrind.h"
+# include "dot.h"
+# include "pass/pass.h"
+# include "print.h"
+# include "task.h"
+# include "taskgrind.h"
 
-#include "pub_tool_libcassert.h"    /* tool_panic, lt_assert */
+# include "pub_tool_libcassert.h"    /* tool_panic, lt_assert */
+# include "pub_tool_threadstate.h"
+# include "pub_tool_execontext.h"
 
 // The tasks hmap
 task_t * TASKS;
@@ -23,6 +25,13 @@ task_part_new(task_t * task)
     SPMT_INITIALIZE(&part->loads);
     SPMT_INITIALIZE(&part->stores);
     array_init(&part->successors, 0, sizeof(task_part_ref_t));
+
+    ThreadId tid = VG_(get_running_tid)();
+    if (tid != VG_INVALID_THREADID)
+        part->ctx = VG_(record_ExeContext)(tid, 0);
+    else
+        part->ctx = NULL;
+
     return part;
 }
 
@@ -66,9 +75,20 @@ task_array_last(array_t * array)
     return tasks ? tasks[0] : NULL;
 }
 
-// set the edge pred -> succ
+// set the edge pred -> succ in the LPG
 static inline void
-task_link_access(task_t * pred, task_t * succ)
+task_part_set_edge(task_part_t * pred, task_t * succ, UInt part_id)
+{
+    task_part_ref_t part_ref;
+    part_ref.task = succ;
+    part_ref.id = part_id;
+    part_ref.flag = 0;
+    array_push(&pred->successors, &part_ref);
+}
+
+// set the edge pred -> succ in the TDG
+static inline void
+task_set_edge(task_t * pred, task_t * succ)
 {
     // filter out multiple edges
     task_t ** tasks = array_last(&pred->successors);
@@ -77,49 +97,74 @@ task_link_access(task_t * pred, task_t * succ)
         return ;
     array_push(&pred->successors, &succ);
     TASKGRIND_DEBUG("   Added edge %p -> %p", (void *)pred->client_id, (void *)succ->client_id);
+
+    // LPG
+    task_part_t * pred_part = (task_part_t *) array_last(&pred->parts);
+    task_part_set_edge(pred_part, succ, 0);
 }
 
 task_t *
 task_create(UWord client_id, task_type_t type)
 {
+    //
+    //  [...]                   // current
+    //  # pragma omp task(wait) // task
+    //  [...]                   // succ
+    //
+
     // ensure this client_id has not already been used
     task_t * task;
     unsigned hashv;
 
     HASH_VALUE(&client_id, sizeof(UWord), hashv);
-    HASH_FIND_BYHASHVALUE(hh, TASKS, &client_id, sizeof(UWord), hashv, task);
 
-    tl_assert(task == NULL);
-
-    // create the task
-    if (task == NULL)
+    if (client_id != TASKGRIND_CLIENT_ID_PRIVATE)
     {
-        task = task_new(client_id, type);
-        HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASKS, &(task->client_id), sizeof(UWord), hashv, task);
-        TASKGRIND_DEBUG("Task create %p (parent %p)", (void *) client_id, (void *) (task->parent ? task->parent->client_id : TASKGRIND_CLIENT_ID_PRIVATE));
+        HASH_FIND_BYHASHVALUE(hh, TASKS, &client_id, sizeof(UWord), hashv, task);
+        tl_assert(task == NULL);
+        if (task)
+        {
+            TASKGRIND_ERR("Client sent the same task id for two 'task_create'");
+            VG_(exit)(1);
+        }
     }
 
+    // create the task
+    task = task_new(client_id, type);
+    HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASKS, &(task->client_id), sizeof(UWord), hashv, task);
+    TASKGRIND_DEBUG("Task create %p (parent %p)", (void *) client_id, (void *) (task->parent ? task->parent->client_id : TASKGRIND_CLIENT_ID_PRIVATE));
+
     tl_assert(task);
-
-    // add edges with respect to previous synchronizations
     tl_assert(CURRENT_TASK);
+
+    /////////
+    // TDG //
+    /////////
+    // add edges with respect to previous synchronizations
     if (CURRENT_TASK->last_sync)
-        task_link_access(CURRENT_TASK->last_sync, task);
+        task_set_edge(CURRENT_TASK->last_sync, task);
 
-    // insert a new task part for the parent
-    task_part_t * succ = task_part_new(CURRENT_TASK);
-    tl_assert(succ);
+    /////////
+    // LPG //
+    /////////
+    // create a new successor part for the current task
+    task_part_t * succ_part = task_part_new(CURRENT_TASK);
+    tl_assert(succ_part);
 
-    // retrieve penultimate to insert dependency edge
-    task_part_t * pred = (task_part_t *) array_penultimate(&CURRENT_TASK->parts);
-    tl_assert(pred);
+    // retrieve current part
+    task_part_t * current_part = (task_part_t *) array_penultimate(&CURRENT_TASK->parts);
+    tl_assert(current_part);
 
-    task_part_ref_t part_ref;
-    part_ref.task = CURRENT_TASK;
-    part_ref.id = CURRENT_TASK->parts.n - 1;
-    TASKGRIND_DEBUG("adding logical edge %p -> %p", pred, succ);
-    array_push(&pred->successors, &part_ref);
-    TASKGRIND_DEBUG("added logical edge %p -> %p", pred, succ);
+    // current task new part depends on the current part
+    task_part_set_edge(current_part, CURRENT_TASK, CURRENT_TASK->parts.n - 1);
+
+    // new task initial part depend on the current part
+    task_part_set_edge(current_part, task, 0);
+
+    if (CURRENT_TASK->last_sync)
+    {
+        // nothing to do, 'current_part' already depends on previous sync
+    }
 
     return task;
 }
@@ -266,17 +311,17 @@ task_access(UWord client_id, UWord addr, UWord type)
                     // prevent cyclic deps in case 'task' already had an 'in'
                     // dep type on the same addr previously
                     if (*in != task)
-                        task_link_access(*in, accesses->out);
+                        task_set_edge(*in, accesses->out);
                 }
                 ARRAY_FOREACH_END(&accesses->ins, task_t **, in)
 
-                task_link_access(accesses->out, task);
+                task_set_edge(accesses->out, task);
                 array_clear(&accesses->ins);
             }
             else
             {
                 ARRAY_FOREACH_BEGIN(&accesses->ins, task_t **, in)
-                    task_link_access(*in, task);
+                    task_set_edge(*in, task);
                 ARRAY_FOREACH_END(&accesses->ins, task_t **, in)
             }
         } // 1.1
@@ -295,16 +340,16 @@ task_access(UWord client_id, UWord addr, UWord type)
                  */
                 accesses->out = task_new(TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_OUTSET);
                 ARRAY_FOREACH_BEGIN(&accesses->outsets, task_t **, outset)
-                    task_link_access(*outset, accesses->out);
+                    task_set_edge(*outset, accesses->out);
                 ARRAY_FOREACH_END(&accesses->outsets, task_t *, outset)
 
-                task_link_access(accesses->out, task);
+                task_set_edge(accesses->out, task);
                 array_clear(&accesses->outsets);
             }
             else
             {
                 ARRAY_FOREACH_BEGIN(&accesses->outsets, task_t **, outset)
-                    task_link_access(*outset, accesses->out);
+                    task_set_edge(*outset, accesses->out);
                 ARRAY_FOREACH_END(&accesses->outsets, task_t **, outset)
             }
         } // 1.2
@@ -320,7 +365,7 @@ task_access(UWord client_id, UWord addr, UWord type)
             }
             else
             {
-                task_link_access(accesses->out, task);
+                task_set_edge(accesses->out, task);
             }
         }
 
@@ -363,22 +408,56 @@ task_access(UWord client_id, UWord addr, UWord type)
 void
 task_sync(void)
 {
+    //
+    //  [...]                   // current
+    //  # pragma omp taskwait   // sync
+    //  [...]                   // succ
+    //
+
     // create an empty task (the sync barrier)
     task_t * sync = task_new(TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_BARRIER);
 
-    // for each children task of the current task
+    /////////
+    // LPG //
+    /////////
+
+    // create a new successor part for the current task
+    task_part_t * succ_part = task_part_new(CURRENT_TASK);
+    tl_assert(succ_part);
+
+    // retrieve current part
+    task_part_t * current_part = (task_part_t *) array_penultimate(&CURRENT_TASK->parts);
+    tl_assert(current_part);
+
+    // retrieve the sync part
+    task_part_t * sync_part = (task_part_t *) array_first(&sync->parts);
+    tl_assert(sync_part);
+
+    // set edges
+    task_part_set_edge(current_part, sync, 0);
+    task_part_set_edge(sync_part, CURRENT_TASK, CURRENT_TASK->parts.n - 1);
+
+    // for each children task of the current task (excluding the new sync barrier)
     ARRAY_FOREACH_BEGIN(&CURRENT_TASK->children, task_t **, child)
     {
-        // link them with the new sync barrier
-
-        // skip the newly inserted sync barrier
         if (*child == sync)
             continue ;
 
+        // link leaves with the new sync barrier
         if (array_is_empty(&(*child)->successors))
-            task_link_access(*child, sync);
+        {
+            // TDG
+            task_set_edge(*child, sync);
+        }
     }
     ARRAY_FOREACH_END(&CURRENT_TASK->children, task_t **, child)
+
+
+
+
+
+
+
 
     // in the future, link each next children with this barrier
     CURRENT_TASK->last_sync = sync;

@@ -1,8 +1,9 @@
 #ifndef __TASK_H__
 # define __TASK_H__
 
-#include "pub_tool_basics.h"
-#include "pub_tool_libcbase.h"      /* strstr */
+# include "pub_tool_basics.h"
+# include "pub_tool_libcbase.h"      /* strstr */
+# include "pub_tool_execontext.h"
 
 # include "taskgrind_uthash.h"
 # include "taskgrind_spmt.h"
@@ -100,6 +101,10 @@ typedef struct  task_part_s
 
     // successors expressed by the client
     array_t successors;
+
+    // the execution context
+    ExeContext * ctx;
+
 }               task_part_t;
 
 typedef struct  task_part_ref_s
@@ -109,6 +114,10 @@ typedef struct  task_part_ref_s
 
     // part id
     UInt id;
+
+    // a flag for searching
+    char flag;
+
 }               task_part_ref_t;
 
 typedef enum    task_mem_access_type_e

@@ -584,6 +584,12 @@ Int VG_(get_ExeContext_n_ips)( const ExeContext* e ) {
    return e->n_ips;
 }
 
+Addr * VG_(get_ExeContext_ips)( const ExeContext* e ) {
+   vg_assert(e->n_ips >= 1);
+   vg_assert(e->ips == e + 1);
+   return e->ips;
+}
+
 ExeContext* VG_(get_ExeContext_from_ECU)( UInt ecu )
 {
    UWord i;
