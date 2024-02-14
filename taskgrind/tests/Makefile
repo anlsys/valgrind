@@ -4,6 +4,7 @@ CFLAGS=-Wall -Werror -Wextra
 CFLAGS+=-fopenmp
 CFLAGS+=-I ../
 CFLAGS+=-O0 -g
+CFLAGS+=-Wno-int-to-pointer-cast -Wno-unused-value
 
 LDFLAGS=
 

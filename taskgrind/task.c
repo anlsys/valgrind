@@ -513,7 +513,7 @@ task_fini(void)
     taskgrind_export_tcfg(&ROOT_TASK);
     taskgrind_export_tdgx_recursive(&ROOT_TASK);
     taskgrind_export_lpg((task_part_t *)array_first(&ROOT_TASK.parts));
-    taskgrind_pass_ph1(&ROOT_TASK);
+    taskgrind_pass_e5(&ROOT_TASK);
     TASKGRIND_INFO("Analysis completed.");
 
     // taskgrind_export_tcfg(CURRENT_TASK);

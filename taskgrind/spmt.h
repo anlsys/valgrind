@@ -80,6 +80,7 @@ typedef struct  spmt_node_s
 }               spmt_node_t;
 
 typedef spmt_node_t spmt_t;
+typedef unsigned int (*spmt_dump_t)(const char *, ...);
 
 /* Initialize a new spmt */
 # define SPMT_INITIALIZE(T) do {                                            \
@@ -189,9 +190,8 @@ __spmt_fill(spmt_t * parent, SPMT_PTR_T begin, SPMT_PTR_T end)
 # define SPMT_FILL(T, B, E)   do {                                \
                                     __spmt_fill((T), (B), (E));   \
                                 } while(0);
-
 static inline void
-__spmt_dump(int (*print)(const char *, ...), spmt_node_t * parent, int depth)
+__spmt_dump(spmt_dump_t print, spmt_node_t * parent, int depth)
 {
     print("%*c(%llu, %llu, %d)\n", 2*depth + 1, ' ', parent->begin, parent->end, parent->filled);
     int i;
@@ -208,10 +208,10 @@ __spmt_dump(int (*print)(const char *, ...), spmt_node_t * parent, int depth)
     } while (0);
 
 static inline void
-__spmt_dump_filled(int (*print)(const char *, ...), spmt_node_t * parent)
+__spmt_dump_filled(spmt_dump_t print, spmt_node_t * parent)
 {
     if (parent->filled)
-        print("[%llu, %llu], ", parent->begin, parent->end);
+        print("[%llu, %llu[, ", parent->begin, parent->end);
 
     int i;
     for (i = 0 ; i < SPMT_N_CHILDREN ; ++i)
@@ -285,12 +285,52 @@ __spmt_intersect(
 static inline int
 __spmt_is_empty(spmt_node_t * node)
 {
+    if (node->filled)
+        return 0;
+
     for (int i = 0 ; i < SPMT_N_CHILDREN ; ++i)
         if (node->children[i] != SPMT_NULL)
             return 0;
-    return !node->filled;
+
+    return 1;
 }
 
 # define SPMT_IS_EMPTY(T) __spmt_is_empty(T)
+
+static inline void
+__spmt_foreach(
+    spmt_node_t * node,
+    int (*f)(SPMT_PTR_T, SPMT_PTR_T, void *),
+    int * stop,
+    void * opaque
+) {
+    if (*stop)
+        return ;
+
+    if (node->filled)
+    {
+        if (f(node->begin, node->end, opaque))
+        {
+            *stop = 1;
+            return ;
+        }
+    }
+
+    for (int i = 0 ; i < SPMT_N_CHILDREN ; ++i)
+    {
+        if (node->children[i] != SPMT_NULL)
+        {
+            __spmt_foreach(node->children[i], f, stop, opaque);
+            if (*stop)
+                return ;
+        }
+    }
+}
+
+# define SPMT_FOREACH_FILLED(T, F, O)       \
+    do {                                    \
+        int stop = 0;                       \
+        __spmt_foreach(T, F, &stop, O);     \
+    } while(0);
 
 #endif /* __SPMT_H__ */
