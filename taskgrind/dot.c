@@ -31,11 +31,11 @@ create_file(const HChar * filename)
     return fp;
 }
 
-// retrieve a single LoC pointing pointing to the given task part
+// retrieve a single LoC pointing pointing to the given task seg
 static const HChar * UNKNOWN = "(unknown)";
 
 static HChar *
-get_task_part_location_from_ip(DiEpoch ep, Addr ip)
+get_task_seg_location_from_ip(DiEpoch ep, Addr ip)
 {
     const HChar * dir;
     const HChar * file;
@@ -56,7 +56,7 @@ get_task_part_location_from_ip(DiEpoch ep, Addr ip)
         //      line : len(str(1 << 32)) == 10
         //      \0  : +1
         UInt len = VG_(strlen)(dir) + 1 + VG_(strlen)(file) + 1 + 10 + 1;
-        s = (HChar *) VG_(malloc)("get_task_part_location_from_ip", len);
+        s = (HChar *) VG_(malloc)("get_task_seg_location_from_ip", len);
         VG_(snprintf)(s, len, "%s%c%s%c%u", dir, '/', file, ':', line);
     }
     else
@@ -67,7 +67,7 @@ get_task_part_location_from_ip(DiEpoch ep, Addr ip)
         //      line : len(str(1 << 32)) == 10
         //      \0  : +1
         UInt len = VG_(strlen)(file) + 1 + 10 + 1;
-        s = (HChar *) VG_(malloc)("get_task_part_location_from_ip", len);
+        s = (HChar *) VG_(malloc)("get_task_seg_location_from_ip", len);
         VG_(snprintf)(s, len, "%s%c%u", file, ':', line);
     }
 
@@ -75,9 +75,9 @@ get_task_part_location_from_ip(DiEpoch ep, Addr ip)
 }
 
 static HChar *
-get_task_part_location(task_part_t * part)
+get_task_seg_location(task_seg_t * seg)
 {
-    ExeContext * ec = part->ctx;
+    ExeContext * ec = seg->ctx;
 
     if (ec == NULL)
         return (HChar *) UNKNOWN;
@@ -97,12 +97,12 @@ get_task_part_location(task_part_t * part)
             // detect LLVM outlined sections
             if (VG_(strstr)(name, "outline"))
             {
-                return get_task_part_location_from_ip(ep, ips[i]);
+                return get_task_seg_location_from_ip(ep, ips[i]);
             }
         }
     }
 
-    return get_task_part_location_from_ip(ep, ips[0]);
+    return get_task_seg_location_from_ip(ep, ips[0]);
 }
 
 // get the type string and label for a given task
@@ -177,18 +177,18 @@ dump_task(VgFile * fp, task_t * task)
 }
 
 static void
-dump_task_part_ref(VgFile * fp, task_part_ref_t * ref)
+dump_task_seg_ref(VgFile * fp, task_seg_ref_t * ref)
 {
     const char * type, * shape;
     get_task_infos(ref->task, &type, &shape);
 
     task_t * task = ref->task;
-    task_part_t * part = task->parts.parts + ref->id;
+    task_seg_t * seg = task->segs.segs + ref->id;
 
-    HChar * location = get_task_part_location(part);
+    HChar * location = get_task_seg_location(seg);
 
-    VG_(fprintf)(fp, "    \"%p\" [label=\"type=%s\\nclient=%ld\\nchild=%ld\\npart=%u\\nlocation=%s\",shape=%s];\n",
-        part, type, (Word)task->client_id, (Word)task->child_id, ref->id, location, shape);
+    VG_(fprintf)(fp, "    \"%p\" [label=\"type=%s\\nclient=%ld\\nchild=%ld\\nseg=%u\\nlocation=%s\",shape=%s];\n",
+        seg, type, (Word)task->client_id, (Word)task->child_id, ref->id, location, shape);
 
     if (location != UNKNOWN)
         VG_(free)(location);
@@ -270,12 +270,12 @@ taskgrind_export_tcfg(task_t * task)
 
 // logically parallel graph
 static void
-dump_lpg(VgFile * fp, task_part_ref_t * pred_ref)
+dump_lpg(VgFile * fp, task_seg_ref_t * pred_ref)
 {
-    dump_task_part_ref(fp, pred_ref);
+    dump_task_seg_ref(fp, pred_ref);
 
-    task_part_t * pred = pred_ref->task->parts.parts + pred_ref->id;
-    ARRAY_FOREACH_BEGIN(&pred->successors, task_part_ref_t *, succ_ref)
+    task_seg_t * pred = pred_ref->task->segs.segs + pred_ref->id;
+    ARRAY_FOREACH_BEGIN(&pred->successors, task_seg_ref_t *, succ_ref)
     {
         // TODO : WARNING, FLAG IS NEVER RESET HERE
         if (succ_ref->flag)
@@ -284,14 +284,14 @@ dump_lpg(VgFile * fp, task_part_ref_t * pred_ref)
 
         dump_lpg(fp, succ_ref);
 
-        task_part_t * succ = succ_ref->task->parts.parts + succ_ref->id;
+        task_seg_t * succ = succ_ref->task->segs.segs + succ_ref->id;
         VG_(fprintf)(fp, "    \"%p\" -> \"%p\" ;\n", pred, succ);
     }
-    ARRAY_FOREACH_END(&pred->successors, task_part_ref_t *, succ_ref)
+    ARRAY_FOREACH_END(&pred->successors, task_seg_ref_t *, succ_ref);
 }
 
 void
-taskgrind_export_lpg(task_part_ref_t * root)
+taskgrind_export_lpg(task_seg_ref_t * root)
 {
     VgFile * fp = create_file("lpg.dot");
 

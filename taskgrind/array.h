@@ -4,7 +4,7 @@
 #include "pub_tool_basics.h"
 
 struct task_s;
-struct task_part_s;
+struct task_seg_s;
 
 // list of tasks
 typedef struct  array_s
@@ -13,7 +13,7 @@ typedef struct  array_s
     union {
         UChar * objs;
         struct task_s ** tasks;
-        struct task_part_s * parts;
+        struct task_seg_s * segs;
     };
 
     // capacity
@@ -45,22 +45,5 @@ void array_deinit(array_t * array);
 # define ARRAY_FOREACH_END(A, T, X)             \
         }                                       \
     } while (0);
-
-#if 0
-typedef array_t task_array_t;
-void task_array_init(task_array_t * array);
-void task_array_push(task_array_t * array, struct task_s * task);
-struct task_s * task_array_last(array_t * array);
-void task_array_clear(task_array_t * array);
-void task_array_deinit(task_array_t * array);
-
-typedef array_t task_part_array_t;
-void task_part_array_init(task_part_array_t * array);
-struct task_part_s * task_part_array_push(task_part_array_t * array);
-struct task_part_s * task_part_array_last(task_part_array_t * array);
-void task_part_array_clear(task_part_array_t * array);
-void task_part_array_deinit(task_part_array_t * array);
-struct task_part_s * task_part_array_first(task_part_array_t * array);
-#endif
 
 #endif /* __ARRAY_H__ */

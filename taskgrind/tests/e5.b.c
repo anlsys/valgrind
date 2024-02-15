@@ -16,7 +16,16 @@ main(void)
             int x;
 
             # pragma omp task depend(out: x) shared(x)
+            {
                 x = 42;
+
+                # pragma omp task depend(out: x)
+                {}
+
+                # pragma omp task depend(in: x)
+                {}
+
+            }
 
             # pragma omp task depend(in: x) shared(x)
                 x = 43;

@@ -278,8 +278,63 @@ __spmt_intersect(
 
 # define SPMT_INTERSECT(DST, A, B)      \
     do {                                \
-        SPMT_INITIALIZE(DST);           \
         __spmt_intersect(DST, A, B);    \
+    } while (0);
+
+static inline int
+__spmt_union(
+    spmt_node_t * dst,
+    spmt_node_t * a,
+    spmt_node_t * b
+) {
+    SPMT_F_ASSERT(dst->begin >= a->begin);
+    SPMT_F_ASSERT(dst->begin >= b->begin);
+    SPMT_F_ASSERT(dst->end   <= a->end);
+    SPMT_F_ASSERT(dst->end   <= b->end);
+
+    if (a->filled || b->filled)
+    {
+        dst->filled = 1;
+        return 1;
+    }
+
+    uintptr_t begin = SPMT_MAX(a->begin, b->begin);
+    uintptr_t end   = SPMT_MIN(a->end, b->end);
+    uintptr_t unit  = (end - begin) / SPMT_N_CHILDREN;
+
+    int r = 0;
+    for (int i = 0 ; i < SPMT_N_CHILDREN ; ++i)
+    {
+        if ((a->children[i] == SPMT_NULL) && (b->children[i] == SPMT_NULL))
+            continue ;
+
+        spmt_node_t * next_a = (a->children[i] == SPMT_NULL) ? a : a->children[i];
+        spmt_node_t * next_b = (b->children[i] == SPMT_NULL) ? b : b->children[i];
+
+        uintptr_t next_begin = begin + (i+0) * unit;
+        uintptr_t next_end   = begin + (i+1) * unit;
+
+        __spmt_alloc_child(dst, i, next_begin, next_end);
+        if (__spmt_union(dst->children[i], next_a, next_b))
+            ++r;
+    }
+
+    if (r == SPMT_N_CHILDREN)
+    {
+        for (int i = 0 ; i < SPMT_N_CHILDREN ; ++i)
+        {
+            SPMT_F_FREE_NODE(dst->children[i]);
+            dst->children[i] = SPMT_NULL;
+        }
+        dst->filled = 1;
+    }
+
+    return r;
+}
+
+# define SPMT_UNION(DST, A, B)      \
+    do {                            \
+        __spmt_union(DST, A, B);    \
     } while (0);
 
 static inline int

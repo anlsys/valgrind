@@ -7,6 +7,7 @@
 # include "pub_tool_libcassert.h"    /* tool_panic, lt_assert */
 # include "pub_tool_threadstate.h"
 # include "pub_tool_execontext.h"
+# include "pub_tool_guest.h"
 
 // The tasks hmap
 task_t * TASKS;
@@ -17,22 +18,17 @@ task_t ROOT_TASK;
 // The current task
 task_t * CURRENT_TASK = NULL;
 
-static inline task_part_t *
-task_part_new(task_t * task)
+static inline task_seg_t *
+task_seg_new(task_t * task)
 {
-    task_part_t * part = array_push(&task->parts, NULL);
-    part->task = task;
-    SPMT_INITIALIZE(&part->loads);
-    SPMT_INITIALIZE(&part->stores);
-    array_init(&part->successors, 0, sizeof(task_part_ref_t));
+    task_seg_t * seg = array_push(&task->segs, NULL);
+    seg->task = task;
+    SPMT_INITIALIZE(&seg->loads);
+    SPMT_INITIALIZE(&seg->stores);
+    array_init(&seg->successors, 0, sizeof(task_seg_ref_t));
+    seg->ctx = NULL;
 
-    ThreadId tid = VG_(get_running_tid)();
-    if (tid != VG_INVALID_THREADID)
-        part->ctx = VG_(record_ExeContext)(tid, 0);
-    else
-        part->ctx = NULL;
-
-    return part;
+    return seg;
 }
 
 static inline void
@@ -48,10 +44,11 @@ __task_init(task_t * task, UWord client_id, task_type_t type)
     task->parent            = CURRENT_TASK;
     array_init(&task->children, 0, sizeof(task_t *));
     task->last_sync         = NULL;
-    array_init(&task->parts, 0, sizeof(task_part_t));
+    array_init(&task->segs, 0, sizeof(task_seg_t));
+    task->sp                = (Addr) TASKGRIND_BASE_STACK_PTR;
 
-    // add an initial part
-    task_part_new(task);
+    // add an initial seg
+    task_seg_new(task);
 
     // tcfg parent reference
     if (CURRENT_TASK)
@@ -77,13 +74,13 @@ task_array_last(array_t * array)
 
 // set the edge pred -> succ in the LPG
 static inline void
-task_part_set_edge(task_part_t * pred, task_t * succ, UInt part_id)
+task_seg_set_edge(task_seg_t * pred, task_t * succ, UInt seg_id)
 {
-    task_part_ref_t part_ref;
-    part_ref.task = succ;
-    part_ref.id = part_id;
-    part_ref.flag = 0;
-    array_push(&pred->successors, &part_ref);
+    task_seg_ref_t seg_ref;
+    seg_ref.task = succ;
+    seg_ref.id = seg_id;
+    seg_ref.flag = 0;
+    array_push(&pred->successors, &seg_ref);
 }
 
 // set the edge pred -> succ in the TDG
@@ -99,8 +96,8 @@ task_set_edge(task_t * pred, task_t * succ)
     TASKGRIND_DEBUG("   Added edge %p -> %p", (void *)pred->client_id, (void *)succ->client_id);
 
     // LPG
-    task_part_t * pred_part = (task_part_t *) array_last(&pred->parts);
-    task_part_set_edge(pred_part, succ, 0);
+    task_seg_t * pred_seg = (task_seg_t *) array_last(&pred->segs);
+    task_seg_set_edge(pred_seg, succ, 0);
 }
 
 task_t *
@@ -152,16 +149,16 @@ task_create(UWord client_id, task_type_t type)
     /////////
     // LPG //
     /////////
-    // create a new successor part for the current task
-    task_part_t * succ_part = task_part_new(CURRENT_TASK);
-    tl_assert(succ_part);
+    // create a new successor seg for the current task
+    task_seg_t * succ_seg = task_seg_new(CURRENT_TASK);
+    tl_assert(succ_seg);
 
-    // retrieve the current part
-    task_part_t * pred_part = (task_part_t *) array_penultimate(&CURRENT_TASK->parts);
-    tl_assert(pred_part);
+    // retrieve the current seg
+    task_seg_t * pred_seg = (task_seg_t *) array_penultimate(&CURRENT_TASK->segs);
+    tl_assert(pred_seg);
 
     // 'pred' -> 'task'
-    task_part_set_edge(pred_part, task, 0);
+    task_seg_set_edge(pred_seg, task, 0);
 
     switch (type)
     {
@@ -181,8 +178,8 @@ task_create(UWord client_id, task_type_t type)
             ARRAY_FOREACH_END(&CURRENT_TASK->children, task_t **, child);
 
             // 'task' -> 'succ'
-            task_part_t * task_part = (task_part_t *) array_first(&task->parts);
-            task_part_set_edge(task_part, CURRENT_TASK, CURRENT_TASK->parts.n - 1);
+            task_seg_t * task_seg = (task_seg_t *) array_first(&task->segs);
+            task_seg_set_edge(task_seg, CURRENT_TASK, CURRENT_TASK->segs.n - 1);
 
             // in the future, link each next children with this barrier
             CURRENT_TASK->last_sync = task;
@@ -194,7 +191,7 @@ task_create(UWord client_id, task_type_t type)
         default:
         {
             // 'pred' -> 'succ'
-            task_part_set_edge(pred_part, CURRENT_TASK, CURRENT_TASK->parts.n - 1);
+            task_seg_set_edge(pred_seg, CURRENT_TASK, CURRENT_TASK->segs.n - 1);
             break ;
         }
     }
@@ -215,11 +212,11 @@ task_get(UWord client_id)
     return task;
 }
 
-static inline task_part_t *
-task_part_get_current(void)
+static inline task_seg_t *
+task_seg_get_current(void)
 {
     tl_assert(CURRENT_TASK);
-    return array_last(&CURRENT_TASK->parts);
+    return array_last(&CURRENT_TASK->segs);
 }
 
 // schedule
@@ -448,32 +445,53 @@ task_sync(void)
 }
 
 // memory accesses
+static inline void
+task_seg_mem_access(task_seg_t * seg)
+{
+    if (seg->ctx == NULL)
+    {
+        ThreadId tid = VG_(get_running_tid)();
+        if (tid != VG_INVALID_THREADID)
+            seg->ctx = VG_(record_ExeContext)(tid, 0);
+        else
+            seg->ctx = NULL;
+    }
+
+    if (seg->task->sp == TASKGRIND_BASE_STACK_PTR)
+    {
+        VexGuestArchState * state = VG_(get_CurrentThreadArchState)();
+        seg->task->sp = state->guest_RSP;
+    }
+}
+
 void
 task_mem_load(Addr addr, SizeT size)
 {
-    task_part_t * part = task_part_get_current();
+    task_seg_t * seg = task_seg_get_current();
 
     #if 0
-    TASKGRIND_DEBUG("(task=%p, part=%p) LOAD        0x%010lX %lu",
-            (void *) CURRENT_TASK->client_id, part, addr, size);
+    TASKGRIND_DEBUG("(task=%p, seg=%p) LOAD        0x%010lX %lu",
+            (void *) CURRENT_TASK->client_id, seg, addr, size);
     #endif
 
-    tl_assert(part);
-    SPMT_FILL(&part->loads, addr, addr + size);
+    tl_assert(seg);
+    SPMT_FILL(&seg->loads, addr, addr + size);
+    task_seg_mem_access(seg);
 }
 
 void
 task_mem_store(Addr addr, SizeT size)
 {
-    task_part_t * part = task_part_get_current();
+    task_seg_t * seg = task_seg_get_current();
 
     #if 0
-    TASKGRIND_DEBUG("(task=%p, part=%p) STORE       0x%010lX %lu",
-            (void *) CURRENT_TASK->client_id, part, addr, size);
+    TASKGRIND_DEBUG("(task=%p, seg=%p) STORE       0x%010lX %lu",
+            (void *) CURRENT_TASK->client_id, seg, addr, size);
     #endif
 
-    tl_assert(part);
-    SPMT_FILL(&part->stores, addr, addr + size);
+    tl_assert(seg);
+    SPMT_FILL(&seg->stores, addr, addr + size);
+    task_seg_mem_access(seg);
 }
 
 void
@@ -512,7 +530,7 @@ task_fini(void)
     // __analyze_useless_dependencies(CURRENT_TASK);
     taskgrind_export_tcfg(&ROOT_TASK);
     taskgrind_export_tdgx_recursive(&ROOT_TASK);
-    taskgrind_export_lpg((task_part_t *)array_first(&ROOT_TASK.parts));
+    taskgrind_export_lpg((task_seg_t *)array_first(&ROOT_TASK.segs));
     taskgrind_pass_e5(&ROOT_TASK);
     TASKGRIND_INFO("Analysis completed.");
 

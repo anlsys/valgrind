@@ -1,5 +1,6 @@
 # include "print.h"
 # include "task.h"
+# include "taskgrind.h"
 # include "taskgrind_spmt.h"
 
 // TODO: analysis code bellow is experimental and temporary
@@ -12,13 +13,10 @@
 static inline int
 pass_e5_addr_is_stack(SPMT_PTR_T addr)
 {
-    // adress of the top of the stack
-    static SPMT_PTR_T STACK_BEGIN           = 0x1fffffffff;
-
     // distance bellow the access is assumed on the stack (64Go of stacks lol)
     static SPMT_PTR_T STACK_MAX_DISTANCE    = 0x0fffffffff;
 
-    return (STACK_BEGIN - STACK_MAX_DISTANCE <= addr) && (addr <= STACK_BEGIN);
+    return (TASKGRIND_BASE_STACK_PTR - STACK_MAX_DISTANCE <= addr) && (addr <= TASKGRIND_BASE_STACK_PTR);
 }
 
 typedef struct  walk_e5_s
@@ -53,41 +51,64 @@ pass_e5_inter_check(SPMT_PTR_T begin, SPMT_PTR_T end, void * opaque)
     return 0;
 }
 
-static inline void
-pass_e5_check_deps(task_part_t * pred, task_part_t * succ)
+static inline
+void task_store_union(task_t * task, spmt_t * accesses)
 {
+    SPMT_INITIALIZE(accesses);
+    SPMT_DUMP(VG_(umsg), accesses);
+
+    task_seg_t * task_seg = (task_seg_t *) array_first(&task->segs);
+
+    //SPMT_UNION(accesses, accesses, &task_seg->stores);
+
+   // ARRAY_FOREACH_BEGIN(&task->segs, task_seg_t *, task_seg)
+   // {
+   //     SPMT_UNION(accesses, accesses, &task_seg->stores);
+   // }
+   // ARRAY_FOREACH_END(&task->segs, task_seg_t *, task_seg);
+}
+
+static inline void
+pass_e5_check_deps(task_t * pred, task_t * succ)
+{
+    TASKGRIND_INFO("--------------------");
+    TASKGRIND_INFO("CHECKING");
+    TASKGRIND_INFO("--------------------");
+    TASKGRIND_INFO("Task %p (rsp=%lu)", (void *) pred->client_id, pred->sp);
+    TASKGRIND_INFO("--------------------");
+    TASKGRIND_INFO("Task %p (rsp=%lu)", (void *) succ->client_id, succ->sp);
+    TASKGRIND_INFO("--------------------");
+
+    spmt_t pred_stores;
+    task_store_union(pred, &pred_stores);
+    SPMT_DUMP_FILLED(VG_(umsg), &pred_stores);
+
+
     #if 0
-    TASKGRIND_INFO("--------------------");
-    TASKGRIND_INFO("Task %p", (void *) pred->task->client_id);
-    TASKGRIND_INFO("--------------------");
-    SPMT_DUMP_FILLED(VG_(umsg), &pred->stores);
-    TASKGRIND_INFO("--------------------");
-    TASKGRIND_INFO("Task %p", (void *) succ->task->client_id);
-    TASKGRIND_INFO("--------------------");
-    SPMT_DUMP_FILLED(VG_(umsg), &succ->stores);
-    #endif
+    //SPMT_DUMP_FILLED(VG_(umsg), &pred->stores);
+    //SPMT_DUMP_FILLED(VG_(umsg), &succ->stores);
 
     spmt_t inter;
     SPMT_INTERSECT(&inter, &pred->stores, &succ->stores);
 
-    #if 0
-    TASKGRIND_INFO("--------------------------------");
-    TASKGRIND_INFO("Intersect tasks %p n %p", (void*)pred->task->client_id, (void*)succ->task->client_id);
-    TASKGRIND_INFO("------------------------------");
-    SPMT_DUMP_FILLED(VG_(umsg), &inter);
-    #endif
+    //TASKGRIND_INFO("--------------------------------");
+    //TASKGRIND_INFO("Intersect tasks %p n %p", (void*)pred->task->client_id, (void*)succ->task->client_id);
+    //TASKGRIND_INFO("------------------------------");
+    //SPMT_DUMP_FILLED(VG_(umsg), &inter);
 
     int err;
-
     int empty_intersect = SPMT_IS_EMPTY(&inter);
 
-    if (!empty_intersect)
+    if (empty_intersect)
+    {
+        err = 1;
+    }
+    else
     {
         walk_e5_t walk = {
             .contains_only_stack_accesses = 1,
             .contains_parent_stack_accesses = 0,
-            .task_stack_pointer = 0,    // TODO : get stack pointer at the start of this task_part
-
+            .task_stack_pointer = 0,    // TODO : get stack pointer at the start of this task_seg
         };
         SPMT_FOREACH_FILLED(&inter, pass_e5_inter_check, &walk);
 
@@ -96,8 +117,6 @@ pass_e5_check_deps(task_part_t * pred, task_part_t * succ)
         else
             err = walk.contains_parent_stack_accesses;
     }
-    else
-        err = 0;
 
     if (err)
     {
@@ -112,36 +131,71 @@ pass_e5_check_deps(task_part_t * pred, task_part_t * succ)
 
 
     SPMT_RELEASE(&inter);
+    #endif
 }
 
 static void
-pass_e5(task_part_t * pred)
+pass_e5(task_t * pred)
 {
-    tl_assert(pred->task);
-    tl_assert(pred->task->parts.n > 0);
+    tl_assert(pred);
+    tl_assert(pred->type == TASK_TYPE_EXPLICIT);
 
-    ARRAY_FOREACH_BEGIN(&pred->successors, task_part_ref_t *, succ_ref)
+    ARRAY_FOREACH_BEGIN(&pred->successors, task_t **, succ_ptr)
     {
-        task_part_t * succ = succ_ref->task->parts.parts + succ_ref->id;
-        tl_assert(succ->task);
-        if (succ->task != pred->task
-                && succ->task->type == TASK_TYPE_EXPLICIT
-                && pred->task->type == TASK_TYPE_EXPLICIT
-                && succ->task->parts.n == 1
-                && pred->task->parts.n == 1)
+        task_t * succ = *succ_ptr;
+        tl_assert(succ);
+        tl_assert(pred != succ);
+
+        switch (succ->type)
         {
-            pass_e5_check_deps(pred, succ);
+            case (TASK_TYPE_EXPLICIT):
+            {
+                pass_e5_check_deps(pred, succ);
+                pass_e5(succ);
+                break;
+            }
+
+            case (TASK_TYPE_IMPLICIT_OUTSET):
+            {
+                // succ is 'outset' empty node, we check its successors
+                ARRAY_FOREACH_BEGIN(&succ->successors, task_t **, actual_succ_ptr)
+                {
+                    task_t * actual_succ = *actual_succ_ptr;
+                    tl_assert(actual_succ);
+                    tl_assert(pred != actual_succ);
+
+                    pass_e5_check_deps(pred, actual_succ);
+                    pass_e5(succ);
+                }
+                ARRAY_FOREACH_END(&succ->successors, task_t **, actual_succ_ptr);
+                break ;
+            }
+
+            default:
+            {
+                break ;
+            }
         }
-        pass_e5(succ);
     }
-    ARRAY_FOREACH_END(&pred->successors, task_part_t *, succ);
+    ARRAY_FOREACH_END(&pred->successors, task_t **, succ_ptr);
 }
 
 // a simple pass checking overly-dependent tasks
 void
 taskgrind_pass_e5(task_t * root)
 {
-    TASKGRIND_INFO("Running E5 pass");
-    task_part_t * root_part = (task_part_t *) array_first(&root->parts);
-    pass_e5(root_part);
+    if (root->parent == NULL)
+        TASKGRIND_INFO("Running E5 pass");
+
+    ARRAY_FOREACH_BEGIN(&root->children, task_t **, child_ptr)
+    {
+        task_t * child = *child_ptr;
+        tl_assert(child);
+
+        if (child->type == TASK_TYPE_EXPLICIT)
+            pass_e5(child);
+
+        taskgrind_pass_e5(child);
+    }
+    ARRAY_FOREACH_END(&root->children, task_t **, child_ptr);
 }

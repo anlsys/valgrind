@@ -80,15 +80,18 @@ typedef struct  task_s
     // last synchronization node
     struct task_s * last_sync;
 
-    // parts
-    array_t parts;
+    // segs
+    array_t segs;
 
     // hmap handle
     UT_hash_handle hh;
+
+    // stack pointer when starting the task
+    Addr sp;
 }               task_t;
 
-// a logical task part
-typedef struct  task_part_s
+// a logical task seg
+typedef struct  task_seg_s
 {
     // the client task
     task_t * task;
@@ -105,20 +108,22 @@ typedef struct  task_part_s
     // the execution context
     ExeContext * ctx;
 
-}               task_part_t;
+}               task_seg_t;
 
-typedef struct  task_part_ref_s
+typedef struct  task_seg_ref_s
 {
     // the task
     task_t * task;
 
-    // part id
+    // seg id
     UInt id;
+
+    // !! BELLOW ARE ATTRIBUTES USED BY PASSES !!
 
     // a flag for searching
     char flag;
 
-}               task_part_ref_t;
+}               task_seg_ref_t;
 
 typedef enum    task_mem_access_type_e
 {

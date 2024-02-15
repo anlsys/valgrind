@@ -5,13 +5,13 @@
 # define SPMT_SPACE (8)
 # include "spmt.h"
 
-// Empty intersection
+// Non empty intersection
 
 int main(void)
 {
     spmt_t A;
     SPMT_INITIALIZE(&A);
-    SPMT_FILL(&A, 0, 4);
+    SPMT_FILL(&A, 0, 8);
     puts("----------------------------------------------------");
     SPMT_DUMP((spmt_dump_t)printf, &A);
     puts("----------------------------------------------------");
@@ -19,7 +19,7 @@ int main(void)
 
     spmt_t B;
     SPMT_INITIALIZE(&B);
-    SPMT_FILL(&B, 4, 8);
+    SPMT_FILL(&B, 0, 8);
     puts("----------------------------------------------------");
     SPMT_DUMP((spmt_dump_t)printf, &B);
     puts("----------------------------------------------------");
@@ -27,13 +27,13 @@ int main(void)
 
     spmt_t DST;
     SPMT_INITIALIZE(&DST);
-    SPMT_INTERSECT(&DST, &A, &B);
+    SPMT_UNION(&DST, &A, &B);
     puts("----------------------------------------------------");
     SPMT_DUMP((spmt_dump_t)printf, &DST);
     puts("----------------------------------------------------");
     SPMT_DUMP_FILLED((spmt_dump_t)printf, &DST);
 
-    SPMT_F_ASSERT(SPMT_IS_EMPTY(&DST));
+    SPMT_F_ASSERT(!SPMT_IS_EMPTY(&DST));
 
     SPMT_RELEASE(&A);
     SPMT_RELEASE(&B);

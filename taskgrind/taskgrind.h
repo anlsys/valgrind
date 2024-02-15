@@ -5,6 +5,8 @@
 
 # include "valgrind.h"
 
+# define TASKGRIND_BASE_STACK_PTR       (0x1fffffffff)
+
 // RESERVED ids that client cannot use for TASKGRIND tasks
 # define TASKGRIND_CLIENT_ID_PRIVATE    ((UWord)-1)
 

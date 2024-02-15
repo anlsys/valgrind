@@ -11,9 +11,9 @@ int main(void)
     SPMT_INITIALIZE(&tree);
     SPMT_FILL(&tree, 0, 3);
     SPMT_FILL(&tree, 6, 7);
-    SPMT_DUMP(printf, &tree);
+    SPMT_DUMP((spmt_dump_t)printf, &tree);
     puts("----------------------------------------------------");
-    SPMT_DUMP_FILLED(printf, &tree);
+    SPMT_DUMP_FILLED((spmt_dump_t)printf, &tree);
     SPMT_RELEASE(&tree);
     return 0;
 }
