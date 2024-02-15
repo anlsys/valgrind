@@ -4,7 +4,7 @@
 # include <stdlib.h>
 # include <stdint.h>
 
-// error : 2 siblings tasks are not-logically-parallel while they could be
+// error : 'B' depends on 'A' while they are data-parallel
 
 int
 main(void)
@@ -19,7 +19,7 @@ main(void)
                 x[0] = 42;
 
             # pragma omp task depend(in: x)
-                x[1] = 43;
+                x[1] = x[0];
         }
     }
 

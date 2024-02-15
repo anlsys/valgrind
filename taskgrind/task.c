@@ -28,6 +28,10 @@ task_seg_new(task_t * task)
     array_init(&seg->successors, 0, sizeof(task_seg_ref_t));
     seg->ctx = NULL;
 
+    ThreadId tid = VG_(get_running_tid)();
+    if (tid != VG_INVALID_THREADID)
+        seg->ctx = VG_(record_ExeContext)(tid, 0);
+
     return seg;
 }
 
@@ -46,9 +50,23 @@ __task_init(task_t * task, UWord client_id, task_type_t type)
     task->last_sync         = NULL;
     array_init(&task->segs, 0, sizeof(task_seg_t));
     task->sp                = (Addr) TASKGRIND_BASE_STACK_PTR;
+    task->flag              = 0;
 
     // add an initial seg
     task_seg_new(task);
+
+    // retrieve stack pointer
+    if (VG_(get_running_tid)() != VG_INVALID_THREADID)
+    {
+        VexGuestArchState * state = VG_(get_CurrentThreadArchState)();
+#if defined(VGA_x86)
+        task->sp = state->guest_ESP;
+#elif defined(VGA_amd64)
+        task->sp = state->guest_RSP;
+#else
+        tl_assert("Arch not supported" && 0);
+#endif
+    }
 
     // tcfg parent reference
     if (CURRENT_TASK)
@@ -93,7 +111,7 @@ task_set_edge(task_t * pred, task_t * succ)
     if (last == succ)
         return ;
     array_push(&pred->successors, &succ);
-    TASKGRIND_DEBUG("   Added edge %p -> %p", (void *)pred->client_id, (void *)succ->client_id);
+//    TASKGRIND_DEBUG("   Added edge %p -> %p", (void *)pred->client_id, (void *)succ->client_id);
 
     // LPG
     task_seg_t * pred_seg = (task_seg_t *) array_last(&pred->segs);
@@ -134,7 +152,7 @@ task_create(UWord client_id, task_type_t type)
         HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASKS, &(task->client_id), sizeof(UWord), hashv, task);
     }
 
-    TASKGRIND_DEBUG("Task create %p (parent %p)", (void *) client_id, (void *) (task->parent ? task->parent->client_id : TASKGRIND_CLIENT_ID_PRIVATE));
+//    TASKGRIND_DEBUG("Task create %p (parent %p)", (void *) client_id, (void *) (task->parent ? task->parent->client_id : TASKGRIND_CLIENT_ID_PRIVATE));
 
     tl_assert(task);
     tl_assert(CURRENT_TASK);
@@ -309,7 +327,7 @@ void
 task_access(UWord client_id, UWord addr, UWord type)
 {
     tl_assert(type == TASKGRIND_IN || type == TASKGRIND_OUT || type == TASKGRIND_OUTSET);
-    TASKGRIND_DEBUG("Task %p accesses %s at %p", (void *) client_id, type == TASKGRIND_IN ? "IN" : type == TASKGRIND_OUT ? "OUT" : type == TASKGRIND_OUTSET ? "OUTSET" : "(null)", (void *) addr);
+//    TASKGRIND_DEBUG("Task %p accesses %s at %p", (void *) client_id, type == TASKGRIND_IN ? "IN" : type == TASKGRIND_OUT ? "OUT" : type == TASKGRIND_OUTSET ? "OUTSET" : "(null)", (void *) addr);
 
     // retrieve current task and its parent accesses
     task_t * task = task_get(client_id);
@@ -446,22 +464,8 @@ task_sync(void)
 
 // memory accesses
 static inline void
-task_seg_mem_access(task_seg_t * seg)
+task_seg_mem_access(task_seg_t * seg, Addr addr, SizeT size)
 {
-    if (seg->ctx == NULL)
-    {
-        ThreadId tid = VG_(get_running_tid)();
-        if (tid != VG_INVALID_THREADID)
-            seg->ctx = VG_(record_ExeContext)(tid, 0);
-        else
-            seg->ctx = NULL;
-    }
-
-    if (seg->task->sp == TASKGRIND_BASE_STACK_PTR)
-    {
-        VexGuestArchState * state = VG_(get_CurrentThreadArchState)();
-        seg->task->sp = state->guest_RSP;
-    }
 }
 
 void
@@ -476,7 +480,8 @@ task_mem_load(Addr addr, SizeT size)
 
     tl_assert(seg);
     SPMT_FILL(&seg->loads, addr, addr + size);
-    task_seg_mem_access(seg);
+
+    task_seg_mem_access(seg, addr, size);
 }
 
 void
@@ -491,7 +496,8 @@ task_mem_store(Addr addr, SizeT size)
 
     tl_assert(seg);
     SPMT_FILL(&seg->stores, addr, addr + size);
-    task_seg_mem_access(seg);
+
+    task_seg_mem_access(seg, addr, size);
 }
 
 void
@@ -528,10 +534,10 @@ task_fini(void)
 {
     TASKGRIND_INFO("Starting analysis...");
     // __analyze_useless_dependencies(CURRENT_TASK);
-    taskgrind_export_tcfg(&ROOT_TASK);
-    taskgrind_export_tdgx_recursive(&ROOT_TASK);
-    taskgrind_export_lpg((task_seg_t *)array_first(&ROOT_TASK.segs));
-    taskgrind_pass_e5(&ROOT_TASK);
+    // taskgrind_export_tcfg(&ROOT_TASK);
+    // taskgrind_export_tdgx_recursive(&ROOT_TASK);
+    // taskgrind_export_lpg((task_seg_t *)array_first(&ROOT_TASK.segs));
+    taskgrind_pass_w1(&ROOT_TASK);
     TASKGRIND_INFO("Analysis completed.");
 
     // taskgrind_export_tcfg(CURRENT_TASK);

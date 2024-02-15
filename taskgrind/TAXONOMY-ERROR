@@ -9,12 +9,14 @@ ERROR
     E2 - 2 tâches cousines indépendantes alors que non niveua accès donnée
     E3 - une tâche fille accède aux données de sa tâche parente après sa terminaison
     E4 - une tâche GPU lit une donnée qui n'a jamais été écrite
-    E5 - 2 tâches sont déclarés dépendantes alors qu'elles ne le sont pas
 
     QUESTION: E1 et E2 mergeable en 1 seul et même analyse ? mais pas même synthèse de correction
         MAIS:   E1 -> ajouter une clause depend
                 E2 -> ajouter weak, taskwait ...
 
+WARNING
+    W1 - 2 tâches sont déclarés dépendantes alors qu'elles ne le sont pas en terme d'accès aux données
+        EXEMPLE LULESH -> weak-in ?
 
 POSITIONNEMENT
     - hint de performances ?

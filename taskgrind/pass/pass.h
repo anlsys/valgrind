@@ -3,6 +3,6 @@
 
 # include "task.h"
 
-void taskgrind_pass_e5(task_t * root);
+void taskgrind_pass_w1(task_t * root);
 
 #endif /* __PASS_H__ */

@@ -4,7 +4,7 @@
 # include <stdlib.h>
 # include <stdint.h>
 
-// no error
+// no error, all good
 
 int
 main(void)
@@ -16,16 +16,7 @@ main(void)
             int x;
 
             # pragma omp task depend(out: x) shared(x)
-            {
                 x = 42;
-
-                # pragma omp task depend(out: x)
-                {}
-
-                # pragma omp task depend(in: x)
-                {}
-
-            }
 
             # pragma omp task depend(in: x) shared(x)
                 x = 43;

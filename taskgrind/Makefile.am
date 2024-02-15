@@ -13,7 +13,7 @@ if VGCONF_HAVE_PLATFORM_SEC
 noinst_PROGRAMS += taskgrind-@VGCONF_ARCH_SEC@-@VGCONF_OS@
 endif
 
-TASKGRIND_TASK_SOURCES_COMMON = main.c env.c dot.c task.c array.c pass/e5.c
+TASKGRIND_TASK_SOURCES_COMMON = main.c env.c dot.c task.c array.c location.c pass/w1.c
 
 taskgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_SOURCES      = \
 	$(TASKGRIND_TASK_SOURCES_COMMON)

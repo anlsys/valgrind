@@ -88,6 +88,9 @@ typedef struct  task_s
 
     // stack pointer when starting the task
     Addr sp;
+
+    // !! BELLOW ARE ATTRIBUTES USED BY PASSES !!
+    char flag;
 }               task_t;
 
 // a logical task seg

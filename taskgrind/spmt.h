@@ -1,3 +1,6 @@
+// TODO : this structure is a bit naive, a lot of levels are empty
+// Improve this implementation of 'interval tree'
+
 #ifndef __SPMT_H__
 # define __SPMT_H__
 
@@ -31,7 +34,7 @@
 
 /* SPMT pointer type */
 # ifndef SPMT_PTR_T
-#  define SPMT_PTR_T uintptr_t
+#  define SPMT_PTR_T uint64_t
 # endif
 
 # define SPMT_NULL  ((void *) 0)
@@ -139,11 +142,13 @@ __spmt_fill(spmt_t * parent, SPMT_PTR_T begin, SPMT_PTR_T end)
     }
 
     // insert new nodes
-    SPMT_PTR_T half = parent->begin + (parent->end - parent->begin) / 2;
+    SPMT_PTR_T unit = (parent->end - parent->begin) / SPMT_N_CHILDREN;
+    SPMT_PTR_T half = parent->begin + unit;
+
+    // GOING LEFT
     if (begin < half)
     {
-        // GOING LEFT
-        if (!parent->children[SPMT_LEFT])
+        if (parent->children[SPMT_LEFT] == SPMT_NULL)
             __spmt_alloc_child(parent, SPMT_LEFT, parent->begin, half);
 
         if (end <= half)
@@ -151,18 +156,19 @@ __spmt_fill(spmt_t * parent, SPMT_PTR_T begin, SPMT_PTR_T end)
         else
         {
             __spmt_fill(parent->children[SPMT_LEFT], begin, half);
-            if (!parent->children[SPMT_RIGHT])
-            {
+
+            if (parent->children[SPMT_RIGHT] == SPMT_NULL)
                 __spmt_alloc_child(parent, SPMT_RIGHT, half, parent->end);
-                __spmt_fill(parent->children[SPMT_RIGHT], half,  end);
-            }
+
+            __spmt_fill(parent->children[SPMT_RIGHT], half,  end);
         }
     }
+    // GOING RIGHT
     else
     {
-        // GOING RIGHT
-        if (!parent->children[SPMT_RIGHT])
+        if (parent->children[SPMT_RIGHT] == SPMT_NULL)
             __spmt_alloc_child(parent, SPMT_RIGHT, half, parent->end);
+
         __spmt_fill(parent->children[SPMT_RIGHT], begin, end);
     }
 
@@ -170,7 +176,7 @@ __spmt_fill(spmt_t * parent, SPMT_PTR_T begin, SPMT_PTR_T end)
     int filled = 1;
     for (int i = 0 ; i < SPMT_N_CHILDREN ; ++i)
     {
-        if (!parent->children[i] || !parent->children[i]->filled)
+        if (parent->children[i] == SPMT_NULL || !parent->children[i]->filled)
         {
             filled = 0;
             break ;
@@ -281,12 +287,67 @@ __spmt_intersect(
         __spmt_intersect(DST, A, B);    \
     } while (0);
 
+static inline void
+__spmt_append(
+    spmt_node_t * dst,
+    spmt_node_t * src
+) {
+    SPMT_F_ASSERT(dst != src);
+    SPMT_F_ASSERT(dst->begin == src->begin);
+    SPMT_F_ASSERT(dst->end   == src->end);
+
+    if (src->filled)
+    {
+        dst->filled = 1;
+        return ;
+    }
+
+    for (int i = 0 ; i < SPMT_N_CHILDREN ; ++i)
+    {
+        if (src->children[i] == SPMT_NULL)
+            continue ;
+
+        if (dst->children[i] != SPMT_NULL && dst->children[i]->filled)
+            continue ;
+
+        spmt_node_t * next = src->children[i];
+
+        if (dst->children[i] == SPMT_NULL)
+            __spmt_alloc_child(dst, i, next->begin, next->end);
+
+        __spmt_append(dst->children[i], next);
+    }
+
+    SPMT_F_ASSERT(!dst->filled);
+
+    int filled = 0;
+    for (int i = 0 ; i < SPMT_N_CHILDREN ; ++i)
+        if (dst->children[i] != SPMT_NULL && dst->children[i]->filled)
+            ++filled;
+
+    if (filled == SPMT_N_CHILDREN)
+    {
+        for (int i = 0 ; i < SPMT_N_CHILDREN ; ++i)
+        {
+            SPMT_F_FREE_NODE(dst->children[i]);
+            dst->children[i] = SPMT_NULL;
+        }
+        dst->filled = 1;
+    }
+}
+
+# define SPMT_APPEND(DST, SRC)      \
+    do {                            \
+        __spmt_append(DST, SRC);    \
+    } while (0);
+
 static inline int
 __spmt_union(
     spmt_node_t * dst,
     spmt_node_t * a,
     spmt_node_t * b
 ) {
+    SPMT_F_ASSERT(dst != a && dst != b);
     SPMT_F_ASSERT(dst->begin >= a->begin);
     SPMT_F_ASSERT(dst->begin >= b->begin);
     SPMT_F_ASSERT(dst->end   <= a->end);
@@ -329,12 +390,17 @@ __spmt_union(
         dst->filled = 1;
     }
 
-    return r;
+    return dst->filled;
 }
 
-# define SPMT_UNION(DST, A, B)      \
-    do {                            \
-        __spmt_union(DST, A, B);    \
+# define SPMT_UNION(DST, A, B)              \
+    do {                                    \
+        if (DST == A)                       \
+            __spmt_append(DST, B);          \
+        else if (DST == B)                  \
+            __spmt_append(DST, A);          \
+        else                                \
+            __spmt_union(DST, A, B);        \
     } while (0);
 
 static inline int
