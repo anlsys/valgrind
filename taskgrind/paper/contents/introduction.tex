@@ -1,0 +1,30 @@
+%!TEX root =  ../article.tex
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Introduction}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+ROMAIN : à travailler, c'est la priorité
+
+L'HISTOIRE
+
+CONTEXT, ACCROCHE
+- Portage de code historiquement séquentiel vers Many-cores and heterogeneous
+- Exprimer du parallélisme depuis un code séquentiel
+
+PROBLEM
+- Paralléliser des applications par tâche dépendantes = fastidieux
+- Comment garantir la justesse d'un code parallèle
+
+OBJECTIFS
+- proposer un outil "heavy instrumentation" pour assister à la parallélisation de programme par tâche dépendantes
+
+CONTRIBUTIONS
+- on introduit Taskgrind, un debogger d'application tâches dépendantes par instrumentation lourde
+- on le branche à OpenMP via OMPT
+- on évalue
+    - l'emprunte mémoire/temps d'exécution
+    - le nombre de faux-positifs/faux-négatifs
+
+
+PLAN
+- Related works

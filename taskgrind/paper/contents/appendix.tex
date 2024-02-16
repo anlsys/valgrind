@@ -1,0 +1,84 @@
+%%
+%% If your work has an appendix, this is the place to put it.
+%
+%\newpage
+%\appendix
+%
+%\section{Software versions}
+%List of software versions used in this paper.
+%\begin{itemize}
+%    \item   Linux 4.18.0-305.19.1.el8\_4.x86\_64 2021 x86\_64 x86\_64 x86\_64 GNU/Linux
+%    \item   clang 13.0.0 (https://github.com/llvm/llvm-project.git b46abdb7)
+%    \item   Open MPI 4.0.5
+%    \item   GCC 11.2.0
+%    \item   boost 1.78.0
+%    \item   Nanos6 2.7 (OmpSs-2 runtime implementation)
+%    \item   Mercurium 2.3.0 (OmpSs-2 compiler)
+%\end{itemize}
+%Regarding Multi-Processor Computing (MPC) OpenMP runtime,
+%we modified the public version 4.1.0.
+%Our modified version is kept private for anonymousity purposes.
+%It will be released publicly in case of acceptance.
+%
+%\section{Applications}
+%URL - \href{https://github.com/7ded82/28089e2f7499/apps}{https://github.com/7ded82/28089e2f7499/apps}
+%HPCCG and LULESH modified versions are available at this address.
+%
+%
+%
+%\section{Experiments}
+%
+%\subsection{Protocol}
+%MPC can trace every OpenMP tasks-related and MPI events.
+%From these events, we re-constructed the global task graph post-mortem,
+%generating one node per task, and one arc per OpenMP dependency, or MPI
+%point to point communication.
+%The nodes weight is set to the associated task execution time,
+%and the arc weight is set to zero.
+%
+%\subsubsection{Metrics} Here is a list of the metrics used and
+%how they were computed from the traces.
+%\begin{itemize}
+%    \item   critical path - computed using a Dijkstra algorithm on the global graph.
+%    \item   in-tasks time - time spent by threads within task bodies.
+%    \item   idle time - time spent by threads outside of task bodies,
+%            with no ready tasks
+%    \item   overhead time - time spent by threads outside of task bodies,
+%            with tasks ready.
+%    \item   graph generation time - time difference betweek the creation of the first
+%            task, and the creation of the last task.
+%    \item   graph execution time - time difference between the start of the first task,
+%            and the end of the last task.
+%\end{itemize}
+%
+%\subsection{Artifact - HPCCG weak scaling}
+%URL - \href{https://github.com/7ded82/28089e2f7499/HPCCG/scaling}{https://github.com/7ded82/28089e2f7499/HPCCG/scaling}.
+%This directory contains raw results of section \ref{sec:hpccg:scaling}.
+%
+%
+%\subsection{Artifact - HPCCG critical path}
+%URL - \href{https://github.com/7ded82/28089e2f7499/HPCCG/critical}{https://github.com/7ded82/28089e2f7499/HPCCG/critical}.
+%This directory contains raw output files of the experiment \ref{xp:hpcch:critical}.
+%\begin{itemize}
+%    \item   trace.json - a Chrome Trace Engine (CTE) trace file to be open
+%            in a Chromium-based navigator at \textit{about:tracing} address.
+%            It can also be opened at \href{https://ui.perfetto.dev/}{https://ui.perfetto.dev/}.
+%    \item   trace-stats.json - a raw text file containing metrics measured from the traces
+%    \item   critical-path.txt - output of the run and post-processor script
+%    \item   cmd - the raw command used to run the application
+%\end{itemize}
+%
+%\subsection{Artifact - LULESH grain study}
+%URL - \href{https://github.com/7ded82/28089e2f7499/lulesh/grain}{https://github.com/7ded82/28089e2f7499/lulesh/grain}
+%This file contains raw results depicted in Figure \ref{fig:luleshgrain}.
+%
+%\subsection{Artifact - LULESH hash study}
+%URL - \href{https://github.com/7ded82/28089e2f7499/lulesh/hash}{https://github.com/7ded82/28089e2f7499/lulesh/hash}
+%This file contains raw results depicted in Figure \ref{fig:lulesh-hash}.
+%
+%\subsection{Artifact - LULESH perf study}
+%URL - \href{https://github.com/7ded82/28089e2f7499/lulesh/perf}{https://github.com/7ded82/28089e2f7499/lulesh/perf}
+%This directory contains raw results presented in section \ref{sec:lulesh:ws} and
+%depicted in Table \ref{tbl:lulesh:ws:task}.
+%
+

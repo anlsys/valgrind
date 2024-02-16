@@ -1,0 +1,149 @@
+%% \BibTeX command to typeset BibTeX logo in the docs
+\AtBeginDocument{%
+    \providecommand\BibTeX{{%
+        \normalfont B\kern-0.5em{\scshape i\kern-0.25em b}\kern-0.8em\TeX}}}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%             CUSTOM                %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+\usepackage{soul}
+\usepackage{subcaption}
+\usepackage{lipsum}
+\usepackage{multicol}% http://ctan.org/pkg/multicols
+
+
+
+%%%%% AVOID PAGE BREAKS %%%%%
+\newenvironment{absolutelynopagebreak}
+  {\par\nobreak\vfil\penalty0\vfilneg
+   \vtop\bgroup}
+  {\par\xdef\tpd{\the\prevdepth}\egroup
+   \prevdepth=\tpd}
+
+%%%%%% COMMENTAIRES %%%%%%
+\usepackage[]{ifthen}
+\newcommand\showComments{0} % 0 = False, 1 = True
+\newcommand{\romain}[1]{\ifthenelse{\equal{\showComments}{0}}{}{\textcolor{blue}{Romain: #1}}}
+\newcommand{\clement}[1]{\ifthenelse{\equal{\showComments}{0}}{}{\textcolor{purple}{Clément: #1}}}
+\newcommand{\adrien}[1]{\ifthenelse{\equal{\showComments}{0}}{}{\textcolor{red}{Adrien: #1}}}
+\newcommand{\patrick}[1]{\ifthenelse{\equal{\showComments}{0}}{}{\textcolor{gray}{Patrick: #1}}}
+\newcommand{\thierry}[1]{\ifthenelse{\equal{\showComments}{0}}{}{\textcolor{orange}{Thierry: #1}}}
+
+%% \code %%
+\makeatletter
+\DeclareRobustCommand*{\escapeus}[1]{%
+    \begingroup\@activeus\scantokens{#1\endinput}\endgroup}
+    \begingroup\lccode`\~=`\_\relax
+    \lowercase{\endgroup\def\@activeus{\catcode`\_=\active \let~\_}}
+    \makeatother
+\def\code#1{\texttt{\escapeus{#1}}}
+
+%% \ceil and \floor %%
+\usepackage{mathtools}
+\DeclarePairedDelimiter\ceil{\lceil}{\rceil}
+\DeclarePairedDelimiter\floor{\lfloor}{\rfloor}
+
+% align figure left/right
+\usepackage[export]{adjustbox}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%               LISTINGS                                    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage{listings}
+\usepackage{color}
+\definecolor{bluekeywords}{rgb}{0.13,0.13,1}
+\definecolor{greencomments}{rgb}{0,0.5,0}
+\definecolor{redstrings}{rgb}{0.9,0,0}
+
+\usepackage{listings}
+% \lstset{language=C,
+%     frame=single,
+%     showspaces=false,
+%     showtabs=false,
+%     breaklines=true,
+%     numbers=left,
+%     showstringspaces=false,
+%     breakatwhitespace=true,
+%     escapeinside={(*@}{@*)},
+%     commentstyle=\color{greencomments},
+%     keywordstyle=\color{bluekeywords},
+%     stringstyle=\color{redstrings},
+%     basicstyle=\ttfamily
+% }
+
+\definecolor{mCyan}{rgb}{0.17,0.69,0.79}
+\definecolor{mGreen}{rgb}{0.08,0.70,0.15}
+\definecolor{mBrown}{rgb}{0.6,0.6,0.06}
+\definecolor{mBlue}{rgb}{0.39,0.39,1.0}
+
+\lstdefinestyle{CStyle}{
+    framextopmargin=50pt,
+    frame=bottomline,
+    basicstyle=\footnotesize\ttfamily,
+    breaklines=true,
+    columns=flexible,
+    stepnumber=1,
+    numbers=left,
+    tabsize=4,
+    language=C,
+    keywordstyle=\bfseries\color{mGreen},
+    commentstyle=\color{mCyan},
+    numberstyle=\color{mBrown},
+    escapeinside={<@}{@>},
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%               PSEUDO-CODE REQUIRED PACKAGES                                     %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\usepackage{amsmath}
+\usepackage{algorithm}
+\usepackage[normalem]{ulem}
+%\usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+\usepackage[noend]{algpseudocode}
+\usepackage{etoolbox}
+\makeatletter
+
+% Defines custom \On ... \EndOn block
+\algblockdefx[LOCK]{Lock}{Unlock}[1]{\textbf{lock}~#1~\textbf{then}}
+
+\algblockdefx[LOCK]{Trylock}{Untrylock}[1]{\textbf{trylock}~#1~\textbf{then}}
+
+\algblockdefx[VARIABLES]{Variables}{EndVariables}{\textbf{Variables}}
+
+% start with some helper code
+% This is the vertical rule that is inserted
+\newcommand*{\algrule}[1][\algorithmicindent]{
+    \makebox[#1][l]{
+        \hspace*{.2em}% <------------- This is where the rule starts from
+            \vrule height .75\baselineskip depth .25\baselineskip
+    }
+}
+
+\newcount\ALG@printindent@tempcnta
+\def\ALG@printindent{%
+    \ifnum \theALG@nested>0% is there anything to print
+        \ifx\ALG@text\ALG@x@notext% is this an end group without any text?
+        % do nothing
+        \else
+        \unskip
+        % draw a rule for each indent level
+        \ALG@printindent@tempcnta=1
+        \loop
+        \algrule[\csname ALG@ind@\the\ALG@printindent@tempcnta\endcsname]%
+        \advance \ALG@printindent@tempcnta 1
+        \ifnum \ALG@printindent@tempcnta<\numexpr\theALG@nested+1\relax
+        \repeat
+        \fi
+        \fi
+}
+% the following line injects our new indent handling code in place of the default spacing
+\patchcmd{\ALG@doentity}{\noindent\hskip\ALG@tlm}{\ALG@printindent}{}{\errmessage{failed to patch    }}
+\patchcmd{\ALG@doentity}{\item[]\nointerlineskip}{}{}{} % no spurious vertical space
+% end vertical rule patch for algorithmicx
+
+\makeatother
