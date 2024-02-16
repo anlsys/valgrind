@@ -3,6 +3,7 @@
 # include "print.h"
 # include "task.h"
 # include "taskgrind.h"
+# include "taskgrind_clo.h"
 
 # include "pub_tool_libcassert.h"    /* tool_panic, lt_assert */
 # include "pub_tool_threadstate.h"
@@ -532,11 +533,14 @@ task_init(void)
 void
 task_fini(void)
 {
+    if (CLOS.dump)
+    {
+        taskgrind_export_tcfg(&ROOT_TASK);
+        taskgrind_export_tdgx_recursive(&ROOT_TASK);
+        taskgrind_export_lpg((task_seg_t *)array_first(&ROOT_TASK.segs));
+    }
+
     TASKGRIND_INFO("Starting analysis...");
-    // __analyze_useless_dependencies(CURRENT_TASK);
-    // taskgrind_export_tcfg(&ROOT_TASK);
-    // taskgrind_export_tdgx_recursive(&ROOT_TASK);
-    // taskgrind_export_lpg((task_seg_t *)array_first(&ROOT_TASK.segs));
     taskgrind_pass_w1(&ROOT_TASK);
     TASKGRIND_INFO("Analysis completed.");
 

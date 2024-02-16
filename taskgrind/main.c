@@ -29,6 +29,7 @@
 #include "print.h"
 #include "task.h"
 #include "taskgrind.h"
+#include "taskgrind_clo.h"
 
 #include "pub_tool_basics.h"
 #include "pub_tool_guest.h"         /* thread state */
@@ -411,17 +412,17 @@ taskgrind_instrument(
 
 # if 0
 static const char * clo_record      = NULL;
+#endif
 
-static const char * clo_compare     = NULL;
-static const char * clo_compare_a   = NULL;
-static const char * clo_compare_b   = NULL;
+// global command line options
+taskgrind_clo_t CLOS = {0};
 
 static void
 taskgrind_print_usage(void)
 {
     VG_(printf)(
-"    --record=<name>            Execute and record the task graph into <name> directory\n"
-"    --compare=<name1>,<name2>  Compare the two task graph previously recorded\n"
+"    --dump            Dump internal data structures to dot files\n"
+//"    --record=<name>            Execute and record the task graph into <name> directory\n"
    );
 }
 
@@ -441,7 +442,6 @@ taskgrind_clo_error(const HChar * err)
     VG_(exit)(1);
     return False;
 }
-#endif
 
 static Bool
 taskgrind_process_cmd_line_option(const HChar * arg)
@@ -461,37 +461,28 @@ taskgrind_process_cmd_line_option(const HChar * arg)
             clo_record = (const HChar *) record;
         }
     }
-    else if (VG_STR_CLO(arg, "--compare", clo_compare))
-    {
-        char * comma = VG_(strchr)(clo_compare, ',');
-        if (!comma)
-            return taskgrind_clo_error("invalid task graph record names");
-
-        comma[0] = 0;
-        clo_compare_a = clo_compare;
-        clo_compare_b = comma + 1;
-
-        if (!*clo_compare_a || !*clo_compare_b)
-            return taskgrind_clo_error("invalid task graph record names");
-
-    }
-    else
-    {
-        return False;
-    }
 #endif
-    return True;
+
+    if (VG_(strcmp)(arg, "--dump") == 0)
+    {
+        CLOS.dump = 1;
+        return True;
+    }
+
+    return False;
 }
 
 static void
 taskgrind_post_clo_init(void)
 {
+    if (CLOS.dump)
+        TASKGRIND_INFO("Export to dot files enabled");
+    else
+        TASKGRIND_INFO("Export to dot files disabled");
+
 #if 0
      if (clo_record)
         TASKGRIND_INFO("Recording task graph to '%s'", clo_record);
-
-    if (!clo_record && !clo_compare)
-       taskgrind_clo_error("at least one command line option must be passed");
 #endif
     task_init();
 }
@@ -517,11 +508,9 @@ taskgrind_pre_clo_init(void)
 
    VG_(details_avg_translation_sizeB) ( 500 ); // TODO: adjust this
 
-   #if 0
    VG_(needs_command_line_options)(taskgrind_process_cmd_line_option,
                                    taskgrind_print_usage,
                                    taskgrind_print_debug_usage);
-   #endif
 
    VG_(needs_client_requests)(taskgrind_handle_client_request);
    VG_(basic_tool_funcs)(taskgrind_post_clo_init, taskgrind_instrument, taskgrind_fini);
