@@ -1,8 +1,13 @@
+# include "error.h"
 # include "print.h"
 # include "location.h"
 # include "task.h"
 # include "taskgrind.h"
 # include "taskgrind_spmt.h"
+
+# include "pub_tool_errormgr.h"
+
+static int E1_ERRORS = 0;
 
 static inline void
 pass_e1_report_err(task_seg_t * seg_a, task_seg_t * seg_b)
@@ -15,9 +20,23 @@ pass_e1_report_err(task_seg_t * seg_a, task_seg_t * seg_b)
     task_seg_get_location(seg_b, 0, loc_b, sizeof(loc_b));
 
     // output error
+
+    // VALGRIND error system requires the program to be executing
+    // Here, we are running after client program termination...
+#if 0
+
+    ThreadId tid = seg_a->tid;
+    ErrorKind kind = TASKGRIND_E1;
+    Addr a = 0;
+    const HChar * s = "Hello";
+    void * extra = NULL;
+    VG_(maybe_record_error)(tid, kind, a, s, extra);
+#else
     TASKGRIND_WARN("  Segments %s (task=%p, sp=%lu, uid=%u) and %s (task=%p, sp=%lu, uid=%u) were declared independant while "
             "accessing the same memory address", loc_a, seg_a->task, seg_a->task->sp, seg_a->uid, loc_b, seg_b->task, seg_b->task->sp, seg_b->uid
     );
+    ++E1_ERRORS;
+#endif
 }
 
 // TODO: analysis code bellow is experimental and temporary
@@ -102,7 +121,7 @@ pass_e1_seg_precedes(task_seg_t * seg_a, task_seg_t * seg_b)
     return walk.precedes;
 }
 
-static UInt
+UInt
 pass_e1_walk_compare(task_seg_t * seg_a, void * opaque)
 {
     task_seg_t * seg_b = (task_seg_t *) opaque;
@@ -211,7 +230,7 @@ pass_e1_walk_compare(task_seg_t * seg_a, void * opaque)
 static UInt
 pass_e1_walk(task_seg_t * curr_seg, void * opaque)
 {
-    task_seg_foreach(pass_e1_walk_compare, curr_seg);
+    task_seg_foreach(pass_e1_walk_compare, (void *) curr_seg);
     return 0;
 }
 
@@ -221,4 +240,9 @@ taskgrind_pass_e1(task_t * root)
 {
     TASKGRIND_INFO("Running E1 pass");
     task_seg_foreach(pass_e1_walk, NULL);
+
+    if (E1_ERRORS)
+        TASKGRIND_WARN("-> E1 reported %d possible determinacy races", E1_ERRORS);
+    else
+        TASKGRIND_INFO("-> E1 found no determinacy races :-)");
 }

@@ -16,4 +16,13 @@ SizeT taskgrind_get_extra_suppression_info(const Error * err, HChar * buf, Int n
 SizeT taskgrind_print_extra_suppression_use(const Supp * su, HChar * buf, Int nBuf);
 void taskgrind_update_extra_suppression_use(const Error * err, const Supp * su);
 
+/* Error kinds */
+typedef enum
+{
+    TASKGRIND_E1=0xCCB6,    // E1 - determinacy race
+
+} taskgrind_error_tag_t;
+
+
+
 #endif /* __ERROR_H__ */

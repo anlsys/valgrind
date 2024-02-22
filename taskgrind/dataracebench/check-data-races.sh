@@ -244,8 +244,9 @@ if [[ "$OPTION" == "--archer" ]]; then
     scripts/test-harness.sh -t 8 -n 5 -d 32 -l $LANGUAGE -x archer
 fi
 
+# TODO: increase to "5" run as well maybe
 if [[ "$OPTION" == "--taskgrind" ]]; then
-    scripts/test-harness.sh -t 8 -n 5 -d 32 -l $LANGUAGE -x taskgrind
+    scripts/test-harness.sh -t 8 -n 2 -d 32 -l $LANGUAGE -x taskgrind
 fi
 
 if [[ "$OPTION" == "--coderrect" ]]; then

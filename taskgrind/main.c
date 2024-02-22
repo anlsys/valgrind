@@ -515,6 +515,7 @@ taskgrind_pre_clo_init(void)
 
    VG_(needs_client_requests)(taskgrind_handle_client_request);
    VG_(basic_tool_funcs)(taskgrind_post_clo_init, taskgrind_instrument, taskgrind_fini);
+   #if 0
    VG_(needs_tool_errors)(
        taskgrind_eq_Error,
        taskgrind_before_pp_Error,
@@ -529,6 +530,7 @@ taskgrind_pre_clo_init(void)
        taskgrind_print_extra_suppression_use,
        taskgrind_update_extra_suppression_use
    );
+   #endif
 }
 
 ///////////////////////////////////////////////////////////////////////////////

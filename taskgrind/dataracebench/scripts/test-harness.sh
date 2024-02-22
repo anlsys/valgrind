@@ -89,7 +89,7 @@ ARCHER=${ARCHER:-"clang-archer"}
 ARCHER_COMPILE_FLAGS="${OPTIMIZATION} -larcher"
 
 TASKGRIND=${TASKGRIND:-"../../vg-in-place"}
-TASKGRIND_COMPILE_FLAGS="-g"
+TASKGRIND_COMPILE_FLAGS="-g -fopenmp"
 
 INSPECTOR=${INSPECTOR:-"inspxe-cl"}
 ICC_COMPILE_FLAGS="${OPTIMIZATION} -fopenmp -std=c99 -qopenmp-offload=host -g"
@@ -143,8 +143,8 @@ valid_tool_name () {
     tsan-gcc) return 0 ;;
     inspector) return 0 ;;
     inspector-max-resources) return 0 ;;
-    romp) return 0;;   
-    llov) return 0;;   
+    romp) return 0;;
+    llov) return 0;;
     *) return 1 ;;
   esac
 }
@@ -462,7 +462,7 @@ for tool in "${TOOLS[@]}"; do
                 $TIMEOUTCMD $TIMEOUTMIN"m" $MEMCHECK -f "%M" -o "$MEMLOG" $TASKGRIND  --tool=taskgrind "./$exname" $size &> tmp.log;
                 check_return_code $?;
 		echo "$testname return $testreturn"
-                races=$(grep -ce 'Possible data race' tmp.log) # TODO : update this for taskgrind
+                races=$(grep -ce 'possible determinacy races' tmp.log) # TODO : update this for taskgrind
                 cat tmp.log >> "$LOG_DIR/$logname" || >tmp.log ;;
               coderrect)
                 ccc="clang"

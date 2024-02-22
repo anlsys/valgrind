@@ -81,7 +81,10 @@ task_seg_new(task_t * task)
 
     ThreadId tid = VG_(get_running_tid)();
     if (tid != VG_INVALID_THREADID)
+    {
         seg->ctx = VG_(record_ExeContext)(tid, 0);
+        seg->tid = tid;
+    }
 
     return seg;
 }
