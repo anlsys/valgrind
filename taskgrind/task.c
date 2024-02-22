@@ -173,11 +173,13 @@ task_set_edge(task_t * pred, task_t * succ)
 }
 
 task_t *
-task_create(UWord client_id, task_type_t type)
+task_create(UWord client_id, task_type_t type, UWord undeferred)
 {
     //
     //  [...]                   // pred
+    //
     //  # pragma omp task(wait) // task
+    //   {}
     //  [...]                   // succ
     //
 
@@ -268,6 +270,14 @@ task_create(UWord client_id, task_type_t type)
         }
     }
 
+    // if undeferred, 'succ' cannot resume until 'task' completed
+    if (undeferred)
+    {
+        // retrieve the new task seg
+        task_seg_t * task_seg = (task_seg_t *) array_first(&task->segs);
+        tl_assert(task_seg);
+        task_seg_set_edge(task_seg, CURRENT_TASK, CURRENT_TASK->segs.n - 1);
+    }
 
     return task;
 }
@@ -408,7 +418,7 @@ task_depend(UWord client_id, UWord addr, UWord type)
                  *           / \
                  * outset:  O   O   <- the task we are inserting
                  */
-                depend->out = task_create(TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_OUTSET);
+                depend->out = task_create(TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_OUTSET, 0);
                 ARRAY_FOREACH_BEGIN(&depend->ins, task_t **, in)
                 {
                     // prevent cyclic deps in case 'task' already had an 'in'
@@ -441,7 +451,7 @@ task_depend(UWord client_id, UWord addr, UWord type)
                  *                   / \
                  * in:              O   O   <- the task we are inserting
                  */
-                depend->out = task_create(TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_OUTSET);
+                depend->out = task_create(TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_OUTSET, 0);
                 ARRAY_FOREACH_BEGIN(&depend->outsets, task_t **, outset)
                     task_set_edge(*outset, depend->out);
                 ARRAY_FOREACH_END(&depend->outsets, task_t **, outset)
@@ -513,7 +523,7 @@ void
 task_sync(void)
 {
     // create an empty task (the sync barrier)
-    task_create(TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_BARRIER);
+    task_create(TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_BARRIER, 0);
 }
 
 // memory accesses

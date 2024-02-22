@@ -155,7 +155,7 @@ extern task_t ROOT_TASK;
 extern UInt N_TASK_SEGS;
 
 // FUNCTIONS TO BUILD THE MAPPING
-task_t * task_create(UWord client_id, task_type_t type);
+task_t * task_create(UWord client_id, task_type_t type, UWord undeferred);
 void task_schedule(UWord client_id);
 void task_depend(UWord client_id, UWord addr, UWord type);
 void task_sync(void);

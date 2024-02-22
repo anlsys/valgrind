@@ -59,6 +59,8 @@ taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
         {
             task_type_t type;
             taskgrind_task_type_t ttype = (taskgrind_task_type_t) arg[2];
+            UWord undeferred = arg[3];
+
             switch (ttype)
             {
                 case (TASKGRIND_TASK_TYPE_EXPLICIT):
@@ -80,7 +82,7 @@ taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
                 }
             }
 
-            task_create(arg[1], type);
+            task_create(arg[1], type, undeferred);
             return True;
         }
 

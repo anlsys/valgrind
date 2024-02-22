@@ -38,8 +38,9 @@ typedef enum    taskgrind_client_request_t
 // Notify taskgring of a create event
 //  - arg[1] is the task unique identifier (> 0) defined by the client
 //  - arg[2] is the task type (taskgrind_task_type_t)
-#define TASKGRIND_CREATE_EVENT(_qzz_key, _qzz_type)  \
-    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_CREATE_EVENT, (_qzz_key), (_qzz_type), 0, 0, 0)
+//  - arg[3] boolean whether the task is undeferred or not
+#define TASKGRIND_CREATE_EVENT(_qzz_key, _qzz_type, _qzz_undeferred)  \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_CREATE_EVENT, (_qzz_key), (_qzz_type), (_qzz_undeferred), 0, 0)
 
 // Notify taskgrind of a schedule event
 //  - arg[1] is the task unique identifier (> 0)

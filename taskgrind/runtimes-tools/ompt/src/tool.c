@@ -91,7 +91,7 @@ on_ompt_callback_task_create(
         ompt_data_t * encountering_task_data,
         const ompt_frame_t * encountering_task_frame,
         ompt_data_t * new_task_data,
-        int ﬂags,
+        int flags,
         int has_dependences,
         const void *codeptr_ra
 ) {
@@ -99,7 +99,10 @@ on_ompt_callback_task_create(
 
     client_id_t * client_id = client_id_insert(new_task_data);
     client_id->value = ++NEXT_CLIENT_ID;
-    TASKGRIND_CREATE_EVENT(client_id->value, TASKGRIND_TASK_TYPE_EXPLICIT);
+
+    taskgrind_task_type_t type = (flags & ompt_task_explicit) ? TASKGRIND_TASK_TYPE_EXPLICIT : TASKGRIND_TASK_TYPE_IMPLICIT;
+    unsigned int undeferred = (flags & ompt_task_undeferred);
+    TASKGRIND_CREATE_EVENT(client_id->value, TASKGRIND_TASK_TYPE_EXPLICIT, undeferred);
 }
 
 void
@@ -133,7 +136,7 @@ on_ompt_callback_implicit_task(
     {
         client_id = client_id_insert(task_data);
         client_id->value = ++NEXT_CLIENT_ID;
-        TASKGRIND_CREATE_EVENT(client_id->value, TASKGRIND_TASK_TYPE_IMPLICIT);
+        TASKGRIND_CREATE_EVENT(client_id->value, TASKGRIND_TASK_TYPE_IMPLICIT, 0);
         TASKGRIND_SCHEDULE_EVENT(client_id->value);
     }
 }
@@ -301,7 +304,7 @@ on_ompt_callback_work(
                     void * new_task_data = (void *) malloc(1);
                     client_id_t * client_id = client_id_insert(new_task_data);
                     client_id->value = ++NEXT_CLIENT_ID;
-                    TASKGRIND_CREATE_EVENT(client_id->value, TASKGRIND_TASK_TYPE_IMPLICIT);
+                    TASKGRIND_CREATE_EVENT(client_id->value, TASKGRIND_TASK_TYPE_IMPLICIT, 0);
 
                     // TODO: schedule should be in 'dispatch' instead probably
                     TASKGRIND_SCHEDULE_EVENT(client_id->value);
