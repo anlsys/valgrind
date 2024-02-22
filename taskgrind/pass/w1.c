@@ -4,6 +4,8 @@
 # include "taskgrind.h"
 # include "taskgrind_spmt.h"
 
+static int W1_COUNT = 0;
+
 // TODO: analysis code bellow is experimental and temporary
 
 // TODO: currently, this is used as a quick and dirty fix to ignore stack
@@ -169,10 +171,11 @@ pass_w1_check_deps(task_t * pred, task_t * succ)
                 (void *)succ->client_id,
                 succ_loc
          );
+        ++W1_COUNT;
     }
     else
     {
-        TASKGRIND_INFO("  No needless dependencies detected, all good :-)");
+        //TASKGRIND_INFO("  No needless dependencies detected, all good :-)");
     }
 }
 
@@ -246,4 +249,12 @@ taskgrind_pass_w1(task_t * root)
         taskgrind_pass_w1(child);
     }
     ARRAY_FOREACH_END(&root->children, task_t **, child_ptr);
+
+    if (root->parent == NULL)
+    {
+        if (W1_COUNT)
+            TASKGRIND_WARN("-> W1 reported %d issue", W1_COUNT);
+        else
+            TASKGRIND_INFO("-> W1 found no issues :-)");
+    }
 }
