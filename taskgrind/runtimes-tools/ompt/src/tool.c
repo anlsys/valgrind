@@ -102,6 +102,11 @@ on_ompt_callback_task_create(
 
     taskgrind_task_type_t type = (flags & ompt_task_explicit) ? TASKGRIND_TASK_TYPE_EXPLICIT : TASKGRIND_TASK_TYPE_IMPLICIT;
     unsigned int undeferred = (flags & ompt_task_undeferred) ? 1 : 0;
+    // TODO : with OMP_NUM_THREADS=1, LLVM put tasks as 'undeferred', so we
+    // cannot really track whether the task is undeferred because of user code
+    // or runtime implementation
+    // For now, assume all tasks are deferable, else we may loose expressed parallelism
+    undeferred = 0;
     TASKGRIND_CREATE_EVENT(client_id->value, TASKGRIND_TASK_TYPE_EXPLICIT, undeferred);
 }
 
