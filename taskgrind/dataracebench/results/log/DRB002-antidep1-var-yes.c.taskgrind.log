@@ -1,0 +1,49 @@
+*****     Log 1 for DRB002-antidep1-var-yes.c with 8 threads and input size 32     *****
+==247976== [INFO] Loading OMPT Plugin from /home/pereirar/repos/valgrind/taskgrind/dataracebench/../../.in_place/../taskgrind/runtimes-tools/ompt/build/libtaskgrind_omp.so
+==247976== Taskgrind, a debugger for dependent tasks order of execution
+==247976== Copyright (C) 2023, and GNU GPL'd, by Romain Pereira et al.
+==247976== Using Valgrind-3.22.0.GIT and LibVEX; rerun with -h for copyright info
+==247976== Command: ./results/exec/DRB002-antidep1-var-yes.c.taskgrind.out 32
+==247976== 
+==247976== [INFO] Export to dot files disabled
+==247976== 
+==247976== [INFO] Starting analysis...
+==247976== [INFO] Running E1 pass
+==247976== [INFO] Analysis completed.
+*****     Log 2 for DRB002-antidep1-var-yes.c with 8 threads and input size 32     *****
+==247988== [INFO] Loading OMPT Plugin from /home/pereirar/repos/valgrind/taskgrind/dataracebench/../../.in_place/../taskgrind/runtimes-tools/ompt/build/libtaskgrind_omp.so
+==247988== Taskgrind, a debugger for dependent tasks order of execution
+==247988== Copyright (C) 2023, and GNU GPL'd, by Romain Pereira et al.
+==247988== Using Valgrind-3.22.0.GIT and LibVEX; rerun with -h for copyright info
+==247988== Command: ./results/exec/DRB002-antidep1-var-yes.c.taskgrind.out 32
+==247988== 
+==247988== [INFO] Export to dot files disabled
+==247988== 
+==247988== [INFO] Starting analysis...
+==247988== [INFO] Running E1 pass
+==247988== [INFO] Analysis completed.
+*****     Log 3 for DRB002-antidep1-var-yes.c with 8 threads and input size 32     *****
+==248000== [INFO] Loading OMPT Plugin from /home/pereirar/repos/valgrind/taskgrind/dataracebench/../../.in_place/../taskgrind/runtimes-tools/ompt/build/libtaskgrind_omp.so
+==248000== Taskgrind, a debugger for dependent tasks order of execution
+==248000== Copyright (C) 2023, and GNU GPL'd, by Romain Pereira et al.
+==248000== Using Valgrind-3.22.0.GIT and LibVEX; rerun with -h for copyright info
+==248000== Command: ./results/exec/DRB002-antidep1-var-yes.c.taskgrind.out 32
+==248000== 
+==248000== [INFO] Export to dot files disabled
+==248000== 
+==248000== [INFO] Starting analysis...
+==248000== [INFO] Running E1 pass
+==248000== [INFO] Analysis completed.
+*****     Log 4 for DRB002-antidep1-var-yes.c with 8 threads and input size 32     *****
+==248012== [INFO] Loading OMPT Plugin from /home/pereirar/repos/valgrind/taskgrind/dataracebench/../../.in_place/../taskgrind/runtimes-tools/ompt/build/libtaskgrind_omp.so
+==248012== Taskgrind, a debugger for dependent tasks order of execution
+==248012== Copyright (C) 2023, and GNU GPL'd, by Romain Pereira et al.
+==248012== Using Valgrind-3.22.0.GIT and LibVEX; rerun with -h for copyright info
+==248012== Command: ./results/exec/DRB002-antidep1-var-yes.c.taskgrind.out 32
+==248012== 
+==248012== [INFO] Export to dot files disabled
+==248012== 
+==248012== [INFO] Starting analysis...
+==248012== [INFO] Running E1 pass
+==248012== [INFO] Analysis completed.
+*****     Log 5 for DRB002-antidep1-var-yes.c with 8 threads and input size 32     *****
