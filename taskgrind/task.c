@@ -90,7 +90,7 @@ task_seg_new(task_t * task)
 }
 
 static inline void
-__task_init(task_t * task, UWord client_id, task_type_t type)
+__task_init(task_t * task, UWord client_id, task_type_t type, UWord undeferred)
 {
     // set attributes
     task->type              = type;
@@ -105,6 +105,7 @@ __task_init(task_t * task, UWord client_id, task_type_t type)
     array_init(&task->segs, 0, sizeof(task_seg_t));
     task->sp                = (Addr) TASKGRIND_BASE_STACK_PTR;
     task->flag              = 0;
+    task->undeferred        = undeferred;
 
     // add an initial seg
     task_seg_new(task);
@@ -128,12 +129,12 @@ __task_init(task_t * task, UWord client_id, task_type_t type)
 }
 
 static inline task_t *
-task_new(UWord client_id, task_type_t type)
+task_new(UWord client_id, task_type_t type, UWord undeferred)
 {
     task_t * task;
 
     task = (task_t *) VG_(malloc)("task_new", sizeof(task_t));
-    __task_init(task, client_id, type);
+    __task_init(task, client_id, type, undeferred);
     return task;
 }
 
@@ -201,7 +202,7 @@ task_create(UWord client_id, task_type_t type, UWord undeferred)
     }
 
     // create the task
-    task = task_new(client_id, type);
+    task = task_new(client_id, type, undeferred);
 
     if (client_id != TASKGRIND_CLIENT_ID_PRIVATE)
     {
@@ -223,16 +224,26 @@ task_create(UWord client_id, task_type_t type, UWord undeferred)
     /////////
     // LPG //
     /////////
+
     // create a new successor seg for the current task
-    task_seg_t * succ_seg = task_seg_new(CURRENT_TASK);
+    task_t * succ = CURRENT_TASK;
+    task_seg_t * succ_seg = task_seg_new(succ);
+    int succ_seg_idx = succ->segs.n - 1;
     tl_assert(succ_seg);
 
     // retrieve the current seg
-    task_seg_t * pred_seg = (task_seg_t *) array_penultimate(&CURRENT_TASK->segs);
+    task_t * pred = CURRENT_TASK;
+    task_seg_t * pred_seg = (task_seg_t *) array_penultimate(&pred->segs);
+    int pred_seg_idx = pred->segs.n - 2;
     tl_assert(pred_seg);
 
+    // retrieve the new task seg
+    task_seg_t * task_seg = (task_seg_t *) array_first(&task->segs);
+    int task_seg_idx = task->segs.n - 1;
+    tl_assert(task_seg);
+
     // 'pred' -> 'task'
-    task_seg_set_edge(pred_seg, task, 0);
+    task_seg_set_edge(pred_seg, task, task_seg_idx);
 
     switch (type)
     {
@@ -252,8 +263,7 @@ task_create(UWord client_id, task_type_t type, UWord undeferred)
             ARRAY_FOREACH_END(&CURRENT_TASK->children, task_t **, child);
 
             // 'task' -> 'succ'
-            task_seg_t * task_seg = (task_seg_t *) array_first(&task->segs);
-            task_seg_set_edge(task_seg, CURRENT_TASK, CURRENT_TASK->segs.n - 1);
+            task_seg_set_edge(task_seg, succ, succ_seg_idx);
 
             // in the future, link each next children with this barrier
             CURRENT_TASK->last_sync = task;
@@ -264,19 +274,15 @@ task_create(UWord client_id, task_type_t type, UWord undeferred)
 
         default:
         {
+            // 'task' -> 'succ'
+            if (undeferred)
+                task_seg_set_edge(task_seg, succ, succ_seg_idx);
             // 'pred' -> 'succ'
-            task_seg_set_edge(pred_seg, CURRENT_TASK, CURRENT_TASK->segs.n - 1);
+            else
+                task_seg_set_edge(pred_seg, succ, succ_seg_idx);
+
             break ;
         }
-    }
-
-    // if undeferred, 'succ' cannot resume until 'task' completed
-    if (undeferred)
-    {
-        // retrieve the new task seg
-        task_seg_t * task_seg = (task_seg_t *) array_first(&task->segs);
-        tl_assert(task_seg);
-        task_seg_set_edge(task_seg, CURRENT_TASK, CURRENT_TASK->segs.n - 1);
     }
 
     return task;
@@ -409,6 +415,7 @@ task_depend(UWord client_id, UWord addr, UWord type)
         // case 1.1 - the generated task is dependant of previous 'in'
         if (!array_is_empty(&depend->ins) && (type == TASKGRIND_OUT || type == TASKGRIND_OUTSET))
         {
+#if 0
             if (type == TASKGRIND_OUTSET)
             {
                 /**
@@ -432,9 +439,11 @@ task_depend(UWord client_id, UWord addr, UWord type)
                 array_clear(&depend->ins);
             }
             else
+#endif
             {
                 ARRAY_FOREACH_BEGIN(&depend->ins, task_t **, in)
-                    task_set_edge(*in, task);
+                    if (*in != task)
+                        task_set_edge(*in, task);
                 ARRAY_FOREACH_END(&depend->ins, task_t **, in)
             }
         } // 1.1
@@ -442,6 +451,7 @@ task_depend(UWord client_id, UWord addr, UWord type)
         // 1.2 - the generated task is dependent of previous 'outset'
         if (!array_is_empty(&depend->outsets) && (type == TASKGRIND_IN || type == TASKGRIND_OUT))
         {
+# if 0
             if (type == TASKGRIND_IN)
             {
                 /**
@@ -460,6 +470,7 @@ task_depend(UWord client_id, UWord addr, UWord type)
                 array_clear(&depend->outsets);
             }
             else
+#endif
             {
                 tl_assert(type == TASKGRIND_OUT);
                 ARRAY_FOREACH_BEGIN(&depend->outsets, task_t **, outset)
@@ -588,7 +599,7 @@ task_mem_store_atomic(Addr addr, SizeT size)
 void
 task_init(void)
 {
-    __task_init(&ROOT_TASK, TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_ROOT);
+    __task_init(&ROOT_TASK, TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_ROOT, 1);
     CURRENT_TASK = &ROOT_TASK;
 }
 

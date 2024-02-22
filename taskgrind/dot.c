@@ -115,8 +115,8 @@ dump_task_seg_ref(VgFile * fp, task_seg_ref_t * ref)
     HChar location[256];
     task_seg_get_location(seg, 0, location, sizeof(location));
 
-    VG_(fprintf)(fp, "    \"%p\" [label=\"type=%s\\nclient=%ld\\nchild=%ld\\nseg=%u\\nlocation=%s\\nuid=%lu\",shape=%s];\n",
-        seg, type, (Word)task->client_id, (Word)task->child_id, ref->id, location, seg->uid, shape);
+    VG_(fprintf)(fp, "    \"%p\" [label=\"type=%s\\nclient=%ld\\nchild=%ld\\nseg=%u\\nlocation=%s\\nuid=%u\\nundeferred=%lu\",shape=%s];\n",
+        seg, type, (Word)task->client_id, (Word)task->child_id, ref->id, location, seg->uid, task->undeferred, shape);
 }
 
 // TDG (task dependency graph)

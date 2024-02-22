@@ -44,6 +44,10 @@ main(void)
 
             # pragma omp task
                 {}
+
+
+            # pragma omp task if(0)
+                {}
         }
 
         # pragma omp for schedule(static, 1)

@@ -101,7 +101,7 @@ on_ompt_callback_task_create(
     client_id->value = ++NEXT_CLIENT_ID;
 
     taskgrind_task_type_t type = (flags & ompt_task_explicit) ? TASKGRIND_TASK_TYPE_EXPLICIT : TASKGRIND_TASK_TYPE_IMPLICIT;
-    unsigned int undeferred = (flags & ompt_task_undeferred);
+    unsigned int undeferred = (flags & ompt_task_undeferred) ? 1 : 0;
     TASKGRIND_CREATE_EVENT(client_id->value, TASKGRIND_TASK_TYPE_EXPLICIT, undeferred);
 }
 
