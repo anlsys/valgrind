@@ -1,5 +1,5 @@
-#CC=clang
-CC=gcc
+CC=clang
+#CC=gcc
 
 CFLAGS=-Wall -Werror -Wextra
 CFLAGS+=-fopenmp

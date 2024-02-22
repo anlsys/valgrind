@@ -26,6 +26,7 @@
 
 #include "dot.h"
 #include "env.h"
+#include "error.h"
 #include "print.h"
 #include "task.h"
 #include "taskgrind.h"
@@ -514,6 +515,20 @@ taskgrind_pre_clo_init(void)
 
    VG_(needs_client_requests)(taskgrind_handle_client_request);
    VG_(basic_tool_funcs)(taskgrind_post_clo_init, taskgrind_instrument, taskgrind_fini);
+   VG_(needs_tool_errors)(
+       taskgrind_eq_Error,
+       taskgrind_before_pp_Error,
+       taskgrind_pp_Error,
+       False,
+       taskgrind_update_extra,
+       taskgrind_recognised_suppression,
+       taskgrind_read_extra_suppression_info,
+       taskgrind_error_matches_suppression,
+       taskgrind_get_error_name,
+       taskgrind_get_extra_suppression_info,
+       taskgrind_print_extra_suppression_use,
+       taskgrind_update_extra_suppression_use
+   );
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -528,6 +543,7 @@ taskgrind_prepare_env(HChar *** envp)
     VG_(strcpy)(absolute_so, VG_(libdir));
     VG_(strcat)(absolute_so, relative_so);
 
+    TASKGRIND_INFO("Loading OMPT Plugin from %s", absolute_so);
     VG_(env_setenv)(envp, "OMP_TOOL_LIBRARIES", absolute_so);
     VG_(env_setenv)(envp, "OMP_NUM_THREADS", "1");
     VG_(env_setenv)(envp, "LIBOMP_USE_HIDDEN_HELPER_TASK", "0");

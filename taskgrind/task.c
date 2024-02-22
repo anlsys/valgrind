@@ -162,7 +162,7 @@ task_set_edge(task_t * pred, task_t * succ)
     if (last == succ)
         return ;
     array_push(&pred->successors, &succ);
-    TASKGRIND_DEBUG("   Added edge %p -> %p", (void *)pred->client_id, (void *)succ->client_id);
+//    TASKGRIND_DEBUG("   Added edge %p -> %p", (void *)pred->client_id, (void *)succ->client_id);
 
     // LPG
     task_seg_t * pred_seg = (task_seg_t *) array_last(&pred->segs);
@@ -203,7 +203,7 @@ task_create(UWord client_id, task_type_t type)
         HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASKS, &(task->client_id), sizeof(UWord), hashv, task);
     }
 
-    TASKGRIND_DEBUG("Task create %p (parent %p)", (void *) client_id, (void *) (task->parent ? task->parent->client_id : TASKGRIND_CLIENT_ID_PRIVATE));
+//    TASKGRIND_DEBUG("Task create %p (parent %p)", (void *) client_id, (void *) (task->parent ? task->parent->client_id : TASKGRIND_CLIENT_ID_PRIVATE));
 
     tl_assert(task);
     tl_assert(CURRENT_TASK);
@@ -378,7 +378,7 @@ void
 task_depend(UWord client_id, UWord addr, UWord type)
 {
     tl_assert(type == TASKGRIND_IN || type == TASKGRIND_OUT || type == TASKGRIND_OUTSET);
-    TASKGRIND_DEBUG("Task %p depend %s at %p", (void *) client_id, type == TASKGRIND_IN ? "IN" : type == TASKGRIND_OUT ? "OUT" : type == TASKGRIND_OUTSET ? "OUTSET" : "(null)", (void *) addr);
+//    TASKGRIND_DEBUG("Task %p depend %s at %p", (void *) client_id, type == TASKGRIND_IN ? "IN" : type == TASKGRIND_OUT ? "OUT" : type == TASKGRIND_OUTSET ? "OUTSET" : "(null)", (void *) addr);
 
     // retrieve current task and its parent depend
     task_t * task = task_get(client_id);
@@ -591,7 +591,7 @@ task_fini(void)
     }
 
     TASKGRIND_INFO("Starting analysis...");
-    taskgrind_pass_w1(&ROOT_TASK);
+//    taskgrind_pass_w1(&ROOT_TASK);
     taskgrind_pass_e1(&ROOT_TASK);
     TASKGRIND_INFO("Analysis completed.");
 

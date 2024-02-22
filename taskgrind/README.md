@@ -38,3 +38,11 @@ You may want to dump generated data structures to dot files with
 # TODO (PRIORITY) LIST BEFORE MAKING TASKGRIND PUBLICLY AVAILABLE
 1) Add the OMPT Plugin to the installation, and have Taskgrind loading it.
 2) Optimize the 'spmt.h' data structure. Probably rewrite it entirely keeping the same interfaces
+
+# Testing with dataracebench
+The project had been modded to 'dataracebench/' to support taskgrind
+```
+cd dataracebench/
+./check-data-races.sh --taskgrind C
+```
+Original repo is here (https://github.com/LLNL/dataracebench)

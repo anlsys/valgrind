@@ -1,3 +1,4 @@
+# PLAN
 0) Abstract
 
 1) Introduction
@@ -165,12 +166,32 @@ Je dois relire pour bien comprendre ce que ça fait
                 ->  ne prend pas avantage du C-Elision, donc faux-négatif possible
     -> nous, méthode robuste: PAS DE FAUX NEGATIF !! s'il y a, on detecte
 
-
 [22] Parallel Data Race Detection for Task Parallel Programs with Locks
 (voir relworks)
 
 [23] Scalable and Precise Dynamic Datarace Detection for Structured Parallelism
 (voir abstract)
+
+[24] Liao, C., Lin, P.H., Asplund, J., Schordan, M., Karlin, I.: Dataracebench: a benchmark suite for systematic evaluation of data race detection tools.
+    - une suite de benchmark data race OpenMP !! évaluer tout là dessus
+
+[25] On-the-fly Data Race Detection with the Enhanced OpenMP Series-Parallel Graph
+    - outil OMPT
+    - pass compile LLVM qui forward les accès mémoires à ompt
+    - graph EOSPG avec des 'fragments' <=> 'segments' de [21]
+        - mais plutôt comme une extension des SP-graph avec différents noeuds
+        - nous on reprends plutôt [21] où
+            - noeud = segments (=fragments)
+            - arcs = contrainte de précedence (transitive) (= HB relation)
+
+[26,27] Papier Thierry / moi sur coût de gestions de dépendances
+    - Taskgrind peut permettre de réduire ce coût en reportant des warnings précis sur la construction du parallélisme
+
+[28]  Running Valgrind on multiple processors: a prototype Philippe Waroquiers FOSDEM 2015 valgrind devroom (présentation, pas un papier)
+    - Valgrind modèle 'big lock'
+
+[29] Dynamic data race detection for OpenMP programs (2018)
+    !! A LIRE !!
 
 # HISTORIQUE RAPIDE
 - Cilk et Determinator (= determinacy races general, detection) (1997)
@@ -205,8 +226,14 @@ Je dois relire pour bien comprendre ce que ça fait
 
 - Runtime Determinacy Race Detection for OpenMP Tasks - (2018) (Europar)
 
-- OmpSs-2 - A Toolchain to Verify the Parallelization of OmpSs-2 Applications - 2020 (= juste au niveau d'une tâche, avec suggestions de correction)
+- A Study of Memory Anomalies in OpenMP Applications - (2020) (IWOMP)
+    - les outils state of the art ne permettent pas de traiter tous les "memory anomalies", il faut accumuler les outils
+    -> avec Taskgrind, on peut tous les traiter
+        - 3.1 Use of Uninitialized Memory
+        - 3.2 Use After Free
+        - 3.3 Use of Stale Data
 
+- OmpSs-2 - A Toolchain to Verify the Parallelization of OmpSs-2 Applications - 2020 (= juste au niveau d'une tâche, avec suggestions de correction)
 
 # TODO
 TODO à regarder:
@@ -293,3 +320,33 @@ for (int i = 0 ; i < 4 ; ++i)
     }
 }
 ```
+
+## Exec parallèle
+- Cilk force l'exec 1 thread séquentiel, nous aussi
+    -> MAIS, pas nécessaire!! on pourrait executer en parallèle, enregistrer, et rejouer seulement l'algo en séquentiel
+    - W = W_exec + W_analyse + W_collect avec
+        - W_exec le travail a executé (le programme)
+        - W_analyse le travail supplémentaire lié à l'analyse (SP bags)
+        - W_collect le travail supplémentaire lié à la collecte (nul si séquentiel pendant l'exécution)
+    - T(nthreads=1) = (W_exec++W_analyse) * f
+    - T(nthreads>1) = (W_exec+W_collect)/nthreads + W_analyse * f
+
+
+
+
+# ALGORITHM DETECTION
+
+Positionnement: complexité temporelle différente
+    - n = number of segments
+    - m = nombre d'octet accédé par un segment
+-> O(log(m) * n²)
+
+les autres sont en
+    - [21] O(n²m²)
+
+Pour chaque segments s1
+    pour chaque segments s2 != s1
+        si s1 and s2 sont parallèles, alors
+            c = (s1.w n s2.w) u (s1.w n s2.r) u (s1.r n s2.w)
+            si c non vide,
+                error
