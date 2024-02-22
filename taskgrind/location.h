@@ -5,6 +5,6 @@
 
 extern const HChar * UNKNOWN;
 
-HChar * task_seg_get_location(task_seg_t * seg);
+HChar * task_seg_get_location(task_seg_t * seg, UInt use_dir, HChar * buffer, UInt len);
 
 #endif /* __LOCATION_H__ */

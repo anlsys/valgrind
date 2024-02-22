@@ -8,6 +8,7 @@ main(void)
         # pragma omp single nowait
         {
             int x;
+            (void) x;
 
             for (int i = 0 ; i < N ; ++i)
             {

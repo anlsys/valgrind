@@ -89,9 +89,9 @@ taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
             return True;
         }
 
-        case VG_USERREQ__TASKGRIND_ACCESS_EVENT:
+        case VG_USERREQ__TASKGRIND_DEPEND_EVENT:
         {
-            task_access(arg[1], arg[2], arg[3]);
+            task_depend(arg[1], arg[2], arg[3]);
             return True;
         }
 

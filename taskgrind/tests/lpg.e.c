@@ -6,6 +6,7 @@ main(void)
         # pragma omp single nowait
         {
             int x;
+            (void) x;
 
             # pragma omp task depend(out: x)
             {}

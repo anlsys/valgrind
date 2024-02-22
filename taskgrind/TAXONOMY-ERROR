@@ -29,9 +29,6 @@ POSITIONNEMENT
 
 
 
-
-
-
 PERFORMANCE HINT
     PH1 - des dépendances sont déclarés inutilement (réduisant le parallélisme)
         - (T1) -> (T2) alors que pas de dépendances sur les accès mémoires.

@@ -159,7 +159,7 @@ on_ompt_callback_dependences(
         {
             case ompt_dependence_type_in:
             {
-                TASKGRIND_ACCESS_EVENT(client_id->value, dep->variable.ptr, TASKGRIND_IN);
+                TASKGRIND_DEPEND_EVENT(client_id->value, dep->variable.ptr, TASKGRIND_IN);
                 break ;
             }
 
@@ -168,13 +168,13 @@ on_ompt_callback_dependences(
             // mutexinoutset is implement as 'out' in practice (2023)
             case ompt_dependence_type_mutexinoutset:
             {
-                TASKGRIND_ACCESS_EVENT(client_id->value, dep->variable.ptr, TASKGRIND_OUT);
+                TASKGRIND_DEPEND_EVENT(client_id->value, dep->variable.ptr, TASKGRIND_OUT);
                 break ;
             }
 
             case ompt_dependence_type_inoutset:
             {
-                TASKGRIND_ACCESS_EVENT(client_id->value, dep->variable.ptr, TASKGRIND_OUTSET);
+                TASKGRIND_DEPEND_EVENT(client_id->value, dep->variable.ptr, TASKGRIND_OUTSET);
                 break ;
             }
 

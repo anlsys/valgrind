@@ -14,6 +14,7 @@ main(void)
         # pragma omp single nowait
         {
             int x, y;
+            (void) x, y;
 
             # pragma omp task depend(out: x) shared(x)
                 x = 42;

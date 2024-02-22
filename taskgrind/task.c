@@ -19,6 +19,55 @@ task_t ROOT_TASK;
 // The current task
 task_t * CURRENT_TASK = NULL;
 
+// Total number of segments
+UInt N_TASK_SEGS = 0;
+
+static void
+task_seg_foreach_walk(UInt (*walk)(task_seg_t *, void *), void * opaque, task_seg_t * seg, UChar * visited, UInt * stop)
+{
+    UChar * seg_char = visited + (seg->uid / (8 * sizeof(UChar)));
+    UInt seg_char_bit = 1 << (seg->uid % (8 * sizeof(UChar)));
+    if (*seg_char & seg_char_bit)
+        return ;
+    *seg_char |= seg_char_bit;
+
+    if (walk(seg, opaque))
+    {
+        *stop = 1;
+         return ;
+    }
+
+    ARRAY_FOREACH_BEGIN(&seg->successors, task_seg_ref_t *, succ_ref)
+    {
+        task_seg_t * succ_seg = succ_ref->task->segs.segs + succ_ref->id;
+        task_seg_foreach_walk(walk, opaque, succ_seg, visited, stop);
+        if (*stop)
+            return ;
+    }
+    ARRAY_FOREACH_END(&seg->successors, task_seg_ref_t *, succ_ref);
+}
+
+void
+task_seg_foreach_from(UInt (*walk)(task_seg_t *, void *), void * opaque, task_seg_t * seg)
+{
+    // TODO: this size could probably be dampened infering from 'seg->uid'
+    UInt size = N_TASK_SEGS / (8 * sizeof(UChar)) + 1;
+    UChar * visited = (UChar *) VG_(malloc)("task_seg_foreach", size);
+    VG_(memset)(visited, 0, size);
+    UInt stop = 0;
+    task_seg_foreach_walk(walk, opaque, seg, visited, &stop);
+    VG_(free)(visited);
+}
+
+void
+task_seg_foreach(UInt (*walk)(task_seg_t *, void *), void * opaque)
+{
+    task_seg_t * root_seg = (task_seg_t *) array_first(&ROOT_TASK.segs);
+    tl_assert(root_seg);
+
+    task_seg_foreach_from(walk, opaque, root_seg);
+}
+
 static inline task_seg_t *
 task_seg_new(task_t * task)
 {
@@ -28,6 +77,7 @@ task_seg_new(task_t * task)
     SPMT_INITIALIZE(&seg->stores);
     array_init(&seg->successors, 0, sizeof(task_seg_ref_t));
     seg->ctx = NULL;
+    seg->uid = N_TASK_SEGS++;
 
     ThreadId tid = VG_(get_running_tid)();
     if (tid != VG_INVALID_THREADID)
@@ -45,7 +95,7 @@ __task_init(task_t * task, UWord client_id, task_type_t type)
     task->next_child_id     = 0;
     task->client_id         = client_id;
     array_init(&task->successors, 4, sizeof(task_t *));
-    task->accesses          = NULL;
+    task->depend          = NULL;
     task->parent            = CURRENT_TASK;
     array_init(&task->children, 0, sizeof(task_t *));
     task->last_sync         = NULL;
@@ -112,7 +162,7 @@ task_set_edge(task_t * pred, task_t * succ)
     if (last == succ)
         return ;
     array_push(&pred->successors, &succ);
-//    TASKGRIND_DEBUG("   Added edge %p -> %p", (void *)pred->client_id, (void *)succ->client_id);
+    TASKGRIND_DEBUG("   Added edge %p -> %p", (void *)pred->client_id, (void *)succ->client_id);
 
     // LPG
     task_seg_t * pred_seg = (task_seg_t *) array_last(&pred->segs);
@@ -153,7 +203,7 @@ task_create(UWord client_id, task_type_t type)
         HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASKS, &(task->client_id), sizeof(UWord), hashv, task);
     }
 
-//    TASKGRIND_DEBUG("Task create %p (parent %p)", (void *) client_id, (void *) (task->parent ? task->parent->client_id : TASKGRIND_CLIENT_ID_PRIVATE));
+    TASKGRIND_DEBUG("Task create %p (parent %p)", (void *) client_id, (void *) (task->parent ? task->parent->client_id : TASKGRIND_CLIENT_ID_PRIVATE));
 
     tl_assert(task);
     tl_assert(CURRENT_TASK);
@@ -253,39 +303,39 @@ task_schedule(UWord client_id)
     CURRENT_TASK = next;
 }
 
-// accesses
-static inline task_accesses_t *
-task_accesses_get(task_t * parent, UWord addr)
+// depend
+static inline task_depend_t *
+task_depend_get(task_t * parent, UWord addr)
 {
-    task_accesses_t * accesses;
+    task_depend_t * depend;
     unsigned hashv;
 
     HASH_VALUE(&addr, sizeof(UWord), hashv);
-    HASH_FIND_BYHASHVALUE(hh, parent->accesses, &addr, sizeof(UWord), hashv, accesses);
+    HASH_FIND_BYHASHVALUE(hh, parent->depend, &addr, sizeof(UWord), hashv, depend);
 
-    if (!accesses)
+    if (!depend)
     {
-        accesses = (task_accesses_t *) VG_(malloc)("task_access", sizeof(task_accesses_t));
-        accesses->addr          = addr;
-        accesses->out           = NULL;
-        accesses->last_out      = NULL;
-        accesses->last_in       = NULL;
-        accesses->last_outset   = NULL;
-        array_init(&accesses->ins, 0, sizeof(task_t *));
-        array_init(&accesses->outsets, 0, sizeof(task_t *));
+        depend = (task_depend_t *) VG_(malloc)("task_access", sizeof(task_depend_t));
+        depend->addr          = addr;
+        depend->out           = NULL;
+        depend->last_out      = NULL;
+        depend->last_in       = NULL;
+        depend->last_outset   = NULL;
+        array_init(&depend->ins, 0, sizeof(task_t *));
+        array_init(&depend->outsets, 0, sizeof(task_t *));
 
-        HASH_ADD_KEYPTR_BYHASHVALUE(hh, parent->accesses, &(accesses->addr), sizeof(UWord), hashv, accesses);
+        HASH_ADD_KEYPTR_BYHASHVALUE(hh, parent->depend, &(depend->addr), sizeof(UWord), hashv, depend);
     }
-    tl_assert(accesses);
+    tl_assert(depend);
 
-    return accesses;
+    return depend;
 }
 
 // return true if the given task access is redundant for the given address
 static inline Bool
 task_access_is_redundant(
     task_t * task,
-    task_accesses_t * accesses,
+    task_depend_t * depend,
     UWord addr,
     UWord type)
 {
@@ -293,25 +343,25 @@ task_access_is_redundant(
     {
         case (TASKGRIND_OUT):
         {
-            if (accesses->last_out == task)
+            if (depend->last_out == task)
                 return True;
-            accesses->last_out = task;
+            depend->last_out = task;
             return False;
         }
 
         case (TASKGRIND_IN):
         {
-            if (accesses->last_out == task || accesses->last_in == task)
+            if (depend->last_out == task || depend->last_in == task)
                 return True;
-            accesses->last_in = task;
+            depend->last_in = task;
             return False;
         }
 
         case (TASKGRIND_OUTSET):
         {
-            if (accesses->last_out == task || accesses->last_outset == task)
+            if (depend->last_out == task || depend->last_outset == task)
                 return True;
-            accesses->last_outset = task;
+            depend->last_outset = task;
             return False;
         }
 
@@ -325,26 +375,26 @@ task_access_is_redundant(
 
 // add a dependency to the task following RaW constraints
 void
-task_access(UWord client_id, UWord addr, UWord type)
+task_depend(UWord client_id, UWord addr, UWord type)
 {
     tl_assert(type == TASKGRIND_IN || type == TASKGRIND_OUT || type == TASKGRIND_OUTSET);
-//    TASKGRIND_DEBUG("Task %p accesses %s at %p", (void *) client_id, type == TASKGRIND_IN ? "IN" : type == TASKGRIND_OUT ? "OUT" : type == TASKGRIND_OUTSET ? "OUTSET" : "(null)", (void *) addr);
+    TASKGRIND_DEBUG("Task %p depend %s at %p", (void *) client_id, type == TASKGRIND_IN ? "IN" : type == TASKGRIND_OUT ? "OUT" : type == TASKGRIND_OUTSET ? "OUTSET" : "(null)", (void *) addr);
 
-    // retrieve current task and its parent accesses
+    // retrieve current task and its parent depend
     task_t * task = task_get(client_id);
     tl_assert(task);
     tl_assert(task->parent);
 
-    task_accesses_t * accesses = task_accesses_get(task->parent, addr);
-    tl_assert(accesses);
+    task_depend_t * depend = task_depend_get(task->parent, addr);
+    tl_assert(depend);
 
     // filter out redundancies
-    if (!task_access_is_redundant(task, accesses, addr, type))
+    if (!task_access_is_redundant(task, depend, addr, type))
     {
         // infer edge between 'task' and its predecessor
 
         // case 1.1 - the generated task is dependant of previous 'in'
-        if (!array_is_empty(&accesses->ins) && (type == TASKGRIND_OUT || type == TASKGRIND_OUTSET))
+        if (!array_is_empty(&depend->ins) && (type == TASKGRIND_OUT || type == TASKGRIND_OUTSET))
         {
             if (type == TASKGRIND_OUTSET)
             {
@@ -355,29 +405,29 @@ task_access(UWord client_id, UWord addr, UWord type)
                  *           / \
                  * outset:  O   O   <- the task we are inserting
                  */
-                accesses->out = task_create(TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_OUTSET);
-                ARRAY_FOREACH_BEGIN(&accesses->ins, task_t **, in)
+                depend->out = task_create(TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_OUTSET);
+                ARRAY_FOREACH_BEGIN(&depend->ins, task_t **, in)
                 {
                     // prevent cyclic deps in case 'task' already had an 'in'
                     // dep type on the same addr previously
                     if (*in != task)
-                        task_set_edge(*in, accesses->out);
+                        task_set_edge(*in, depend->out);
                 }
-                ARRAY_FOREACH_END(&accesses->ins, task_t **, in)
+                ARRAY_FOREACH_END(&depend->ins, task_t **, in)
 
-                task_set_edge(accesses->out, task);
-                array_clear(&accesses->ins);
+                task_set_edge(depend->out, task);
+                array_clear(&depend->ins);
             }
             else
             {
-                ARRAY_FOREACH_BEGIN(&accesses->ins, task_t **, in)
+                ARRAY_FOREACH_BEGIN(&depend->ins, task_t **, in)
                     task_set_edge(*in, task);
-                ARRAY_FOREACH_END(&accesses->ins, task_t **, in)
+                ARRAY_FOREACH_END(&depend->ins, task_t **, in)
             }
         } // 1.1
 
         // 1.2 - the generated task is dependent of previous 'outset'
-        if (!array_is_empty(&accesses->outsets) && (type == TASKGRIND_IN || type == TASKGRIND_OUT))
+        if (!array_is_empty(&depend->outsets) && (type == TASKGRIND_IN || type == TASKGRIND_OUT))
         {
             if (type == TASKGRIND_IN)
             {
@@ -388,35 +438,35 @@ task_access(UWord client_id, UWord addr, UWord type)
                  *                   / \
                  * in:              O   O   <- the task we are inserting
                  */
-                accesses->out = task_create(TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_OUTSET);
-                ARRAY_FOREACH_BEGIN(&accesses->outsets, task_t **, outset)
-                    task_set_edge(*outset, accesses->out);
-                ARRAY_FOREACH_END(&accesses->outsets, task_t *, outset)
+                depend->out = task_create(TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_OUTSET);
+                ARRAY_FOREACH_BEGIN(&depend->outsets, task_t **, outset)
+                    task_set_edge(*outset, depend->out);
+                ARRAY_FOREACH_END(&depend->outsets, task_t **, outset)
 
-                task_set_edge(accesses->out, task);
-                array_clear(&accesses->outsets);
+                task_set_edge(depend->out, task);
+                array_clear(&depend->outsets);
             }
             else
             {
                 tl_assert(type == TASKGRIND_OUT);
-                ARRAY_FOREACH_BEGIN(&accesses->outsets, task_t **, outset)
+                ARRAY_FOREACH_BEGIN(&depend->outsets, task_t **, outset)
                     task_set_edge(*outset, task);
-                ARRAY_FOREACH_END(&accesses->outsets, task_t **, outset)
+                ARRAY_FOREACH_END(&depend->outsets, task_t **, outset)
             }
         } // 1.2
 
         // 1.3 - the generated task is dependent of previous 'out'
-        if (accesses->out && (type == TASKGRIND_OUT || type == TASKGRIND_IN || type == TASKGRIND_OUTSET))
+        if (depend->out && (type == TASKGRIND_OUT || type == TASKGRIND_IN || type == TASKGRIND_OUTSET))
         {
             if (type == TASKGRIND_OUT &&
-                    (!array_is_empty(&accesses->ins) || !array_is_empty(&accesses->outsets)))
+                    (!array_is_empty(&depend->ins) || !array_is_empty(&depend->outsets)))
             {
-                // nothing to do, the task already depends on a previous 'in'
-                // or 'outset' that depend on the 'accesses->out'
+                // nothing to do, the task already depend on a previous 'in'
+                // or 'outset' that depend on the 'depend->out'
             }
             else
             {
-                task_set_edge(accesses->out, task);
+                task_set_edge(depend->out, task);
             }
         }
 
@@ -425,21 +475,21 @@ task_access(UWord client_id, UWord addr, UWord type)
         {
             case (TASKGRIND_IN):
             {
-                array_push(&accesses->ins, &task);
+                array_push(&depend->ins, &task);
                 break ;
             }
 
             case (TASKGRIND_OUT):
             {
-                array_clear(&accesses->ins);
-                array_clear(&accesses->outsets);
-                accesses->out = task;
+                array_clear(&depend->ins);
+                array_clear(&depend->outsets);
+                depend->out = task;
                 break ;
             }
 
             case (TASKGRIND_OUTSET):
             {
-                array_push(&accesses->outsets, &task);
+                array_push(&depend->outsets, &task);
                 break ;
             }
 
@@ -454,7 +504,7 @@ task_access(UWord client_id, UWord addr, UWord type)
 }
 
 // a task sync: wait for the completion of sibling tasks, represented by
-// adding an empty task node which depends on all previously created tasks with
+// adding an empty task node which depend on all previously created tasks with
 // no successors (leaves)
 void
 task_sync(void)
@@ -542,6 +592,7 @@ task_fini(void)
 
     TASKGRIND_INFO("Starting analysis...");
     taskgrind_pass_w1(&ROOT_TASK);
+    taskgrind_pass_e1(&ROOT_TASK);
     TASKGRIND_INFO("Analysis completed.");
 
     // taskgrind_export_tcfg(CURRENT_TASK);

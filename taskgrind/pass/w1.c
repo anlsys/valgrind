@@ -29,7 +29,7 @@ typedef struct  walk_w1_s
 }               walk_w1_t;
 
 static int
-pass_w1_inter_check(SPMT_PTR_T begin, SPMT_PTR_T end, void * opaque)
+pass_w1_intersect_check(SPMT_PTR_T begin, SPMT_PTR_T end, void * opaque)
 {
     #if 0
     TASKGRIND_INFO("Common access on [%lu, %lu[", begin, end);
@@ -120,8 +120,8 @@ pass_w1_check_deps(task_t * pred, task_t * succ)
             .contains_parent_stack_accesses = 0,
             .task_stack_pointer = pred->sp < succ->sp ? pred->sp : succ->sp,
         };
-        SPMT_FOREACH_FILLED(&inter_s_ls, pass_w1_inter_check, &walk);
-        SPMT_FOREACH_FILLED(&inter_l_s, pass_w1_inter_check, &walk);
+        SPMT_FOREACH_FILLED(&inter_s_ls, pass_w1_intersect_check, &walk);
+        SPMT_FOREACH_FILLED(&inter_l_s, pass_w1_intersect_check, &walk);
         if (walk.contains_heap_accesses)
         {
             // the two tasks access same address in the heap memory
@@ -157,11 +157,18 @@ pass_w1_check_deps(task_t * pred, task_t * succ)
         task_seg_t * succ_seg = (task_seg_t *) array_first(&succ->segs);
         tl_assert(succ_seg);
 
+        HChar pred_loc[256];
+        task_seg_get_location(pred_seg, 0, pred_loc, 256);
+
+        HChar succ_loc[256];
+        task_seg_get_location(succ_seg, 0, succ_loc, 256);
+
         TASKGRIND_WARN("  %p (%s) and %p (%s) were declared dependent having no data dependencies",
                 (void *)pred->client_id,
-                task_seg_get_location(pred_seg),
+                pred_loc,
                 (void *)succ->client_id,
-                task_seg_get_location(succ_seg));
+                succ_loc
+         );
     }
     else
     {
@@ -226,7 +233,7 @@ void
 taskgrind_pass_w1(task_t * root)
 {
     if (root->parent == NULL)
-        TASKGRIND_INFO("Running E5 pass");
+        TASKGRIND_INFO("Running W1 pass");
 
     ARRAY_FOREACH_BEGIN(&root->children, task_t **, child_ptr)
     {

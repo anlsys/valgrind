@@ -22,8 +22,8 @@ typedef enum    task_type_e
     TASK_TYPE_IMPLICIT_UNKNOWN,
 }               task_type_t;
 
-// task accesses hmap for child dependences
-typedef struct  task_accesses_t
+// task depends hmap for child dependences
+typedef struct  task_depend_s
 {
     // dependency address
     Addr addr;
@@ -48,7 +48,7 @@ typedef struct  task_accesses_t
 
     // hmap handle
     UT_hash_handle hh;
-}               task_accesses_t;
+}               task_depend_t;
 
 // tasks
 typedef struct  task_s
@@ -69,7 +69,7 @@ typedef struct  task_s
     array_t successors;
 
     // task hmap for child dependencies
-    task_accesses_t * accesses;
+    task_depend_t * depend;
 
     // parent
     struct task_s * parent;
@@ -111,6 +111,9 @@ typedef struct  task_seg_s
     // the execution context
     ExeContext * ctx;
 
+    // a unique identifier for this segment in [0, N_SEGMENTS[
+    UInt uid;
+
 }               task_seg_t;
 
 typedef struct  task_seg_ref_s
@@ -147,10 +150,13 @@ extern task_t * CURRENT_TASK;
 // The root task
 extern task_t ROOT_TASK;
 
+// Number of segments
+extern UInt N_TASK_SEGS;
+
 // FUNCTIONS TO BUILD THE MAPPING
 task_t * task_create(UWord client_id, task_type_t type);
 void task_schedule(UWord client_id);
-void task_access(UWord client_id, UWord addr, UWord type);
+void task_depend(UWord client_id, UWord addr, UWord type);
 void task_sync(void);
 
 // FUNCTIONS FOR MEMORY ACCESSES DETECTED
@@ -161,6 +167,8 @@ void task_mem_store_atomic(Addr addr, SizeT size);
 
 // HELPER FUNCTIONS
 task_t * task_get(UWord client_id);
+void task_seg_foreach(UInt (*walk)(task_seg_t *, void *), void * opaque);
+void task_seg_foreach_from(UInt (*walk)(task_seg_t *, void *), void * opaque, task_seg_t * seg);
 
 // INIT -> setup root task
 void task_init(void);
