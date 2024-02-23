@@ -4,11 +4,10 @@
 # include <ompt.h>
 # include <stdio.h>
 # include <string.h>
+# include <stdatomic.h>
 
 # include <valgrind/taskgrind.h>
 # define TOOL_NAME "Taskgrind"
-
-# include "uthash.h"
 
 ///////////////////////////////////////////////////////////////////////////////
 // OMPT EVENT CALLBACKS
@@ -40,51 +39,8 @@
         fprintf(stdout, "\n");              \
     } while (0)
 
-// a map from OMP runtime 'task_data' to taskgrind 'client id'
-typedef struct  client_id_s
-{
-    void * task_data;
-    uint64_t value;
-    UT_hash_handle hh;
-}               client_id_t;
-
-// next client id
-static uint64_t NEXT_CLIENT_ID;
-
-// the map
-static client_id_t * CLIENT_IDS;
-
-static inline client_id_t *
-client_id_get(void * task_data)
-{
-    client_id_t * client_id;
-    unsigned hashv;
-
-    HASH_VALUE(&task_data, sizeof(void *), hashv);
-    HASH_FIND_BYHASHVALUE(hh, CLIENT_IDS, &task_data, sizeof(void *), hashv, client_id);
-
-    return client_id;
-}
-
-static inline client_id_t *
-client_id_insert(void * task_data)
-{
-    client_id_t * client_id;
-    unsigned hashv;
-
-    HASH_VALUE(&task_data, sizeof(void *), hashv);
-    HASH_FIND_BYHASHVALUE(hh, CLIENT_IDS, &task_data, sizeof(void *), hashv, client_id);
-
-    client_id = client_id_get(task_data);
-    if (client_id == NULL)
-    {
-        client_id = (client_id_t *) malloc(sizeof(client_id_t));
-        assert(client_id);
-        client_id->task_data = task_data;
-        HASH_ADD_KEYPTR_BYHASHVALUE(hh, CLIENT_IDS, &(client_id->task_data), sizeof(void *), hashv, client_id);
-    }
-    return client_id;
-}
+// next task id
+static atomic_int NEXT_TASK_ID = 0;
 
 void
 on_ompt_callback_task_create(
@@ -97,8 +53,8 @@ on_ompt_callback_task_create(
 ) {
     // INFO("[CREATE] encountering_task_data, = %p, new_task_data = %p, codeptr_ra = %p", encountering_task_data, new_task_data, codeptr_ra);
 
-    client_id_t * client_id = client_id_insert(new_task_data);
-    client_id->value = ++NEXT_CLIENT_ID;
+    uint64_t task_id = ++NEXT_TASK_ID;
+    new_task_data->value = task_id;
 
     taskgrind_task_type_t type = (flags & ompt_task_explicit) ? TASKGRIND_TASK_TYPE_EXPLICIT : TASKGRIND_TASK_TYPE_IMPLICIT;
     unsigned int undeferred = (flags & ompt_task_undeferred) ? 1 : 0;
@@ -107,7 +63,7 @@ on_ompt_callback_task_create(
     // or runtime implementation
     // For now, assume all tasks are deferable, else we may loose expressed parallelism
     undeferred = 0;
-    TASKGRIND_CREATE_EVENT(client_id->value, TASKGRIND_TASK_TYPE_EXPLICIT, undeferred);
+    TASKGRIND_CREATE_EVENT(task_id, TASKGRIND_TASK_TYPE_EXPLICIT, undeferred);
 }
 
 void
@@ -117,11 +73,7 @@ on_ompt_callback_task_schedule(
     ompt_data_t * next_task_data
 ) {
     // INFO("[SCHEDULE] prior_task_data = %p, next_task_data = %p", prior_task_data, next_task_data);
-
-    client_id_t * client_id;
-
-    client_id = client_id_get(next_task_data);
-    TASKGRIND_SCHEDULE_EVENT(client_id->value);
+    TASKGRIND_SCHEDULE_EVENT(next_task_data->value);
 }
 
 void
@@ -135,14 +87,12 @@ on_ompt_callback_implicit_task(
 ) {
     // INFO("[IMPLICIT] task_data = %p", task_data);
 
-    client_id_t * client_id;
-
     if (endpoint == ompt_scope_begin)
     {
-        client_id = client_id_insert(task_data);
-        client_id->value = ++NEXT_CLIENT_ID;
-        TASKGRIND_CREATE_EVENT(client_id->value, TASKGRIND_TASK_TYPE_IMPLICIT, 0);
-        TASKGRIND_SCHEDULE_EVENT(client_id->value);
+        uint64_t task_id = ++NEXT_TASK_ID;
+        task_data->value = task_id;
+        TASKGRIND_CREATE_EVENT(task_id, TASKGRIND_TASK_TYPE_IMPLICIT, 0);
+        TASKGRIND_SCHEDULE_EVENT(task_id);
     }
 }
 
@@ -154,10 +104,8 @@ on_ompt_callback_dependences(
 ) {
     // INFO("[IMPLICIT] task_data = %p", task_data);
 
-    client_id_t * client_id;
+    uint64_t task_id = task_data->value;
     int i;
-
-    client_id = client_id_get(task_data);
 
     // convert to taskgrind dependency format
     for (i = 0 ; i < ndeps ; ++i)
@@ -167,7 +115,7 @@ on_ompt_callback_dependences(
         {
             case ompt_dependence_type_in:
             {
-                TASKGRIND_DEPEND_EVENT(client_id->value, dep->variable.ptr, TASKGRIND_IN);
+                TASKGRIND_DEPEND_EVENT(task_id, dep->variable.ptr, TASKGRIND_IN);
                 break ;
             }
 
@@ -176,13 +124,13 @@ on_ompt_callback_dependences(
             // mutexinoutset is implement as 'out' in practice (2023)
             case ompt_dependence_type_mutexinoutset:
             {
-                TASKGRIND_DEPEND_EVENT(client_id->value, dep->variable.ptr, TASKGRIND_OUT);
+                TASKGRIND_DEPEND_EVENT(task_id, dep->variable.ptr, TASKGRIND_OUT);
                 break ;
             }
 
             case ompt_dependence_type_inoutset:
             {
-                TASKGRIND_DEPEND_EVENT(client_id->value, dep->variable.ptr, TASKGRIND_OUTSET);
+                TASKGRIND_DEPEND_EVENT(task_id, dep->variable.ptr, TASKGRIND_OUTSET);
                 break ;
             }
 
@@ -225,15 +173,27 @@ on_ompt_callback_dispatch(
 
         case (ompt_dispatch_ws_loop_chunk):
         {
-            // ompt_dispatch_chunk_t * chunk = (ompt_dispatch_chunk_t *) instance.ptr;
-            // printf("%lu %lu\n", chunk->start, chunk->iterations);
-            // assert("Not implemented" && 0);
+            #if 0
+            ompt_dispatch_chunk_t * chunk = (ompt_dispatch_chunk_t *) instance.ptr;
+            printf("%lu %lu\n", chunk->start, chunk->iterations);
+            assert("Not implemented" && 0);
+            #endif
+#if 0
+            // OpenMP semantics to taskgrind:
+            // 1) Create an implicit node
+            // 2) Schedule it (instead of the current implicit task)
+            uint64_t task_id = ++NEXT_TASK_ID;
+            TASKGRIND_CREATE_EVENT(task_id, TASKGRIND_TASK_TYPE_EXPLICIT, 0);
+
+            // TODO: schedule should be in 'dispatch' instead probably
+            TASKGRIND_SCHEDULE_EVENT(task_id);
+    #endif
             break ;
         }
 
         case (ompt_dispatch_taskloop_chunk):
         {
-            assert("Not implemented" && 0);
+            //assert("Not implemented" && 0);
             break ;
         }
 
@@ -303,25 +263,14 @@ on_ompt_callback_work(
 
                 case (ompt_scope_begin):
                 {
-                    // OpenMP semantics to taskgrind:
-                    // 1) Create an implicit node
-                    // 2) Schedule it (instead of the current implicit task)
-                    void * new_task_data = (void *) malloc(1);
-                    client_id_t * client_id = client_id_insert(new_task_data);
-                    client_id->value = ++NEXT_CLIENT_ID;
-                    TASKGRIND_CREATE_EVENT(client_id->value, TASKGRIND_TASK_TYPE_IMPLICIT, 0);
-
-                    // TODO: schedule should be in 'dispatch' instead probably
-                    TASKGRIND_SCHEDULE_EVENT(client_id->value);
-
                     break ;
                 }
 
                 case (ompt_scope_end):
                 {
-                    // OpenMP semantics to taskgrind: reschedule implicit task
-                    client_id_t * client_id = client_id_get(task_data);
-                    TASKGRIND_SCHEDULE_EVENT(client_id->value);
+                    // Reschedule implicit task
+                    // uint64_t task_id = task_data->value;
+                    // TASKGRIND_SCHEDULE_EVENT(task_id);
                     break ;
                 }
             }
@@ -416,6 +365,28 @@ on_ompt_callback_work(
     }
 }
 
+# if 0
+void
+on_ompt_callback_parallel_begin(
+    ompt_data_t * encountering_task_data,
+    const ompt_frame_t * encountering_task_frame,
+    ompt_data_t * parallel_data,
+    unsigned int requested_parallelism,
+    int flags,
+    const void * codeptr_ra
+) {
+}
+
+void
+on_ompt_callback_parallel_end(
+    ompt_data_t * parallel_data,
+    ompt_data_t * encountering_task_data,
+    int flags,
+    const void * codeptr_ra
+) {
+}
+#endif
+
 ///////////////////////////////////////////////////////////////////////////////
 // OMPT INIT / DEINIT CALLBACKS
 ///////////////////////////////////////////////////////////////////////////////
@@ -440,6 +411,10 @@ int ompt_initialize(
     register_callback(ompt_callback_sync_region);
     register_callback(ompt_callback_work);
     register_callback(ompt_callback_dispatch);
+    #if 0
+    register_callback(ompt_callback_parallel_begin);
+    register_callback(ompt_callback_parallel_end);
+    #endif
     return 1;
 }
 

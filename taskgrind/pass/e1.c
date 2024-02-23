@@ -32,8 +32,8 @@ pass_e1_report_err(task_seg_t * seg_a, task_seg_t * seg_b)
     void * extra = NULL;
     VG_(maybe_record_error)(tid, kind, a, s, extra);
 #else
-//    TASKGRIND_WARN("  Segments %s (task=%p, sp=%lu, uid=%u) and %s (task=%p, sp=%lu, uid=%u) were declared independant while accessing the same memory address", loc_a, seg_a->task, seg_a->task->sp, seg_a->uid, loc_b, seg_b->task, seg_b->task->sp, seg_b->uid);
-//    TASKGRIND_WARN("  Segments %s and %s were declared independant while accessing the same memory address", loc_a, loc_b);
+    TASKGRIND_WARN("  Segments %s (task=%p, sp=%lu, uid=%u) and %s (task=%p, sp=%lu, uid=%u) were declared independant while accessing the same memory address", loc_a, seg_a->task, seg_a->task->sp, seg_a->uid, loc_b, seg_b->task, seg_b->task->sp, seg_b->uid);
+    //TASKGRIND_WARN("  Segments %s and %s were declared independant while accessing the same memory address", loc_a, loc_b);
     ++E1_ERRORS;
 #endif
 }
@@ -105,6 +105,7 @@ pass_e1_happens_before_walk(task_seg_t * curr_seg, void * opaque)
     return 0;
 }
 
+// TODO : compute precedence relation once for all in an optimized way
 // returns '1' 'seg_a' precedes 'seg'b' ; else 0
 static UInt
 pass_e1_seg_precedes(task_seg_t * seg_a, task_seg_t * seg_b)
@@ -184,8 +185,10 @@ pass_e1_walk_compare(task_seg_t * seg_a, void * opaque)
             .contains_parent_stack_accesses = 0,
             .task_stack_pointer = seg_a->task->sp < seg_b->task->sp ? seg_a->task->sp : seg_b->task->sp,
         };
-        SPMT_FOREACH_FILLED(&Wb_inter_RaWa, pass_e1_intersect_check, &walk);
-        if (!walk.contains_heap_accesses && !walk.contains_parent_stack_accesses)
+        if (!SPMT_IS_EMPTY(&Wb_inter_RaWa))
+            SPMT_FOREACH_FILLED(&Wb_inter_RaWa, pass_e1_intersect_check, &walk);
+
+        if (!SPMT_IS_EMPTY(&Wa_inter_RbWb) && !walk.contains_heap_accesses && !walk.contains_parent_stack_accesses)
             SPMT_FOREACH_FILLED(&Wa_inter_RbWb, pass_e1_intersect_check, &walk);
 
         // if both segments are accessing the same heap space
@@ -196,21 +199,20 @@ pass_e1_walk_compare(task_seg_t * seg_a, void * opaque)
         // else, both segments are accessing the same stack space
         else
         {
-            // TODO : stack accesses are not supported as they induce too many false positive
-            err = 0;
             #if 0
             // if one segment is accessing stack space outside its allocated stack
             if (walk.contains_parent_stack_accesses)
             {
                 err = 1;
+                // TODO : what is going on
             }
             else
             {
                 err = 0;
             }
             #endif
+            err = 0;
         }
-
     }
 
     if (err)

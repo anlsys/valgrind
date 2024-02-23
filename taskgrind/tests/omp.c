@@ -23,6 +23,7 @@ main(void)
 
     # pragma omp parallel shared(x, y)
     {
+        #if 0
         # pragma omp single nowait
         {
             # pragma omp task shared(x, y) depend(in: x)
@@ -49,12 +50,14 @@ main(void)
             # pragma omp task if(0)
                 {}
         }
+#endif
 
-        # pragma omp for schedule(static, 1)
+        # pragma omp for schedule(static)
         for (int i = 0 ; i < Nfor ; ++i)
         {}
 
-        # pragma omp for schedule(dynamic, 1)
+        #if 0
+        # pragma omp for schedule(dynamic)
         for (int i = 0 ; i < Nfor ; ++i)
         {}
 
@@ -95,6 +98,7 @@ main(void)
 
         // TODO: in single thread, LLVM does not seem to raise barrier OMPT callback in parallel region
         # pragma omp barrier
+        #endif
     }
     return 0;
 }

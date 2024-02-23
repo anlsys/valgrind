@@ -63,7 +63,7 @@ typedef struct  task_s
     UWord next_child_id;
 
     // id for the tool client (depend on schedule)
-    UWord client_id;
+    UWord id;
 
     // task successors infered from dependences provided by user program
     array_t successors;
@@ -158,9 +158,9 @@ extern task_t ROOT_TASK;
 extern UInt N_TASK_SEGS;
 
 // FUNCTIONS TO BUILD THE MAPPING
-task_t * task_create(UWord client_id, task_type_t type, UWord undeferred);
-void task_schedule(UWord client_id);
-void task_depend(UWord client_id, UWord addr, UWord type);
+task_t * task_create(UWord id, task_type_t type, UWord undeferred);
+void task_schedule(UWord id);
+void task_depend(UWord id, UWord addr, UWord type);
 void task_sync(void);
 
 // FUNCTIONS FOR MEMORY ACCESSES DETECTED
@@ -170,7 +170,7 @@ void task_mem_load_atomic(Addr addr, SizeT size);
 void task_mem_store_atomic(Addr addr, SizeT size);
 
 // HELPER FUNCTIONS
-task_t * task_get(UWord client_id);
+task_t * task_get(UWord id);
 void task_seg_foreach(UInt (*walk)(task_seg_t *, void *), void * opaque);
 void task_seg_foreach_from(UInt (*walk)(task_seg_t *, void *), void * opaque, task_seg_t * seg);
 

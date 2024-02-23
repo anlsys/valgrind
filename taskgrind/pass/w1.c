@@ -82,9 +82,9 @@ pass_w1_check_deps(task_t * pred, task_t * succ)
     TASKGRIND_INFO("--------------------");
     TASKGRIND_INFO("CHECKING");
     TASKGRIND_INFO("--------------------");
-    TASKGRIND_INFO("Task %p (rsp=%lu) at %s", (void *) pred->client_id, pred->sp, task_seg_get_location(pred_seg));
+    TASKGRIND_INFO("Task %p (rsp=%lu) at %s", (void *) pred->id, pred->sp, task_seg_get_location(pred_seg));
     TASKGRIND_INFO("--------------------");
-    TASKGRIND_INFO("Task %p (rsp=%lu) at %s", (void *) succ->client_id, succ->sp, task_seg_get_location(succ_seg));
+    TASKGRIND_INFO("Task %p (rsp=%lu) at %s", (void *) succ->id, succ->sp, task_seg_get_location(succ_seg));
     TASKGRIND_INFO("--------------------");
 
 #endif
@@ -166,9 +166,9 @@ pass_w1_check_deps(task_t * pred, task_t * succ)
         task_seg_get_location(succ_seg, 0, succ_loc, 256);
 
         TASKGRIND_WARN("  %p (%s) and %p (%s) were declared dependent having no data dependencies",
-                (void *)pred->client_id,
+                (void *)pred->id,
                 pred_loc,
-                (void *)succ->client_id,
+                (void *)succ->id,
                 succ_loc
          );
         ++W1_COUNT;

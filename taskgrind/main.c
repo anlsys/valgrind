@@ -183,8 +183,12 @@ taskgrind_instrument(
 ) {
     // Accesses in these functions can be ignored
     static const HChar * SUPPRESS_FN[] = {
-        "on_ompt",
-        "__kmp",
+        "on_ompt",          // ignore ompt plugin code
+        "__kmp",            // ignore llvm runtime code
+        "outlined_debug",   // ignore llvm debug micro tasks
+        // "dl_lookup_symbol",
+        // "free",
+        // "malloc"
     };
 
     if (gWordTy != hWordTy)

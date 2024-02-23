@@ -100,7 +100,7 @@ dump_task(VgFile * fp, task_t * task)
     get_task_infos(task, &type, &shape);
 
     VG_(fprintf)(fp, "    \"%p\" [label=\"type=%s\\nclient=%ld\\nchild=%ld\",shape=%s];\n",
-        task, type, (Word)task->client_id, (Word)task->child_id, shape);
+        task, type, (Word)task->id, (Word)task->child_id, shape);
 }
 
 static void
@@ -115,8 +115,8 @@ dump_task_seg_ref(VgFile * fp, task_seg_ref_t * ref)
     HChar location[256];
     task_seg_get_location(seg, 0, location, sizeof(location));
 
-    VG_(fprintf)(fp, "    \"%p\" [label=\"type=%s\\nclient=%ld\\nchild=%ld\\nseg=%u\\nlocation=%s\\nuid=%u\\nundeferred=%lu\",shape=%s];\n",
-        seg, type, (Word)task->client_id, (Word)task->child_id, ref->id, location, seg->uid, task->undeferred, shape);
+    VG_(fprintf)(fp, "    \"%p\" [label=\"type=%s\\nclient=%ld\\ntid=%u\\nchild=%ld\\ntask_seg=%u\\nseg_uid=%u\\nundeferred=%lu\\nlocation=%s\",shape=%s];\n",
+        seg, type, (Word)task->id, seg->tid, (Word)task->child_id, ref->id, seg->uid, task->undeferred, location, shape);
 }
 
 // TDG (task dependency graph)

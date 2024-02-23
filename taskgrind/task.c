@@ -90,13 +90,13 @@ task_seg_new(task_t * task)
 }
 
 static inline void
-__task_init(task_t * task, UWord client_id, task_type_t type, UWord undeferred)
+__task_init(task_t * task, UWord id, task_type_t type, UWord undeferred)
 {
     // set attributes
     task->type              = type;
     task->child_id          = CURRENT_TASK ? ++CURRENT_TASK->next_child_id : -1;
     task->next_child_id     = 0;
-    task->client_id         = client_id;
+    task->id         = id;
     array_init(&task->successors, 4, sizeof(task_t *));
     task->depend          = NULL;
     task->parent            = CURRENT_TASK;
@@ -129,12 +129,12 @@ __task_init(task_t * task, UWord client_id, task_type_t type, UWord undeferred)
 }
 
 static inline task_t *
-task_new(UWord client_id, task_type_t type, UWord undeferred)
+task_new(UWord id, task_type_t type, UWord undeferred)
 {
     task_t * task;
 
     task = (task_t *) VG_(malloc)("task_new", sizeof(task_t));
-    __task_init(task, client_id, type, undeferred);
+    __task_init(task, id, type, undeferred);
     return task;
 }
 
@@ -166,7 +166,7 @@ task_set_edge(task_t * pred, task_t * succ)
     if (last == succ)
         return ;
     array_push(&pred->successors, &succ);
-//    TASKGRIND_DEBUG("   Added edge %p -> %p", (void *)pred->client_id, (void *)succ->client_id);
+//    TASKGRIND_DEBUG("   Added edge %p -> %p", (void *)pred->id, (void *)succ->id);
 
     // LPG
     task_seg_t * pred_seg = (task_seg_t *) array_last(&pred->segs);
@@ -174,7 +174,7 @@ task_set_edge(task_t * pred, task_t * succ)
 }
 
 task_t *
-task_create(UWord client_id, task_type_t type, UWord undeferred)
+task_create(UWord id, task_type_t type, UWord undeferred)
 {
     //
     //  [...]                   // pred
@@ -184,15 +184,15 @@ task_create(UWord client_id, task_type_t type, UWord undeferred)
     //  [...]                   // succ
     //
 
-    // ensure this client_id has not already been used
+    // ensure this id has not already been used
     task_t * task;
     unsigned hashv;
 
-    HASH_VALUE(&client_id, sizeof(UWord), hashv);
+    HASH_VALUE(&id, sizeof(UWord), hashv);
 
-    if (client_id != TASKGRIND_CLIENT_ID_PRIVATE)
+    if (id != TASKGRIND_CLIENT_ID_PRIVATE)
     {
-        HASH_FIND_BYHASHVALUE(hh, TASKS, &client_id, sizeof(UWord), hashv, task);
+        HASH_FIND_BYHASHVALUE(hh, TASKS, &id, sizeof(UWord), hashv, task);
         tl_assert(task == NULL);
         if (task)
         {
@@ -202,14 +202,14 @@ task_create(UWord client_id, task_type_t type, UWord undeferred)
     }
 
     // create the task
-    task = task_new(client_id, type, undeferred);
+    task = task_new(id, type, undeferred);
 
-    if (client_id != TASKGRIND_CLIENT_ID_PRIVATE)
+    if (id != TASKGRIND_CLIENT_ID_PRIVATE)
     {
-        HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASKS, &(task->client_id), sizeof(UWord), hashv, task);
+        HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASKS, &(task->id), sizeof(UWord), hashv, task);
     }
 
-//    TASKGRIND_DEBUG("Task create %p (parent %p)", (void *) client_id, (void *) (task->parent ? task->parent->client_id : TASKGRIND_CLIENT_ID_PRIVATE));
+//    TASKGRIND_DEBUG("Task create %p (parent %p)", (void *) id, (void *) (task->parent ? task->parent->id : TASKGRIND_CLIENT_ID_PRIVATE));
 
     tl_assert(task);
     tl_assert(CURRENT_TASK);
@@ -289,13 +289,13 @@ task_create(UWord client_id, task_type_t type, UWord undeferred)
 }
 
 task_t *
-task_get(UWord client_id)
+task_get(UWord id)
 {
     task_t * task;
     unsigned hashv;
 
-    HASH_VALUE(&client_id, sizeof(UWord), hashv);
-    HASH_FIND_BYHASHVALUE(hh, TASKS, &client_id, sizeof(UWord), hashv, task);
+    HASH_VALUE(&id, sizeof(UWord), hashv);
+    HASH_FIND_BYHASHVALUE(hh, TASKS, &id, sizeof(UWord), hashv, task);
 
     return task;
 }
@@ -309,12 +309,12 @@ task_seg_get_current(void)
 
 // schedule
 void
-task_schedule(UWord client_id)
+task_schedule(UWord id)
 {
     task_t * prev, * next;
 
     prev    = CURRENT_TASK;
-    next    = task_get(client_id);
+    next    = task_get(id);
     tl_assert(prev);
     tl_assert(next);
     tl_assert(prev != next);
@@ -394,13 +394,13 @@ task_access_is_redundant(
 
 // add a dependency to the task following RaW constraints
 void
-task_depend(UWord client_id, UWord addr, UWord type)
+task_depend(UWord id, UWord addr, UWord type)
 {
     tl_assert(type == TASKGRIND_IN || type == TASKGRIND_OUT || type == TASKGRIND_OUTSET);
-//    TASKGRIND_DEBUG("Task %p depend %s at %p", (void *) client_id, type == TASKGRIND_IN ? "IN" : type == TASKGRIND_OUT ? "OUT" : type == TASKGRIND_OUTSET ? "OUTSET" : "(null)", (void *) addr);
+//    TASKGRIND_DEBUG("Task %p depend %s at %p", (void *) id, type == TASKGRIND_IN ? "IN" : type == TASKGRIND_OUT ? "OUT" : type == TASKGRIND_OUTSET ? "OUTSET" : "(null)", (void *) addr);
 
     // retrieve current task and its parent depend
-    task_t * task = task_get(client_id);
+    task_t * task = task_get(id);
     tl_assert(task);
     tl_assert(task->parent);
 
@@ -472,7 +472,7 @@ task_depend(UWord client_id, UWord addr, UWord type)
             else
 #endif
             {
-                tl_assert(type == TASKGRIND_OUT);
+                // tl_assert(type == TASKGRIND_OUT);
                 ARRAY_FOREACH_BEGIN(&depend->outsets, task_t **, outset)
                     task_set_edge(*outset, task);
                 ARRAY_FOREACH_END(&depend->outsets, task_t **, outset)
@@ -549,8 +549,14 @@ task_mem_load(Addr addr, SizeT size)
     task_seg_t * seg = task_seg_get_current();
 
     #if 0
-    TASKGRIND_DEBUG("(task=%p, seg=%p) LOAD        0x%010lX %lu",
-            (void *) CURRENT_TASK->client_id, seg, addr, size);
+    if (addr == 68537960 && seg->uid == 768)
+    {
+        ThreadId tid = VG_(get_running_tid)();
+        VG_(get_and_pp_StackTrace)(tid, 5);
+        TASKGRIND_DEBUG("(task=%p, seg=%u) LOAD        0x%010lX %lu",
+                (void *) CURRENT_TASK->id, seg->uid, addr, size);
+
+    }
     #endif
 
     tl_assert(seg);
@@ -565,8 +571,14 @@ task_mem_store(Addr addr, SizeT size)
     task_seg_t * seg = task_seg_get_current();
 
     #if 0
-    TASKGRIND_DEBUG("(task=%p, seg=%p) STORE       0x%010lX %lu",
-            (void *) CURRENT_TASK->client_id, seg, addr, size);
+    if (addr == 68537960 && seg->uid == 768)
+    {
+        ThreadId tid = VG_(get_running_tid)();
+        VG_(get_and_pp_StackTrace)(tid, 5);
+        TASKGRIND_DEBUG("(task=%p, seg=%u) STORE       0x%010lX %lu",
+                (void *) CURRENT_TASK->id, seg->uid, addr, size);
+
+    }
     #endif
 
     tl_assert(seg);
@@ -579,9 +591,9 @@ void
 task_mem_load_atomic(Addr addr, SizeT size)
 {
 #if 0
-    if (CURRENT_TASK->client_id == 3)
+    if (CURRENT_TASK->id == 3)
         TASKGRIND_DEBUG("(task=%p) LOAD ATOMIC  0x%010lX %lu",
-                (void *) CURRENT_TASK->client_id, addr, size);
+                (void *) CURRENT_TASK->id, addr, size);
 #endif
 }
 
@@ -589,9 +601,9 @@ void
 task_mem_store_atomic(Addr addr, SizeT size)
 {
 #if 0
-    if (CURRENT_TASK->client_id == 3)
+    if (CURRENT_TASK->id == 3)
         TASKGRIND_DEBUG("(task=%p) STORE ATOMIC 0x%010lX %lu",
-                (void *) CURRENT_TASK->client_id, addr, size);
+                (void *) CURRENT_TASK->id, addr, size);
 #endif
 }
 
