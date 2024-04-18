@@ -3,34 +3,27 @@
 #ifndef __PRINT_H__
 # define __PRINT_H__
 
-#include "pub_tool_libcprint.h"     /* snumsg */
+# include "pub_tool_libcprint.h"     /* snumsg */
 
-#if 1
-# define TASKGRIND_DEBUG(...)   do {                            \
-                                    VG_(umsg)("[DEBUG] ");      \
-                                    VG_(umsg)(__VA_ARGS__);     \
-                                    VG_(umsg)("\n");            \
-                                } while (0)
-#else
-# define TASKGRIND_DEBUG(...)
-#endif
+# define TASKGRIND_PRINT_INFO_ID     0
+# define TASKGRIND_PRINT_WARN_ID     1
+# define TASKGRIND_PRINT_ERROR_ID    2
+# define TASKGRIND_PRINT_DEBUG_ID    3
 
-# define TASKGRIND_INFO(...)    do {                            \
-                                    VG_(umsg)("[INFO] ");       \
-                                    VG_(umsg)(__VA_ARGS__);     \
-                                    VG_(umsg)("\n");            \
-                                } while (0)
+extern char * TASKGRIND_PRINT_COLORS[4];
+extern char * TASKGRIND_PRINT_HEADERS[4];
 
-# define TASKGRIND_WARN(...)    do {                            \
-                                    VG_(umsg)("[WARN] ");       \
-                                    VG_(umsg)(__VA_ARGS__);     \
-                                    VG_(umsg)("\n");            \
-                                } while (0)
+# define TASKGRIND_PRINT(LVL, ...)                                          \
+    do {                                                                    \
+        VG_(umsg)("[%s%s\033[0m] ",                                         \
+                TASKGRIND_PRINT_COLORS[LVL], TASKGRIND_PRINT_HEADERS[LVL]); \
+        VG_(umsg)(__VA_ARGS__);                                             \
+        VG_(umsg)("\n");                                                    \
+    } while (0)
 
-# define TASKGRIND_ERR(...)     do {                            \
-                                    VG_(umsg)("[ERRR] ");       \
-                                    VG_(umsg)(__VA_ARGS__);     \
-                                    VG_(umsg)("\n");            \
-                                } while (0)
+# define TASKGRIND_INFO(...)  TASKGRIND_PRINT(TASKGRIND_PRINT_INFO_ID,  __VA_ARGS__)
+# define TASKGRIND_WARN(...)  TASKGRIND_PRINT(TASKGRIND_PRINT_WARN_ID,  __VA_ARGS__)
+# define TASKGRIND_ERR(...)   TASKGRIND_PRINT(TASKGRIND_PRINT_ERROR_ID, __VA_ARGS__)
+# define TASKGRIND_DEBUG(...) TASKGRIND_PRINT(TASKGRIND_PRINT_DEBUG_ID, __VA_ARGS__)
 
 #endif /* __PRINT_H__ */

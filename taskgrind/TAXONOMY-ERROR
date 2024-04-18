@@ -9,6 +9,7 @@ ERROR
     E2 - 2 tâches cousines indépendantes alors que non niveua accès donnée
     E3 - une tâche fille accède aux données de sa tâche parente après sa terminaison
     E4 - une tâche GPU lit une donnée qui n'a jamais été écrite
+    E5 - if(0) et dépendances
 
     QUESTION: E1 et E2 mergeable en 1 seul et même analyse ? mais pas même synthèse de correction
         MAIS:   E1 -> ajouter une clause depend

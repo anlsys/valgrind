@@ -98,7 +98,7 @@ __task_init(task_t * task, UWord id, task_type_t type, UWord undeferred)
     task->next_child_id     = 0;
     task->id         = id;
     array_init(&task->successors, 4, sizeof(task_t *));
-    task->depend          = NULL;
+    task->depend            = NULL;
     task->parent            = CURRENT_TASK;
     array_init(&task->children, 0, sizeof(task_t *));
     task->last_sync         = NULL;
@@ -234,7 +234,7 @@ task_create(UWord id, task_type_t type, UWord undeferred)
     // retrieve the current seg
     task_t * pred = CURRENT_TASK;
     task_seg_t * pred_seg = (task_seg_t *) array_penultimate(&pred->segs);
-    int pred_seg_idx = pred->segs.n - 2;
+       // int pred_seg_idx = pred->segs.n - 2;
     tl_assert(pred_seg);
 
     // retrieve the new task seg
@@ -245,6 +245,7 @@ task_create(UWord id, task_type_t type, UWord undeferred)
     // 'pred' -> 'task'
     task_seg_set_edge(pred_seg, task, task_seg_idx);
 
+    // TODO : barrier and taskwait are 2 different things, fix me
     switch (type)
     {
         // if the task is a barrier
@@ -541,6 +542,7 @@ task_sync(void)
 static inline void
 task_seg_mem_access(task_seg_t * seg, Addr addr, SizeT size)
 {
+
 }
 
 void
@@ -630,6 +632,4 @@ task_fini(void)
 //    taskgrind_pass_w1(&ROOT_TASK);
     taskgrind_pass_e1(&ROOT_TASK);
     TASKGRIND_INFO("Analysis completed.");
-
-    // taskgrind_export_tcfg(CURRENT_TASK);
 }
