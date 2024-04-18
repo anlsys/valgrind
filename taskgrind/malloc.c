@@ -21,6 +21,9 @@ void * alloc_and_record(ThreadId tid, SizeT size, SizeT align, Bool zero)
     // TODO
     // record_block(tid, p, size, slop_szB, /*exclude_first_entry*/True, /*maybe_snapshot*/True);
 
+    // TODO : record where this had been allocated, to report on which variable
+    // occurs the determinacy race occurs to the programmer
+
     return p;
 }
 
@@ -41,14 +44,12 @@ void * realloc_and_record(ThreadId tid, void * p, SizeT size)
 void *
 taskgrind_malloc(ThreadId tid, SizeT n)
 {
-//    TASKGRIND_DEBUG("malloc");
     return alloc_and_record(tid, n, VG_(clo_alignment), 0);
 }
 
 void *
 taskgrind___builtin_new(ThreadId tid, SizeT n)
 {
-    TASKGRIND_DEBUG("new");
     return alloc_and_record(tid, n, VG_(clo_alignment), 0);
 }
 
@@ -62,7 +63,6 @@ taskgrind___builtin_new_aligned(ThreadId tid, SizeT n, SizeT align)
 void *
 taskgrind___builtin_vec_new(ThreadId tid, SizeT n)
 {
-    TASKGRIND_DEBUG("vec new");
     return alloc_and_record(tid, n, VG_(clo_alignment), 0);
 }
 
@@ -96,25 +96,29 @@ taskgrind_free(ThreadId tid, void * p)
 void
 taskgrind___builtin_delete(ThreadId tid, void * p)
 {
-    TASKGRIND_DEBUG("delete");
+    // do not release memory, to avoid recycling that could lead to false-positive
+    // VG_(cli_free)(p);
 }
 
 void
-taskgrind___builtin_delete_aligned(ThreadId tid, void * p, SizeT alignB)
+taskgrind___builtin_delete_aligned(ThreadId tid, void * p, SizeT align)
 {
-    TASKGRIND_DEBUG("delete_aligned");
+    // do not release memory, to avoid recycling that could lead to false-positive
+    // VG_(cli_free)(p);
 }
 
 void
 taskgrind___builtin_vec_delete(ThreadId tid, void * p)
 {
-    TASKGRIND_DEBUG("vec_delete");
+    // do not release memory, to avoid recycling that could lead to false-positive
+    // VG_(cli_free)(p);
 }
 
 void
-taskgrind___builtin_vec_delete_aligned(ThreadId tid, void* p, SizeT alignB)
+taskgrind___builtin_vec_delete_aligned(ThreadId tid, void* p, SizeT align)
 {
-    TASKGRIND_DEBUG("vec_delete_aligned");
+    // do not release memory, to avoid recycling that could lead to false-positive
+    // VG_(cli_free)(p);
 }
 
 void *

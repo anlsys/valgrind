@@ -529,7 +529,6 @@ taskgrind_pre_clo_init(void)
     TASKGRIND_DEBUG("replacing malloc");
     VG_(needs_libc_freeres)();
     VG_(needs_cxx_freeres)();
-
     VG_(needs_malloc_replacement)(
         taskgrind_malloc,
         taskgrind___builtin_new,
