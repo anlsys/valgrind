@@ -1,5 +1,7 @@
 // TODO : this structure is a bit naive, a lot of levels are empty
 // Improve this implementation of 'interval tree'
+//
+// TODO : most likely reimplement all the macros defined here
 
 #ifndef __SPMT_H__
 # define __SPMT_H__

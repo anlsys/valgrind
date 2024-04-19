@@ -32,8 +32,8 @@ pass_e1_report_err(task_seg_t * seg_a, task_seg_t * seg_b)
     void * extra = NULL;
     VG_(maybe_record_error)(tid, kind, a, s, extra);
 #else
-    TASKGRIND_WARN("  Segments %s (task=%p, sp=%lu, uid=%u) and %s (task=%p, sp=%lu, uid=%u) were declared independent while accessing the same memory address", loc_a, seg_a->task, seg_a->task->sp, seg_a->uid, loc_b, seg_b->task, seg_b->task->sp, seg_b->uid);
-    //TASKGRIND_WARN("  Segments %s and %s were declared independent while accessing the same memory address", loc_a, loc_b);
+    //TASKGRIND_WARN("  Segments %s (task=%p, sp=%lu, uid=%u) and %s (task=%p, sp=%lu, uid=%u) were declared independent while accessing the same memory address", loc_a, seg_a->task, seg_a->task->sp, seg_a->uid, loc_b, seg_b->task, seg_b->task->sp, seg_b->uid);
+    TASKGRIND_WARN("  Segments %s and %s were declared independent while accessing the same memory address", loc_a, loc_b);
     ++E1_ERRORS;
 #endif
 }

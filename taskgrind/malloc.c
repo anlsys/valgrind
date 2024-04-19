@@ -16,13 +16,9 @@ void * alloc_and_record(ThreadId tid, SizeT size, SizeT align, Bool zero)
 
     SizeT actual_size = VG_(cli_malloc_usable_size)(p);
     tl_assert(actual_size >= size);
-    SizeT slop_size = actual_size - size;
+    SizeT slop = actual_size - size;
 
-    // TODO
-    // record_block(tid, p, size, slop_szB, /*exclude_first_entry*/True, /*maybe_snapshot*/True);
-
-    // TODO : record where this had been allocated, to report on which variable
-    // occurs the determinacy race occurs to the programmer
+    taskgrind_record_alloc(tid, p, size, slop);
 
     return p;
 }
@@ -30,15 +26,19 @@ void * alloc_and_record(ThreadId tid, SizeT size, SizeT align, Bool zero)
 static inline
 void * realloc_and_record(ThreadId tid, void * p, SizeT size)
 {
-    // TODO : instead of realloc, we should here 'malloc' a new pointer, and
-    // copy data Currently, realloc may recycle memory that can lead to
-    // false-positive
-    void * pp = VG_(cli_realloc)(p, size);
+    #if 0
+    void * pp = alloc_and_record(tid, size, VG_(clo_alignment), 0);
+    if (pp == NULL)
+        return NULL;
 
-    // TODO
-    // record_block(tid, p, size, slop_szB, /*exclude_first_entry*/True, /*maybe_snapshot*/True);
+    SizeT prev_size = VG_(cli_malloc_usable_size)(p);
+    SizeT copy_size = (prev_size < size) ? prev_size : size;
+    VG_(memcpy)(pp, p, copy_size);
 
     return pp;
+    #endif
+
+    return VG_(cli_realloc)(p, size);
 }
 
 void *

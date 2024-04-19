@@ -10,10 +10,10 @@
 const HChar * UNKNOWN = "(unknown)";
 
 static HChar *
-task_seg_unknown_location(HChar * buffer, UInt len)
+__unknown_location(HChar * buffer, UInt len)
 {
     if (buffer == NULL)
-        return (HChar *) VG_(strdup)("task_seg_unknown_location", UNKNOWN);
+        return (HChar *) VG_(strdup)("__unknown_location", UNKNOWN);
     else
     {
         VG_(strncpy)(buffer, UNKNOWN, len);
@@ -28,7 +28,7 @@ task_seg_get_location_from_ip(DiEpoch ep, Addr ip, UInt use_dir, HChar * buffer,
     const HChar * file;
     UInt line;
     if (!VG_(get_filename_linenum)(ep, ip, &file, &dir, &line))
-        return task_seg_unknown_location(buffer, len);
+        return NULL;
 
     if (buffer == NULL)
     {
@@ -74,7 +74,7 @@ task_seg_get_location(task_seg_t * seg, UInt use_dir, HChar * buffer, UInt len)
     ExeContext * ec = seg->ctx;
 
     if (ec == NULL)
-        return task_seg_unknown_location(buffer, len);
+        return __unknown_location(buffer, len);
 
     DiEpoch ep = VG_(get_ExeContext_epoch)(ec);
     Int n_ips = VG_(get_ExeContext_n_ips)(ec);
@@ -89,12 +89,27 @@ task_seg_get_location(task_seg_t * seg, UInt use_dir, HChar * buffer, UInt len)
         if (VG_(get_fnname)(ep, ip, &name))
         {
             // detect LLVM outlined sections
-            if (VG_(strstr)(name, "outline"))
+            if (VG_(strstr)(name, "omp_task_entry"))
             {
-                return task_seg_get_location_from_ip(ep, ips[i], use_dir, buffer, len);
+                HChar * r = task_seg_get_location_from_ip(ep, ips[i], use_dir, buffer, len);
+                if (r)
+                    return r;
             }
         }
     }
 
-    return task_seg_get_location_from_ip(ep, ips[0], use_dir, buffer, len);
+    HChar * r = task_seg_get_location_from_ip(ep, ips[0], use_dir, buffer, len);
+    return r ? r : __unknown_location(buffer, len);
+}
+
+HChar *
+taskgrind_alloc_record_get_location(
+    taskgrind_alloc_record_t * record,
+    HChar * buffer,
+    UInt len
+) {
+    if (record == NULL)
+        return __unknown_location(buffer, len);
+    // TODO
+    return NULL;
 }
