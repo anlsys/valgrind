@@ -7,10 +7,44 @@
 
 # include "pub_tool_errormgr.h"
 
+static int E1_MALLOC_ADDR_TO_REPORT = 5;
 static int E1_ERRORS = 0;
 
+static int
+pass_e1_report_err_alloc_addr(SPMT_PTR_T begin, SPMT_PTR_T end, void * opaque)
+{
+    int * reported = (int *) opaque;
+    if (*reported >= E1_MALLOC_ADDR_TO_REPORT)
+        return 1;
+
+    taskgrind_alloc_record_t * record = taskgrind_alloc_record_get((void *) begin);
+    if (record == NULL)
+        return 0;
+
+    tl_assert(record->ctx);
+
+    ExeContext * ec = record->ctx;
+    DiEpoch ep = VG_(get_ExeContext_epoch)(ec);
+    Int n_ips = VG_(get_ExeContext_n_ips)(ec);
+    Addr * ips = VG_(get_ExeContext_ips)(ec);
+
+    HChar buffer[256];
+    UInt show_dir = 1;
+
+    location_get_from_ip(ep, ips[0], show_dir, buffer, sizeof(buffer));
+    TASKGRIND_WARN("    Access of %lu bytes at %p allocated in block %p of size %lu at %s", end - begin, (void *) begin, record->p, record->size, buffer);
+
+    for (Int i = i ; i < n_ips ; ++i)
+    {
+        location_get_from_ip(ep, ips[i], show_dir, buffer, sizeof(buffer));
+        TASKGRIND_WARN("       from %s", buffer);
+    }
+
+    return ++(*reported) >= E1_MALLOC_ADDR_TO_REPORT;
+}
+
 static inline void
-pass_e1_report_err(task_seg_t * seg_a, task_seg_t * seg_b)
+pass_e1_report_err(task_seg_t * seg_a, task_seg_t * seg_b, spmt_t * accesses)
 {
     // retrieve location
     HChar loc_a[256];
@@ -34,6 +68,10 @@ pass_e1_report_err(task_seg_t * seg_a, task_seg_t * seg_b)
 #else
     //TASKGRIND_WARN("  Segments %s (task=%p, sp=%lu, uid=%u) and %s (task=%p, sp=%lu, uid=%u) were declared independent while accessing the same memory address", loc_a, seg_a->task, seg_a->task->sp, seg_a->uid, loc_b, seg_b->task, seg_b->task->sp, seg_b->uid);
     TASKGRIND_WARN("  Segments %s and %s were declared independent while accessing the same memory address", loc_a, loc_b);
+
+    int reported = 0;
+    SPMT_FOREACH_FILLED(accesses, pass_e1_report_err_alloc_addr, &reported);
+
     ++E1_ERRORS;
 #endif
 }
@@ -59,7 +97,6 @@ typedef struct  walk_e1_intersect_s
     int contains_heap_accesses;
     int contains_parent_stack_accesses;
     SPMT_PTR_T task_stack_pointer;
-
 }               walk_e1_intersect_t;
 
 static int
@@ -131,7 +168,7 @@ pass_e1_walk_compare(task_seg_t * seg_a, void * opaque)
         return 0;
 
     // avoid reporting twice the same error
-    if (seg_a->uid > seg_b->uid)
+    if (seg_a->uid >= seg_b->uid)
         return 0;
 
     // if a segment precede another, no determinacy race possible
@@ -217,7 +254,11 @@ pass_e1_walk_compare(task_seg_t * seg_a, void * opaque)
 
     if (err)
     {
-        pass_e1_report_err(seg_a, seg_b);
+        spmt_t accesses;
+        SPMT_INITIALIZE(&accesses);
+        SPMT_UNION(&accesses, &Wa_inter_RbWb, &Wb_inter_RaWa);
+        pass_e1_report_err(seg_a, seg_b, &accesses);
+        SPMT_RELEASE(&accesses);
     }
 
     SPMT_RELEASE(&RaWa);
