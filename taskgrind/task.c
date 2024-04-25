@@ -639,7 +639,7 @@ task_fini(void)
     }
 
     TASKGRIND_INFO("Starting analysis on a %u segments graph...", SEGS.n);
-//    taskgrind_pass_w1(&ROOT_TASK);
+    // taskgrind_pass_w1(&ROOT_TASK);
     taskgrind_pass_e1(&ROOT_TASK);
     TASKGRIND_INFO("Analysis completed.");
 

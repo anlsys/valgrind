@@ -32,8 +32,9 @@ report_err_alloc_addr(SPMT_PTR_T begin, SPMT_PTR_T end, void * opaque)
     HChar buffer[256];
     UInt show_dir = 1;
 
-    location_get_from_ip(ep, ips[0], show_dir, buffer, sizeof(buffer));
-    TASKGRIND_ERR("    Access of %lu bytes at %p allocated in block %p of size %lu at %s", end - begin, (void *) begin, record->p, record->size, buffer);
+    TASKGRIND_ERR("    %lu bytes from %p allocated in block %p of size %lu", end - begin, (void *) begin, record->p, record->size);
+    // location_get_from_ip(ep, ips[0], show_dir, buffer, sizeof(buffer));
+    // TASKGRIND_ERR("         at %s", buffer);
 
     for (Int i = i ; i < n_ips && i < E1_MALLOC_N_IPS ; ++i)
     {
@@ -101,7 +102,7 @@ typedef struct  walk_e1_intersect_s
 }               walk_e1_intersect_t;
 
 static int
-compare_segments_intersect(SPMT_PTR_T begin, SPMT_PTR_T end, void * opaque)
+compare_segments_independent_intersect(SPMT_PTR_T begin, SPMT_PTR_T end, void * opaque)
 {
     #if 0
     TASKGRIND_INFO("Common access on [%lu, %lu[", begin, end);
@@ -126,7 +127,7 @@ compare_segments_intersect(SPMT_PTR_T begin, SPMT_PTR_T end, void * opaque)
 
 // Confront memory accesses of both segments and report errors
 static UInt
-compare_segments(task_seg_t * seg_a, task_seg_t * seg_b)
+compare_segments_independent(task_seg_t * seg_a, task_seg_t * seg_b)
 {
     // segments are declared independent,
     // check that
@@ -176,10 +177,10 @@ compare_segments(task_seg_t * seg_a, task_seg_t * seg_b)
             .task_stack_pointer = seg_a->task->sp < seg_b->task->sp ? seg_a->task->sp : seg_b->task->sp,
         };
         if (!SPMT_IS_EMPTY(&Wb_inter_RaWa))
-            SPMT_FOREACH_FILLED(&Wb_inter_RaWa, compare_segments_intersect, &walk);
+            SPMT_FOREACH_FILLED(&Wb_inter_RaWa, compare_segments_independent_intersect, &walk);
 
         if (!SPMT_IS_EMPTY(&Wa_inter_RbWb) && !walk.contains_heap_accesses && !walk.contains_parent_stack_accesses)
-            SPMT_FOREACH_FILLED(&Wa_inter_RbWb, compare_segments_intersect, &walk);
+            SPMT_FOREACH_FILLED(&Wa_inter_RbWb, compare_segments_independent_intersect, &walk);
 
         // if both segments are accessing the same heap space
         if (walk.contains_heap_accesses)
@@ -190,7 +191,8 @@ compare_segments(task_seg_t * seg_a, task_seg_t * seg_b)
         else
         {
             #if 0
-            // if one segment is accessing stack space outside its allocated stack
+            // TODO : check if one segment is accessing stack space outside its
+            // allocated stack
             if (walk.contains_parent_stack_accesses)
             {
                 err = 1;
@@ -222,20 +224,6 @@ compare_segments(task_seg_t * seg_a, task_seg_t * seg_b)
 
     return 0;
 }
-
-#if 0
-static int processed = 0;
-
-static UInt
-pass_e1_walk(task_seg_t * curr_seg, void * opaque)
-{
-    task_seg_foreach(pass_e1_walk_compare, (void *) curr_seg);
-    int percent = processed++ / (double)SEGS.n * 100;
-    if (processed % (SEGS.n / 10 + 1) == 0)
-        TASKGRIND_INFO("%d%% nodes processed", percent);
-    return 0;
-}
-#endif
 
 // segment reachability triangular matrix bits
 static UChar * reachability = NULL;
@@ -322,14 +310,14 @@ taskgrind_pass_e1(task_t * root)
     TASKGRIND_INFO("Running E1 pass");
 
     // compute the path matrix (triangular bit-flag matrix)
-    reachability = (UChar *) VG_(malloc)("taskgrind_pass_e1", SEGS.n * (SEGS.n - 1) / 8 + 1);
-    VG_(memset)(reachability, 0, SEGS.n * (SEGS.n - 1) / 8 + 1);
+    reachability = (UChar *) VG_(malloc)("taskgrind_pass_e1", SEGS.n * (SEGS.n - 1) / 2 / 8 + 1);
+    VG_(memset)(reachability, 0, SEGS.n * (SEGS.n - 1) / 2 / 8 + 1);
     compute_reachability();
 
     // check errors
-    int n = SEGS.n;
-    int processed = 0;
-    int total = (n-1)*n/2;
+    UInt n = SEGS.n;
+    UInt processed = 0;
+    UInt total = (n-1)*n/2;
     TASKGRIND_INFO("%u comparison to perform", total);
     ARRAY_FOREACH_BEGIN(&SEGS, task_seg_ref_t *, s1_ref)
     {
@@ -337,8 +325,9 @@ taskgrind_pass_e1(task_t * root)
         ARRAY_FOREACH_FROM_BEGIN(&SEGS, s1->uid + 1, task_seg_ref_t *, s2_ref)
         {
             task_seg_t * s2 = s2_ref->task->segs.segs + s2_ref->id;
+
             if (!reachability_is_set(s1, s2))
-                compare_segments(s1, s2);
+                compare_segments_independent(s1, s2);
 
             int percent = processed++ * 100 / total;
             if (processed % (total / 10 + 1) == 0)
