@@ -8,10 +8,11 @@
 # include "pub_tool_errormgr.h"
 
 static int E1_MALLOC_ADDR_TO_REPORT = 5;
+static int E1_MALLOC_N_IPS = 10;
 static int E1_ERRORS = 0;
 
 static int
-pass_e1_report_err_alloc_addr(SPMT_PTR_T begin, SPMT_PTR_T end, void * opaque)
+report_err_alloc_addr(SPMT_PTR_T begin, SPMT_PTR_T end, void * opaque)
 {
     int * reported = (int *) opaque;
     if (*reported >= E1_MALLOC_ADDR_TO_REPORT)
@@ -32,19 +33,19 @@ pass_e1_report_err_alloc_addr(SPMT_PTR_T begin, SPMT_PTR_T end, void * opaque)
     UInt show_dir = 1;
 
     location_get_from_ip(ep, ips[0], show_dir, buffer, sizeof(buffer));
-    TASKGRIND_WARN("    Access of %lu bytes at %p allocated in block %p of size %lu at %s", end - begin, (void *) begin, record->p, record->size, buffer);
+    TASKGRIND_ERR("    Access of %lu bytes at %p allocated in block %p of size %lu at %s", end - begin, (void *) begin, record->p, record->size, buffer);
 
-    for (Int i = i ; i < n_ips ; ++i)
+    for (Int i = i ; i < n_ips && i < E1_MALLOC_N_IPS ; ++i)
     {
         location_get_from_ip(ep, ips[i], show_dir, buffer, sizeof(buffer));
-        TASKGRIND_WARN("       from %s", buffer);
+        TASKGRIND_ERR("       from %s", buffer);
     }
 
     return ++(*reported) >= E1_MALLOC_ADDR_TO_REPORT;
 }
 
 static inline void
-pass_e1_report_err(task_seg_t * seg_a, task_seg_t * seg_b, spmt_t * accesses)
+report_err(task_seg_t * seg_a, task_seg_t * seg_b, spmt_t * accesses)
 {
     // retrieve location
     HChar loc_a[256];
@@ -67,10 +68,10 @@ pass_e1_report_err(task_seg_t * seg_a, task_seg_t * seg_b, spmt_t * accesses)
     VG_(maybe_record_error)(tid, kind, a, s, extra);
 #else
     //TASKGRIND_WARN("  Segments %s (task=%p, sp=%lu, uid=%u) and %s (task=%p, sp=%lu, uid=%u) were declared independent while accessing the same memory address", loc_a, seg_a->task, seg_a->task->sp, seg_a->uid, loc_b, seg_b->task, seg_b->task->sp, seg_b->uid);
-    TASKGRIND_WARN("  Segments %s and %s were declared independent while accessing the same memory address", loc_a, loc_b);
+    TASKGRIND_ERR("Segments %s and %s were declared independent while accessing the same memory address", loc_a, loc_b);
 
     int reported = 0;
-    SPMT_FOREACH_FILLED(accesses, pass_e1_report_err_alloc_addr, &reported);
+    SPMT_FOREACH_FILLED(accesses, report_err_alloc_addr, &reported);
 
     ++E1_ERRORS;
 #endif
@@ -100,7 +101,7 @@ typedef struct  walk_e1_intersect_s
 }               walk_e1_intersect_t;
 
 static int
-pass_e1_intersect_check(SPMT_PTR_T begin, SPMT_PTR_T end, void * opaque)
+compare_segments_intersect(SPMT_PTR_T begin, SPMT_PTR_T end, void * opaque)
 {
     #if 0
     TASKGRIND_INFO("Common access on [%lu, %lu[", begin, end);
@@ -123,65 +124,17 @@ pass_e1_intersect_check(SPMT_PTR_T begin, SPMT_PTR_T end, void * opaque)
     return 0;
 }
 
-typedef struct  walk_e1_precedes_s
-{
-    task_seg_t * seg_b;
-    UInt precedes;
-}               walk_e1_precedes_t;
-
+// Confront memory accesses of both segments and report errors
 static UInt
-pass_e1_happens_before_walk(task_seg_t * curr_seg, void * opaque)
+compare_segments(task_seg_t * seg_a, task_seg_t * seg_b)
 {
-    walk_e1_precedes_t * walk = (walk_e1_precedes_t *) opaque;
-
-    if (curr_seg == walk->seg_b)
-    {
-        walk->precedes = 1;
-        return 1;
-    }
-    return 0;
-}
-
-// TODO : compute precedence relation once for all in an optimized way
-// returns '1' 'seg_a' precedes 'seg'b' ; else 0
-static UInt
-pass_e1_seg_precedes(task_seg_t * seg_a, task_seg_t * seg_b)
-{
-    tl_assert(seg_a != seg_b);
-    tl_assert(seg_a->task != seg_b->task);
-
-    walk_e1_precedes_t walk = {
-        .seg_b = seg_b,
-        .precedes = 0,
-    };
-    task_seg_foreach_from(pass_e1_happens_before_walk, &walk, seg_a);
-    return walk.precedes;
-}
-
-UInt
-pass_e1_walk_compare(task_seg_t * seg_a, void * opaque)
-{
-    task_seg_t * seg_b = (task_seg_t *) opaque;
-
-    // if comparing the same segment to itself, no determinacy race possible
-    if (seg_a->task == seg_b->task)
-        return 0;
-
-    // avoid reporting twice the same error
-    if (seg_a->uid >= seg_b->uid)
-        return 0;
-
-    // if a segment precede another, no determinacy race possible
-    if (pass_e1_seg_precedes(seg_a, seg_b) || pass_e1_seg_precedes(seg_a, seg_b))
-        return 0;
-
-    // segments are independent, check there memory accesses to ensure correctness
+    // segments are declared independent,
     // check that
     //  - Wa n (Rb u Wb) == {}
     //  - Wb n (Ra u Wa) == {}
-    // else, it means there exist memory addresses for which at least one writes while the other accesses it
+    // else, it means there exist memory addresses for which at least one
+    // writes while the other accesses it
 
-    // TODO
     spmt_t RaWa;
     SPMT_INITIALIZE(&RaWa);
     SPMT_APPEND(&RaWa, &seg_a->loads);
@@ -223,10 +176,10 @@ pass_e1_walk_compare(task_seg_t * seg_a, void * opaque)
             .task_stack_pointer = seg_a->task->sp < seg_b->task->sp ? seg_a->task->sp : seg_b->task->sp,
         };
         if (!SPMT_IS_EMPTY(&Wb_inter_RaWa))
-            SPMT_FOREACH_FILLED(&Wb_inter_RaWa, pass_e1_intersect_check, &walk);
+            SPMT_FOREACH_FILLED(&Wb_inter_RaWa, compare_segments_intersect, &walk);
 
         if (!SPMT_IS_EMPTY(&Wa_inter_RbWb) && !walk.contains_heap_accesses && !walk.contains_parent_stack_accesses)
-            SPMT_FOREACH_FILLED(&Wa_inter_RbWb, pass_e1_intersect_check, &walk);
+            SPMT_FOREACH_FILLED(&Wa_inter_RbWb, compare_segments_intersect, &walk);
 
         // if both segments are accessing the same heap space
         if (walk.contains_heap_accesses)
@@ -256,8 +209,9 @@ pass_e1_walk_compare(task_seg_t * seg_a, void * opaque)
     {
         spmt_t accesses;
         SPMT_INITIALIZE(&accesses);
-        SPMT_UNION(&accesses, &Wa_inter_RbWb, &Wb_inter_RaWa);
-        pass_e1_report_err(seg_a, seg_b, &accesses);
+        SPMT_APPEND(&accesses, &Wa_inter_RbWb);
+        SPMT_APPEND(&accesses, &Wb_inter_RaWa);
+        report_err(seg_a, seg_b, &accesses);
         SPMT_RELEASE(&accesses);
     }
 
@@ -269,11 +223,96 @@ pass_e1_walk_compare(task_seg_t * seg_a, void * opaque)
     return 0;
 }
 
+#if 0
+static int processed = 0;
+
 static UInt
 pass_e1_walk(task_seg_t * curr_seg, void * opaque)
 {
     task_seg_foreach(pass_e1_walk_compare, (void *) curr_seg);
+    int percent = processed++ / (double)SEGS.n * 100;
+    if (processed % (SEGS.n / 10 + 1) == 0)
+        TASKGRIND_INFO("%d%% nodes processed", percent);
     return 0;
+}
+#endif
+
+// segment reachability triangular matrix bits
+static UChar * reachability = NULL;
+
+static int
+reachability_is_set(task_seg_t * s1, task_seg_t * s2)
+{
+    UInt i = s1->uid;
+    UInt j = s2->uid;
+
+    if (i == j)
+        return 1;
+
+    if (i > j)
+    {
+        UInt tmp = i;
+        i = j;
+        j = tmp;
+    }
+
+    tl_assert(i < j);
+
+    UInt n = SEGS.n;
+    UInt k = (n*(n-1)/2) - (n-i)*((n-i)-1)/2 + j - i - 1;
+    tl_assert(k >= 0 && k < n*(n-1)/2);
+    // return reachability[k];
+
+    UInt byte = k / (8*sizeof(UChar));
+    UInt bit = k % (8*sizeof(UChar));
+    return reachability[byte] & (1 << bit);
+}
+
+static void
+reachability_set(task_seg_t * s1, task_seg_t * s2)
+{
+    UInt i = s1->uid;
+    UInt j = s2->uid;
+
+    if (i == j)
+        return ;
+
+    if (i > j)
+    {
+        UInt tmp = i;
+        i = j;
+        j = tmp;
+    }
+
+    tl_assert(i < j);
+
+    UInt n = SEGS.n;
+    UInt k = (n*(n-1)/2) - (n-i)*((n-i)-1)/2 + j - i - 1;
+    tl_assert(k >= 0 && k < n*(n-1)/2);
+    // reachability[k] = 1;
+
+    UInt byte = k / (8*sizeof(UChar));
+    UInt bit = k % (8*sizeof(UChar));
+    reachability[byte] |= (1 << bit);
+}
+
+static UInt
+compute_reachability_walk(task_seg_t * s2, void * opaque)
+{
+    task_seg_t * s1 = (task_seg_t *) opaque;
+    reachability_set(s1, s2);
+    return 0;
+}
+
+static void
+compute_reachability(void)
+{
+    ARRAY_FOREACH_BEGIN(&SEGS, task_seg_ref_t *, s1_ref)
+    {
+        task_seg_t * s1 = s1_ref->task->segs.segs + s1_ref->id;
+        task_seg_dfs_from(compute_reachability_walk, (void *) s1, s1);
+    }
+    ARRAY_FOREACH_END(&SEGS, task_seg_ref_t *, s1_ref)
 }
 
 // a simple pass checking overly-dependent tasks
@@ -281,10 +320,40 @@ void
 taskgrind_pass_e1(task_t * root)
 {
     TASKGRIND_INFO("Running E1 pass");
-    task_seg_foreach(pass_e1_walk, NULL);
 
+    // compute the path matrix (triangular bit-flag matrix)
+    reachability = (UChar *) VG_(malloc)("taskgrind_pass_e1", SEGS.n * (SEGS.n - 1) / 8 + 1);
+    VG_(memset)(reachability, 0, SEGS.n * (SEGS.n - 1) / 8 + 1);
+    compute_reachability();
+
+    // check errors
+    int n = SEGS.n;
+    int processed = 0;
+    int total = (n-1)*n/2;
+    TASKGRIND_INFO("%u comparison to perform", total);
+    ARRAY_FOREACH_BEGIN(&SEGS, task_seg_ref_t *, s1_ref)
+    {
+        task_seg_t * s1 = s1_ref->task->segs.segs + s1_ref->id;
+        ARRAY_FOREACH_FROM_BEGIN(&SEGS, s1->uid + 1, task_seg_ref_t *, s2_ref)
+        {
+            task_seg_t * s2 = s2_ref->task->segs.segs + s2_ref->id;
+            if (!reachability_is_set(s1, s2))
+                compare_segments(s1, s2);
+
+            int percent = processed++ * 100 / total;
+            if (processed % (total / 10 + 1) == 0)
+                TASKGRIND_INFO("%d%% comparisons performed", percent);
+        }
+        ARRAY_FOREACH_FROM_END(&SEGS, s1->uid + 1, task_seg_ref_t *, s2_ref);
+    }
+    ARRAY_FOREACH_END(&SEGS, task_seg_ref_t *, s1_ref);
+
+    // release reachability
+    VG_(free)(reachability);
+
+    // summary of errors
     if (E1_ERRORS)
-        TASKGRIND_WARN("-> E1 reported %d possible determinacy races", E1_ERRORS);
+        TASKGRIND_ERR("-> E1 reported %d possible determinacy races", E1_ERRORS);
     else
         TASKGRIND_INFO("-> E1 found no determinacy races :-)");
 }

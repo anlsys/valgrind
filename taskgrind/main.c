@@ -179,15 +179,9 @@ taskgrind_instrument(
     IRType gWordTy,
     IRType hWordTy
 ) {
-    // Accesses in these functions can be ignored
-    static const HChar * SUPPRESS_FN[] = {
-        "on_ompt",          // ignore ompt plugin code
-        "__kmp",            // ignore llvm runtime code
-        "outlined_debug",   // ignore llvm debug micro tasks
-        // "dl_lookup_symbol",
-        // "free",
-        // "malloc"
-    };
+    // ignore initial accesses from the root segment
+    if (SEGS.n <= 1)
+        return sb_in;
 
     if (gWordTy != hWordTy)
         VG_(tool_panic)("host/guest word size mismatch");
@@ -198,11 +192,21 @@ taskgrind_instrument(
     const HChar * fn;
     VG_(get_fnname)(ep, addr, &fn);
 
-    // ignore all accesses outside outermost basic bloc
+    // ignore all accesses outside outermost basic bloc if requested by users
     if (!fn || (CLOS.outermost_only && !VG_(strstr)(fn, "omp_task_entry")))
         return sb_in;
 
-    // Nothing to do if running in run-time code
+    // Ignore run-time code
+    // Accesses in these functions can be ignored
+    static const HChar * SUPPRESS_FN[] = {
+        "on_ompt",          // ignore ompt plugin code
+        "__kmp",            // ignore llvm runtime code
+        "outlined_debug",   // ignore llvm debug micro tasks
+        // "dl_lookup_symbol",
+        // "free",
+        // "malloc"
+    };
+
     for (int i = 0 ; i < sizeof(SUPPRESS_FN) / sizeof(const HChar *) ; ++i)
         if (VG_(strstr)(fn, SUPPRESS_FN[i]))
             return sb_in;

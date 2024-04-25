@@ -119,7 +119,7 @@ taskgrind_alloc_record_get_location(
 
     ExeContext * ec = record->ctx;
     DiEpoch ep = VG_(get_ExeContext_epoch)(ec);
-    Int n_ips = VG_(get_ExeContext_n_ips)(ec);
+    // Int n_ips = VG_(get_ExeContext_n_ips)(ec);
     Addr * ips = VG_(get_ExeContext_ips)(ec);
 
     HChar * r = location_get_from_ip(ep, ips[0], use_dir, buffer, len);

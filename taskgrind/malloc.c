@@ -1,4 +1,5 @@
 # include "pub_tool_basics.h"           /* ThreadId */
+# include "pub_tool_libcbase.h"         /* memset */
 # include "pub_tool_replacemalloc.h"    /* cli_malloc */
 # include "pub_tool_libcassert.h"       /* tl_assert */
 
