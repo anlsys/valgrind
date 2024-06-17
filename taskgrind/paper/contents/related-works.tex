@@ -3,6 +3,17 @@
 \section{Related Work} \label{sec:relworks}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+- Par rapport à tous les outils (Archer, TaskSanitizer...)
+	- eux: possible faux-négatifs, car seulement ce qui est instrumenté à la compilation
+	- nous: instrmentaiton à l'exécution (VM Valgrind) -> pas de faux-négatifs
+		- par contre, BEAUCOUP de faux-positifs qui font l'objet du papier
+Use-case envisagé
+	- eux: l'utilisateur observe qu'un programme ne se comporte pas bien, de façon itérative il recompile la pile soft jusqu'à trouver le bug
+	- nous: l'utilisateur souhaite savoir si son programme est correct (sans erreurs observés à priori)
+		- l'outil reporte pleins d'erreurs / warning, l'utilisateur filtre ce qu'il ne veut pas
+autrement dit:
+	- eux: whitelist ; nous: blacklist
+
 - Debogging d'application parallèle
 	- paradigme thread vs tâche
 		philosophie

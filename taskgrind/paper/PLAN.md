@@ -6,6 +6,23 @@
     - Aucunes garantis sur la justesse des codes
 
 2) Motivations
+    On the reliability of programs. E.W. Dijkstra
+    """
+        I shall argue that our programs should be correct
+            - exemple: cite famous example of program errors
+
+        I shall argue that debugging is an inadequate means for achieving that goal and that we must prove the correctness of programs
+            - Currently (Helgrind, ThreadSanitizer(=Archer), ... : programmer observe an error, then debug it. Maybe there is other that didn't show; maybe his debugging does not handle all cases, ...
+
+        I shall argue that we must tailor our programs to the proof requirements
+            - Rust is going that direction (?)
+            - Not the direction taken over the past 50 years, for the sake of productivity
+                - Cite languages that tried that, and failed
+
+        I shall argue that programming will become more and more an activity of mathematical nature.
+            - Pour compléter
+    """
+
     2.1) How programmers are currently debugging their task-based parallel applications
         - Helgrind, ThreadSanitizer (<=> Archer)
     2.2) Proposed Analysis
@@ -332,7 +349,13 @@ for (int i = 0 ; i < 4 ; ++i)
     - T(nthreads>1) = (W_exec+W_collect)/nthreads + W_analyse * f
 
 
-
+# PROBLEME DE l'APPROCHE
+- NUM_THREADS=1
+    -> accès à la même pile par plusieurs tâches à traiter
+    -> accès aux TLS
+        - des libs "thread-safe" peuvent accéder à la TLS du thread appelant, comment gérer ça ?
+    -> comportement de LLVM en NUM_THREADS=1
+        - tout est "undeferred", pas moyen de distinguer if(0) - donc faux positifs dans # pragma omp task depend(in: x) if(0) {}
 
 # ALGORITHM DETECTION
 
