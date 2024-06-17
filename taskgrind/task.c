@@ -19,19 +19,20 @@ task_t ROOT_TASK;
 // The current task
 task_t * CURRENT_TASK = NULL;
 
-// Total number of segments
-UInt N_TASK_SEGS = 0;
+// List of all segments
+array_t SEGS;
+
+// version for dfs
+static UInt DFS_VERSION = 0;
 
 static void
-task_seg_foreach_walk(UInt (*walk)(task_seg_t *, void *), void * opaque, task_seg_t * seg, UChar * visited, UInt * stop)
+task_seg_dfs_go(UInt (*dfs)(task_seg_t *, void *), void * opaque, task_seg_t * seg, UInt * stop)
 {
-    UChar * seg_char = visited + (seg->uid / (8 * sizeof(UChar)));
-    UInt seg_char_bit = 1 << (seg->uid % (8 * sizeof(UChar)));
-    if (*seg_char & seg_char_bit)
+    if (seg->dfs_version == DFS_VERSION)
         return ;
-    *seg_char |= seg_char_bit;
+    seg->dfs_version = DFS_VERSION;
 
-    if (walk(seg, opaque))
+    if (dfs(seg, opaque))
     {
         *stop = 1;
          return ;
@@ -40,7 +41,7 @@ task_seg_foreach_walk(UInt (*walk)(task_seg_t *, void *), void * opaque, task_se
     ARRAY_FOREACH_BEGIN(&seg->successors, task_seg_ref_t *, succ_ref)
     {
         task_seg_t * succ_seg = succ_ref->task->segs.segs + succ_ref->id;
-        task_seg_foreach_walk(walk, opaque, succ_seg, visited, stop);
+        task_seg_dfs_go(dfs, opaque, succ_seg, stop);
         if (*stop)
             return ;
     }
@@ -48,24 +49,20 @@ task_seg_foreach_walk(UInt (*walk)(task_seg_t *, void *), void * opaque, task_se
 }
 
 void
-task_seg_foreach_from(UInt (*walk)(task_seg_t *, void *), void * opaque, task_seg_t * seg)
+task_seg_dfs_from(UInt (*dfs)(task_seg_t *, void *), void * opaque, task_seg_t * seg)
 {
-    // TODO: this size could probably be dampened infering from 'seg->uid'
-    UInt size = N_TASK_SEGS / (8 * sizeof(UChar)) + 1;
-    UChar * visited = (UChar *) VG_(malloc)("task_seg_foreach", size);
-    VG_(memset)(visited, 0, size);
     UInt stop = 0;
-    task_seg_foreach_walk(walk, opaque, seg, visited, &stop);
-    VG_(free)(visited);
+    ++DFS_VERSION;
+    task_seg_dfs_go(dfs, opaque, seg, &stop);
 }
 
 void
-task_seg_foreach(UInt (*walk)(task_seg_t *, void *), void * opaque)
+task_seg_dfs(UInt (*dfs)(task_seg_t *, void *), void * opaque)
 {
     task_seg_t * root_seg = (task_seg_t *) array_first(&ROOT_TASK.segs);
     tl_assert(root_seg);
 
-    task_seg_foreach_from(walk, opaque, root_seg);
+    task_seg_dfs_from(dfs, opaque, root_seg);
 }
 
 static inline task_seg_t *
@@ -75,16 +72,23 @@ task_seg_new(task_t * task)
     seg->task = task;
     SPMT_INITIALIZE(&seg->loads);
     SPMT_INITIALIZE(&seg->stores);
-    array_init(&seg->successors, 0, sizeof(task_seg_ref_t));
+    array_init(&seg->successors, 4, sizeof(task_seg_ref_t));
     seg->ctx = NULL;
-    seg->uid = N_TASK_SEGS++;
+    seg->uid = SEGS.n;
+    seg->dfs_version = 0;
 
     ThreadId tid = VG_(get_running_tid)();
     if (tid != VG_INVALID_THREADID)
     {
-        seg->ctx = VG_(record_ExeContext)(tid, 0);
+        seg->ctx = NULL; // VG_(record_ExeContext)(tid, 0);
         seg->tid = tid;
     }
+
+    task_seg_ref_t seg_ref;
+    seg_ref.task = task;
+    seg_ref.id = task->segs.n - 1;
+    seg_ref.flag = 0;
+    array_push(&SEGS, &seg_ref);
 
     return seg;
 }
@@ -96,9 +100,9 @@ __task_init(task_t * task, UWord id, task_type_t type, UWord undeferred)
     task->type              = type;
     task->child_id          = CURRENT_TASK ? ++CURRENT_TASK->next_child_id : -1;
     task->next_child_id     = 0;
-    task->id         = id;
+    task->id                = id;
     array_init(&task->successors, 4, sizeof(task_t *));
-    task->depend          = NULL;
+    task->depend            = NULL;
     task->parent            = CURRENT_TASK;
     array_init(&task->children, 0, sizeof(task_t *));
     task->last_sync         = NULL;
@@ -234,7 +238,7 @@ task_create(UWord id, task_type_t type, UWord undeferred)
     // retrieve the current seg
     task_t * pred = CURRENT_TASK;
     task_seg_t * pred_seg = (task_seg_t *) array_penultimate(&pred->segs);
-    int pred_seg_idx = pred->segs.n - 2;
+       // int pred_seg_idx = pred->segs.n - 2;
     tl_assert(pred_seg);
 
     // retrieve the new task seg
@@ -245,6 +249,7 @@ task_create(UWord id, task_type_t type, UWord undeferred)
     // 'pred' -> 'task'
     task_seg_set_edge(pred_seg, task, task_seg_idx);
 
+    // TODO : barrier and taskwait are 2 different things, fix me
     switch (type)
     {
         // if the task is a barrier
@@ -541,6 +546,12 @@ task_sync(void)
 static inline void
 task_seg_mem_access(task_seg_t * seg, Addr addr, SizeT size)
 {
+    if (seg->ctx == NULL)
+    {
+        ThreadId tid = VG_(get_running_tid)();
+        if (tid != VG_INVALID_THREADID)
+            seg->ctx = VG_(record_ExeContext)(tid, 0);
+    }
 }
 
 void
@@ -611,6 +622,7 @@ task_mem_store_atomic(Addr addr, SizeT size)
 void
 task_init(void)
 {
+    array_init(&SEGS, 8192, sizeof(task_seg_ref_t));
     __task_init(&ROOT_TASK, TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_ROOT, 1);
     CURRENT_TASK = &ROOT_TASK;
 }
@@ -626,10 +638,10 @@ task_fini(void)
         taskgrind_export_lpg((task_seg_t *)array_first(&ROOT_TASK.segs));
     }
 
-    TASKGRIND_INFO("Starting analysis...");
-//    taskgrind_pass_w1(&ROOT_TASK);
+    TASKGRIND_INFO("Starting analysis on a %u segments graph...", SEGS.n);
+    // taskgrind_pass_w1(&ROOT_TASK);
     taskgrind_pass_e1(&ROOT_TASK);
     TASKGRIND_INFO("Analysis completed.");
 
-    // taskgrind_export_tcfg(CURRENT_TASK);
+    array_deinit(&SEGS);
 }

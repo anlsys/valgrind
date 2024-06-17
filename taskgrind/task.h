@@ -118,8 +118,14 @@ typedef struct  task_seg_s
     // a unique identifier for this segment in [0, N_SEGMENTS[
     UInt uid;
 
+    // a version counter for dfs, to detect
+    // whether the segment had already been visited
+    UInt dfs_version;
 }               task_seg_t;
 
+// a reference to a task segment Thats because 'task->segs' array may be
+// realloc-ed, therefore, using 'task_seg_t *' reference directly may be
+// inconsistent
 typedef struct  task_seg_ref_s
 {
     // the task
@@ -155,7 +161,7 @@ extern task_t * CURRENT_TASK;
 extern task_t ROOT_TASK;
 
 // Number of segments
-extern UInt N_TASK_SEGS;
+extern array_t SEGS;
 
 // FUNCTIONS TO BUILD THE MAPPING
 task_t * task_create(UWord id, task_type_t type, UWord undeferred);
@@ -171,8 +177,8 @@ void task_mem_store_atomic(Addr addr, SizeT size);
 
 // HELPER FUNCTIONS
 task_t * task_get(UWord id);
-void task_seg_foreach(UInt (*walk)(task_seg_t *, void *), void * opaque);
-void task_seg_foreach_from(UInt (*walk)(task_seg_t *, void *), void * opaque, task_seg_t * seg);
+void task_seg_dfs(UInt (*walk)(task_seg_t *, void *), void * opaque);
+void task_seg_dfs_from(UInt (*walk)(task_seg_t *, void *), void * opaque, task_seg_t * seg);
 
 // INIT -> setup root task
 void task_init(void);

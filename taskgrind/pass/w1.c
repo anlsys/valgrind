@@ -165,10 +165,8 @@ pass_w1_check_deps(task_t * pred, task_t * succ)
         HChar succ_loc[256];
         task_seg_get_location(succ_seg, 0, succ_loc, 256);
 
-        TASKGRIND_WARN("  %p (%s) and %p (%s) were declared dependent having no data dependencies",
-                (void *)pred->id,
+        TASKGRIND_WARN("Segments %s and %s were declared dependent having no data dependencies",
                 pred_loc,
-                (void *)succ->id,
                 succ_loc
          );
         ++W1_COUNT;

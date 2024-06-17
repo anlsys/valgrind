@@ -37,13 +37,16 @@ int array_is_empty(array_t * array);
 void array_clear(array_t * array);
 void array_deinit(array_t * array);
 
-# define ARRAY_FOREACH_BEGIN(A, T, X)                   \
+# define ARRAY_FOREACH_FROM_BEGIN(A, I, T, X)           \
     do {                                                \
-        for (int X##i = 0 ; X##i < (A)->n ; ++X##i) {   \
+        for (int X##i = I ; X##i < (A)->n ; ++X##i) {   \
             T X = ((T) (A)->objs) + X##i;
 
-# define ARRAY_FOREACH_END(A, T, X)             \
+# define ARRAY_FOREACH_FROM_END(A, I, T, X)     \
         }                                       \
     } while (0);
+
+# define ARRAY_FOREACH_BEGIN(A, T, X) ARRAY_FOREACH_FROM_BEGIN(A, 0, T, X)
+# define ARRAY_FOREACH_END(A, T, X)   ARRAY_FOREACH_FROM_END(A, 0, T, X)
 
 #endif /* __ARRAY_H__ */

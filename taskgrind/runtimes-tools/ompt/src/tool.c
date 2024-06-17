@@ -1,5 +1,4 @@
 # include <assert.h>
-# include <bfd.h>
 # include <omp.h>
 # include <ompt.h>
 # include <stdio.h>
@@ -39,8 +38,12 @@
         fprintf(stdout, "\n");              \
     } while (0)
 
-// next task id
+// TODO : use 'get_unique_id' or generate one 'per thread' to avoid memory
+// contention on this global atomic
 static atomic_int NEXT_TASK_ID = 0;
+
+// number of running openmp threads
+static int NTHREADS = 1;
 
 void
 on_ompt_callback_task_create(
@@ -58,11 +61,12 @@ on_ompt_callback_task_create(
 
     taskgrind_task_type_t type = (flags & ompt_task_explicit) ? TASKGRIND_TASK_TYPE_EXPLICIT : TASKGRIND_TASK_TYPE_IMPLICIT;
     unsigned int undeferred = (flags & ompt_task_undeferred) ? 1 : 0;
-    // TODO : with OMP_NUM_THREADS=1, LLVM put tasks as 'undeferred', so we
+    // TODO : with OMP_NUM_THREADS=1, LLVM sets every tasks as 'undeferred', so we
     // cannot really track whether the task is undeferred because of user code
     // or runtime implementation
     // For now, assume all tasks are deferable, else we may loose expressed parallelism
-    undeferred = 0;
+    if (NTHREADS == 1 && undeferred)
+        undeferred = 0;
     TASKGRIND_CREATE_EVENT(task_id, TASKGRIND_TASK_TYPE_EXPLICIT, undeferred);
 }
 
@@ -73,7 +77,8 @@ on_ompt_callback_task_schedule(
     ompt_data_t * next_task_data
 ) {
     // INFO("[SCHEDULE] prior_task_data = %p, next_task_data = %p", prior_task_data, next_task_data);
-    TASKGRIND_SCHEDULE_EVENT(next_task_data->value);
+    if (next_task_data)
+        TASKGRIND_SCHEDULE_EVENT(next_task_data->value);
 }
 
 void
@@ -365,7 +370,6 @@ on_ompt_callback_work(
     }
 }
 
-# if 0
 void
 on_ompt_callback_parallel_begin(
     ompt_data_t * encountering_task_data,
@@ -375,6 +379,7 @@ on_ompt_callback_parallel_begin(
     int flags,
     const void * codeptr_ra
 ) {
+    NTHREADS = requested_parallelism;
 }
 
 void
@@ -384,8 +389,8 @@ on_ompt_callback_parallel_end(
     int flags,
     const void * codeptr_ra
 ) {
+    NTHREADS = 1;
 }
-#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 // OMPT INIT / DEINIT CALLBACKS
@@ -411,10 +416,8 @@ int ompt_initialize(
     register_callback(ompt_callback_sync_region);
     register_callback(ompt_callback_work);
     register_callback(ompt_callback_dispatch);
-    #if 0
     register_callback(ompt_callback_parallel_begin);
     register_callback(ompt_callback_parallel_end);
-    #endif
     return 1;
 }
 

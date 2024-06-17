@@ -27,6 +27,7 @@
 #include "dot.h"
 #include "env.h"
 #include "error.h"
+#include "malloc.h"
 #include "print.h"
 #include "task.h"
 #include "taskgrind.h"
@@ -46,9 +47,6 @@
 ///////////////////////////////////////////////////////////////////////////////
 //  Track tasks and their dependencies
 ///////////////////////////////////////////////////////////////////////////////
-
-// The tasking environment being instrumented
-static taskgrind_env_t ENV = {0};
 
 static Bool
 taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
@@ -181,6 +179,24 @@ taskgrind_instrument(
     IRType gWordTy,
     IRType hWordTy
 ) {
+    // ignore initial accesses from the root segment
+    if (SEGS.n <= 1)
+        return sb_in;
+
+    if (gWordTy != hWordTy)
+        VG_(tool_panic)("host/guest word size mismatch");
+
+    IRStmt * st = sb_in->stmts[0];
+    Addr addr = st->Ist.IMark.addr + st->Ist.IMark.delta;
+    DiEpoch ep = VG_(current_DiEpoch)();
+    const HChar * fn;
+    VG_(get_fnname)(ep, addr, &fn);
+
+    // ignore all accesses outside outermost basic bloc if requested by users
+    if (!fn || (CLOS.outermost_only && !VG_(strstr)(fn, "omp_task_entry")))
+        return sb_in;
+
+    // Ignore run-time code
     // Accesses in these functions can be ignored
     static const HChar * SUPPRESS_FN[] = {
         "on_ompt",          // ignore ompt plugin code
@@ -191,29 +207,9 @@ taskgrind_instrument(
         // "malloc"
     };
 
-    if (gWordTy != hWordTy)
-        VG_(tool_panic)("host/guest word size mismatch");
-
-    // TODO: these are remains from old design.
-    // It is no longer required to automatically detect the tasking environement
-    // This could be removed
-
-    // nothing to do until we detected the tasking environment
-    if (!ENV.name)
-        taskgrind_env_detect(&ENV);
-
-    if (!ENV.name)
-        return sb_in;
-
-    // Nothing to do if running in run-time code
-    IRStmt * st = sb_in->stmts[0];
-    Addr addr = st->Ist.IMark.addr + st->Ist.IMark.delta;
-    DiEpoch ep = VG_(current_DiEpoch)();
-    const HChar * fn;
-    if (VG_(get_fnname)(ep, addr, &fn))
-        for (int i = 0 ; i < sizeof(SUPPRESS_FN) / sizeof(const HChar *) ; ++i)
-            if (VG_(strstr)(fn, SUPPRESS_FN[i]))
-                return sb_in;
+    for (int i = 0 ; i < sizeof(SUPPRESS_FN) / sizeof(const HChar *) ; ++i)
+        if (VG_(strstr)(fn, SUPPRESS_FN[i]))
+            return sb_in;
 
     // deep copy code until marker
     IRSB * sb_out = deepCopyIRSBExceptStmts(sb_in);
@@ -429,6 +425,7 @@ taskgrind_print_usage(void)
 {
     VG_(printf)(
 "    --dump            Dump internal data structures to dot files\n"
+"    --outermost-only  Only instrument accesses in tasks outermost scope\n"
 //"    --record=<name>            Execute and record the task graph into <name> directory\n"
    );
 }
@@ -476,6 +473,12 @@ taskgrind_process_cmd_line_option(const HChar * arg)
         return True;
     }
 
+    if (VG_(strcmp)(arg, "--outermost-only") == 0)
+    {
+        CLOS.outermost_only = 1;
+        return True;
+    }
+
     return False;
 }
 
@@ -486,6 +489,11 @@ taskgrind_post_clo_init(void)
         TASKGRIND_INFO("Export to dot files enabled");
     else
         TASKGRIND_INFO("Export to dot files disabled");
+
+    if (CLOS.outermost_only)
+        TASKGRIND_INFO("Instrumenting only tasks outermost scope memory accesses");
+    else
+        TASKGRIND_INFO("Instrumenting every memory accesses");
 
 #if 0
      if (clo_record)
@@ -506,21 +514,43 @@ taskgrind_fini(Int exitcode)
 static void
 taskgrind_pre_clo_init(void)
 {
-   VG_(details_name)            ("Taskgrind");
-   VG_(details_version)         (NULL);
-   VG_(details_description)     ("a debugger for dependent tasks order of execution");
-   VG_(details_copyright_author)(
-      "Copyright (C) 2023, and GNU GPL'd, by Romain Pereira et al.");
-   VG_(details_bug_reports_to)  ("romain.pereira@inria.fr");
+    VG_(details_name)            ("Taskgrind");
+    VG_(details_version)         (NULL);
+    VG_(details_description)     ("a debugger for dependent tasks order of execution");
+    VG_(details_copyright_author)(
+            "Copyright (C) 2023, and GNU GPL'd, by Romain Pereira et al.");
+    VG_(details_bug_reports_to)  ("romain.pereira@inria.fr");
 
-   VG_(details_avg_translation_sizeB) ( 500 ); // TODO: adjust this
+    VG_(details_avg_translation_sizeB) ( 500 ); // TODO: adjust this
 
-   VG_(needs_command_line_options)(taskgrind_process_cmd_line_option,
-                                   taskgrind_print_usage,
-                                   taskgrind_print_debug_usage);
+    VG_(needs_command_line_options)(taskgrind_process_cmd_line_option,
+            taskgrind_print_usage,
+            taskgrind_print_debug_usage);
 
-   VG_(needs_client_requests)(taskgrind_handle_client_request);
-   VG_(basic_tool_funcs)(taskgrind_post_clo_init, taskgrind_instrument, taskgrind_fini);
+    VG_(needs_client_requests)(taskgrind_handle_client_request);
+    VG_(basic_tool_funcs)(taskgrind_post_clo_init, taskgrind_instrument, taskgrind_fini);
+
+    TASKGRIND_DEBUG("replacing malloc");
+    VG_(needs_libc_freeres)();
+    VG_(needs_cxx_freeres)();
+    VG_(needs_malloc_replacement)(
+        taskgrind_malloc,
+        taskgrind___builtin_new,
+        taskgrind___builtin_new_aligned,
+        taskgrind___builtin_vec_new,
+        taskgrind___builtin_vec_new_aligned,
+        taskgrind_memalign,
+        taskgrind_calloc,
+        taskgrind_free,
+        taskgrind___builtin_delete,
+        taskgrind___builtin_delete_aligned,
+        taskgrind___builtin_vec_delete,
+        taskgrind___builtin_vec_delete_aligned,
+        taskgrind_realloc,
+        taskgrind_malloc_usable_size,
+        16
+    );
+
    #if 0
    VG_(needs_tool_errors)(
        taskgrind_eq_Error,
@@ -553,7 +583,7 @@ taskgrind_prepare_env(HChar *** envp)
 
     TASKGRIND_INFO("Loading OMPT Plugin from %s", absolute_so);
     VG_(env_setenv)(envp, "OMP_TOOL_LIBRARIES", absolute_so);
-    VG_(env_setenv)(envp, "OMP_NUM_THREADS", "1");
+    // VG_(env_setenv)(envp, "OMP_NUM_THREADS", "2");
     VG_(env_setenv)(envp, "LIBOMP_USE_HIDDEN_HELPER_TASK", "0");
 }
 
