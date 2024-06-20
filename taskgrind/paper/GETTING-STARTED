@@ -1,0 +1,328 @@
+# Summary
+- Bibliography
+    - list of papers
+    - an history
+- Issues
+- Detection Algorithm
+- Ideas
+
+# Bibliography
+
+## List of papers, positionning
+[1] « Compiler Automatic Discovery of OmpSs Task Dependencies » - S. Royuela - https://link.springer.com/chapter/10.1007/978-3-642-37658-0_16
+    - compile-time only
+
+[2] « Detecting Non-Sibling Dependencies in OpenMP Task-Based Application » - Patrick - https://hal.science/hal-02177469/document
+    - OMPT only, no accesses instrumentation
+
+[3] Eric Aubanel and Leah Bidlake: some work on parallelism mental representation and the need of a tools
+
+[4] A Toolchain to Verify the Parallelization of OmpSs-2 Applications - 2020
+They check the following "errors"
+- E1 - the task perform an access not specified in its constructor (in/out)
+- E2 - not E1 - a dependence is specified but the task does not perform the access
+- E3 - detection of sibling dependences similarly to [2]
+- E4 - not E3
+- E5 - suggest taskwait to ensure RaW/WaW/WaR looking at childrne tasks
+
+    -> E1 and E2 are not "OpenMP" errors, not even an "OmpSs" error - such checks are local per-task - O(1)
+    -> E3, E4 and E5 are determinacy-errors, that we would detect-
+
+[5] Starsscheck: A tool to find errors in task-based parallel programs - 2010
+- equivalent to E1 and E2 of [4]
+
+[6] Helgrind - https://valgrind.org/docs/manual/hg-manual.html
+- race conditions of POSIX threads
+
+[7] OMPSanitizer: An Impact Analyzer of Reported Data Races in OpenMP Programs
+TODO
+
+[8] Valgrind and Shadow Memory
+- we do not need shadow memory, we can be more compact with interval trees
+
+[10] ThreadSanitizer – data race detection in practice (2009)
+- As opposed to Valgrind
+    - WAY FASTER
+        - Can skip regions by static analysis at compile-time
+        - Native execution : the compiler injects instrumentation calls
+            - no VEX virtualization
+            - can run parallel code
+    - need to recompile the software stack of interest
+- Same as Valgrind
+    - if we recompile the entire software stack, we face the same ISSUES presented bellow
+
+[11] ARCHER: Effectively Spotting Data Races in Large OpenMP Applications
+    - Detecting data races for OpenMP
+    - Problem: May miss a race condition
+        - TODO: Romain, investigate why Archer generates false-negative
+
+[12] Samuel P. Midkiff Automatic Parallelization : An Overview of Fundamental Compiler Techniques
+- TODO
+
+[13] Serial to Parallel Code Converter Tools: A Review
+- TODO
+
+[15] Pin3 Intel, Dynamorio (DrPin: A Dynamic binary instrumentator for multiple processsor architecture)
+- TODO
+
+[16] Hybrid dynamic data race detection (2003)
+An hybrid of two popular methods to reduce false-positives:
+- lockset-based detection
+- happens before
+
+[17] OMPGPT: A Generative Pre-trained Transformer Model for OpenMP
+- Train an IA GPT with HPCorpus
+- OK with parallel for (dense regular code) - but what about sparse/irregular accesses ?
+- Require access to source code
+
+[18] Cyclebite: Extracting Task Graphs From Unstructured Compute-Programs
+- Source -> Markov Control Graph -> extract coarse tasks -> attribute data dependences using epochs
+- Romain: I do not understand how they build t he dependence graph, do they assume sequential order = correct ?
+    -> do not reference
+
+[19] Efficient Detection of Determinacy Races in Cilk Programs
+- {race condition, data races, ...} c Determinacy races
+- Nondeterminator = cilk tool to detect determinacy races provably and accuratly
+- SP-Bags algorithm
+    - Assume the serial elision (or C elision) of the full Cilk program - that is sequential order = correct
+"""
+    Like Tarjan’s algorithm, the SPbags algorithm uses an efficient data structure [6, Chapter 22] to manage disjoint sets of elements.
+    It uses the fact that any Cilk program can be executed on one processor in a depth-first (C-like) fashion and conforms to the semantics of the C program that results when all spawn and sync keywords are removed
+    two shadow spaces of shared memory called writer and reader.
+"""
+-> we do O(n²) comparison with n the number of segments - not "efficient" but can be easily parallelized
+
+-> Taskgrind do not need to assume serial elision
+
+[20] Efficient Data Race Detection for Async-Finish Parallelism
+-> [19] Adapté à X10
+
+[21] Runtime Determinacy Race Detection for OpenMP Tasks (TaskSanitizer) - 2018 Europar
+- see [10] 
+- Cilk threads = task segments
+- Support tasks and dependences (in/out)
+- Algorithm 1.
+    - commutativity in locked regions = OK
+
+-> Taskgrind algorithm differs
+    - [21] is O(m²) with 'm' the number of accesses
+    - Taskgrind is O(n²) with 'n' the number of segments - and accesses are represented in a compact interval tree
+        - the number of elements in the interval tree depends whether memory accesses are sparsity of memory accesses
+
+[22] Parallel Data Race Detection for Task Parallel Programs with Locks
+- TODO
+
+[23] Scalable and Precise Dynamic Datarace Detection for Structured Parallelism
+(see abstract)
+
+[24] Liao, C. and al. - Dataracebench: a benchmark suite for systematic evaluation of data race detection tools.
+- use it for evaluation ?
+
+[25] On-the-fly Data Race Detection with the Enhanced OpenMP Series-Parallel Graph
+- OMPT tool
+- LLVM compilation-pass compile forwarding memory accesses to OMPT
+- graph EOSPG with 'fragments' <=> 'segments' of [21]
+    - extension of SP-Graph (?)
+-> we do not rely on C-Elision, Taskgrind is closer to [21]
+    - nodes = segments (=fragments)
+    - edges = precedence constraints (transitive) (= HB relation)
+
+[28]  Running Valgrind on multiple processors: a prototype Philippe Waroquiers FOSDEM 2015 valgrind devroom
+- Valgrind 'big lock' model currently
+
+[29] Dynamic data race detection for OpenMP programs (2018) (ROMP)
+- TODO
+
+## An history
+
+- Cilk et Determinator (= determinacy races general, detection) (1997)
+    - spawn/sync only (~= task/taskwait)
+
+- Valgrind - How to Shadow Every Byte of Memory Used by a Program - (2007)
+    - slowdown x20 // sequential execution
+
+- Helgrind - https://valgrind.org/docs/manual/hg-manual.html - (2007-2009)
+    - pthread (mutex, condvar, ...) - partial solution: no tasks support
+
+- ThreadSanitizer – data race detection in practice (2009)
+    - Equivalent to Helgrind but compile-time stuff (= faster at execution, but requires recompilation)
+    - Slowdown x2 // parallel execution)
+
+- Efficient Data Race Detection for Async-Finish Parallelism (X10) - (2010)
+    - async / future <=> 1997
+
+- Scalable and Precise Dynamic Datarace Detection for Structured Parallelism (2012)
+    - TODO
+
+- ARCHER: Effectively Spotting Data Races in Large OpenMP Applications - (2016) (IPDPS)
+    - can produce false-negative (Romain: why ?)
+    - ThreadSanitizer extension
+
+- Runtime Determinacy Race Detection for OpenMP Tasks - (2018) (Europar)
+    - support for dependences (no false-negative theoritically ?) - see Algorithm 1
+    - ThreadSanitizer extension
+
+- OmpSs-2 - A Toolchain to Verify the Parallelization of OmpSs-2 Applications (2020)
+
+
+# ISSUES
+
+## REMARK
+Taskgrind currently has a work around to all these issues :
+    - the `--outermost-only` CLA makes only tasks outermost-scope instrumented
+But it looses all the point of Valgrind ("seeing everything" goes to "seeing only outermost scope")
+Another workaround could be to ask the programmer for a symbol whitelist
+    - "omp_task_entry"
+    - "gemm"
+    - "a_suspicious_library_function"
+    - [...]
+
+
+## CAN CAUSE FALSE-NEGATIVE
+
+### LLVM task serialization
+#### Problem
+https://github.com/llvm/llvm-project/issues/89398#issuecomment-2066822457
+#### How Taskgrind manages it (currently, fixing LLVM as suggested would require no such work-around)
+Run with 2 threads, and disable throttling
+
+
+
+## CAN CAUSE FALSE-POSITIVE
+
+### Atomic Accesses
+- may or may not be an issue if order matters
+- no support in taskgrind
+
+### Any synchronization primitives not reported to Taskgrind
+- Mutexes, conditions, ... - NO SUPPORT IN TASKGRIND YET
+    - we could detect those using `omp_lock_t` via OMPT callbacks
+    - we could detect pthread matching symbols name
+- Spinlock
+    - i don't think we can detect ?
+#### How Taskgrind manages it
+It doesn't
+
+
+
+### Malloc recycling
+#### Problem
+- a task allocate then release memory
+- an independent task do the same later, and got allocated the same memory
+    -> false-positive
+#### How Taskgrind manages it
+Overrides malloc/free - makes free perform a no-op
+
+
+
+### Thread Local Storage (TLS)
+#### Problem
+1) Stack accesses - independent tasks scheduled on the same thread uses its stack
+2) Standard TLS (using `__thread` or `pthread_setspecific()` ...)
+We could probably detect it with ExTLS - kernel GDT table...
+3) "Hand-crafted" TLS - can it be detected ???? probably not
+```
+for (int i = 0 ; i < 2 ; ++i)
+    # pragma omp task
+        write(x[omp_get_thread_id()]);
+```
+#### How Taskgrind manages it
+2) and 3) - it doesn't
+1) Ignore stack accesses above task's entry-point stack-frame
+```c
+# pragma omp task
+{
+    // no issues
+
+    # pragma omp task // A
+        int x = 0;
+
+    # pragma omp task // B
+        int x = 1;
+}
+```
+
+```c
+# pragma omp task
+{
+    // an issue
+
+    int x;
+
+    # pragma omp task // A
+        x = 0;
+
+    # pragma omp task // B
+        x = 1;
+
+    # pragma omp taskwait
+}
+```
+
+
+
+### LLVM specific behaviors in single-thread
+#### Workshare
+Only one "work" callback
+```
+# pragma omp for schedule(static, 1)
+for (int i = 0 ; i < 4 ; ++i)
+{}
+```
+
+#### Parallel region
+No "sync" callback
+```
+# pragma omp parallel
+{
+} // no sync callback raised
+```
+
+#### Sections
+No 'ompt_dispatch_section' callbacks
+```
+# pragma omp sections
+{
+    # pragma omp section
+    { // no callbak raised
+    }
+}
+```
+#### How Taskgrind manages it
+Run with 2 threads :-(
+
+# DETECTION ALGORITHM
+- n = number of segments
+- m = number of non-continuous accesses per segments
+-> O(log(m) * n²)
+
+TaskSanitizer - [21] is O(n²m²)
+
+```bash
+for each segment s1  # n
+    for each segments s2 != s1 # n
+        if s1 and s2 are concurrent, then
+            if (s1.w n s2.w) u (s1.w n s2.r) u (s1.r n s2.w) is non-empty # log(m)
+                error
+```
+
+
+# IDEAS
+- Can specialize analysis to report errors more precisely (right now, only reports "determinacy race issue")
+    - 2 siblings (use a dependence or taskwait)
+    - 2 non-siblings (use taskwait)
+    - a child task accesses its parent stack after its completion (use taskwait)
+    - a task is reading uninitialized GPU memory (target tasks, read but no write previously)
+
+- Can provide performance hints (not CORRECTNESS !!)
+    - over-synchronized
+        - 2 tasks are declared dependent but are not access-wide
+        - 2 consecutive barriers
+    - multiple-edges - out(x, y) -> in(x, y) - useless overheads, out(x) -> in(x) is sufficient
+    - redundant-edges - out(x, x, ..., x)
+    - arc redundant by transivity -
+        - out(x, y) -> out(x) -> in(x)
+               |_________________^
+    - cache-use - a task accesses fits / does not fit into cache lines
+
+- Task memory accesses mapping (see Numamma - https://github.com/numamma/numamma)

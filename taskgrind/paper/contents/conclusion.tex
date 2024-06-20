@@ -1,12 +1,3 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Conclusion and Future Work}    \label{sec:conclusion}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-
-
-
-\subsection{LIMITS}
-- if(0) = pas possible à tracker avec LLVM et OMP-NUM-THREADS=1 -> utiliser OMP-NUM-THREADS=2 ? tt façon valgrind serialise
-- 200,000 erreurs reportés sur LULESH sur un cas minimal ... inexpoitable. Dû au fait de voir "tous les accès" (=> faux positifs TLS, ...) - en passant uniquement sur le outermostscope, alors moins de faux positifs (~50)
-- 2 tâches identiques qui malloc() + free() - potentiellement alloué au même endroit sur le tas... sans pb de concurrences - besoin d'override le malloc
-- mutex : comment les gérer ?

@@ -583,8 +583,15 @@ taskgrind_prepare_env(HChar *** envp)
 
     TASKGRIND_INFO("Loading OMPT Plugin from %s", absolute_so);
     VG_(env_setenv)(envp, "OMP_TOOL_LIBRARIES", absolute_so);
-    // VG_(env_setenv)(envp, "OMP_NUM_THREADS", "2");
     VG_(env_setenv)(envp, "LIBOMP_USE_HIDDEN_HELPER_TASK", "0");
+    VG_(env_setenv)(envp, "KMP_ENABLE_TASK_THROTTLING", "0");
+
+    // TODO : use 1 thread once llvm fixed
+    // https://github.com/llvm/llvm-project/issues/89398#issuecomment-2066822457
+    // valgrind is serializing anyway
+    // VG_(env_setenv)(envp, "OMP_NUM_THREADS", "1");
+    VG_(env_setenv)(envp, "OMP_NUM_THREADS", "2");
+
 }
 
 VG_DETERMINE_INTERFACE_VERSION_WITH_ENV(taskgrind_pre_clo_init, taskgrind_prepare_env)

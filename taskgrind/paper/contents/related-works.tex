@@ -3,35 +3,3 @@
 \section{Related Work} \label{sec:relworks}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-- Par rapport à tous les outils (Archer, TaskSanitizer...)
-	- eux: possible faux-négatifs, car seulement ce qui est instrumenté à la compilation
-	- nous: instrmentaiton à l'exécution (VM Valgrind) -> pas de faux-négatifs
-		- par contre, BEAUCOUP de faux-positifs qui font l'objet du papier
-Use-case envisagé
-	- eux: l'utilisateur observe qu'un programme ne se comporte pas bien, de façon itérative il recompile la pile soft jusqu'à trouver le bug
-	- nous: l'utilisateur souhaite savoir si son programme est correct (sans erreurs observés à priori)
-		- l'outil reporte pleins d'erreurs / warning, l'utilisateur filtre ce qu'il ne veut pas
-autrement dit:
-	- eux: whitelist ; nous: blacklist
-
-- Debogging d'application parallèle
-	- paradigme thread vs tâche
-		philosophie
-			- thread = programmeur décrit les workers
-			- tâche = programmeur décrit le work (indépendamment des workers)
-		primitives de synchronizations:
-			- thread: mutex, condition, semaphore, ...
-			- tâche: réduction, dépendances, barrières, ...
-
-	- Paradigme thread "plus bas niveau" que tâche (modèle d'exécution tâche repose sur thread) [MODELE EXECUTION OPENMP]
-	- Il existe des outils pour assister le deboging de la programmation par thread, en detectant des problèmes très générals: data race, race condition
-		- comme tâche repose sur thread, ils permettent indirectement de deboguer tâche
-		- mais pas adapté au paradigme tâche
-
-
-
-- Debogger application par tâche dépendantes (= BSC et Patrick 2019 non-siblings)
-
-
-- Parallélisation automatique de code
--> nous: semi-automatique, on n'extrait pas les "coarse tasks" : on assume qu'elles sont connus / fourni par l'utilisateur

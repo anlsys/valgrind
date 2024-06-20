@@ -247,7 +247,7 @@ reachability_is_set(task_seg_t * s1, task_seg_t * s2)
     tl_assert(i < j);
 
     UInt n = SEGS.n;
-    UInt k = j + (i-1)*i/2;
+    UInt k = (n*(n-1)/2) - (n-i)*((n-i)-1)/2 + j - i - 1;
     tl_assert(k >= 0 && k < n*(n-1)/2);
     // return reachability[k];
 
@@ -275,7 +275,7 @@ reachability_set(task_seg_t * s1, task_seg_t * s2)
     tl_assert(i < j);
 
     UInt n = SEGS.n;
-    UInt k = j + (i-1)*i/2;
+    UInt k = (n*(n-1)/2) - (n-i)*((n-i)-1)/2 + j - i - 1;
     tl_assert(k >= 0 && k < n*(n-1)/2);
 
     UInt byte = k / (8*sizeof(UChar));
