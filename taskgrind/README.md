@@ -1,5 +1,5 @@
 # Requirements
-You need an LLVM>=17.x installation. Minimal build as follows:
+You need an LLVM>=17.x installation. You can build LLVM as follows
 ```
 cmake -S llvm -B build -G "Unix Makefiles" -DLLVM_TARGETS_TO_BUILD=X86 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_SHARED_LIBS=on -DLLVM_ENABLE_PROJECTS="clang;openmp" -DCMAKE_INSTALL_PREFIX=PREFIX
 ```
@@ -13,22 +13,22 @@ Refer to 'Building and installing it' section from Valgrind README
 You need a Clang>=17.x for this step.
 ```
 cd valgrind/taskgrind/runtimes-tools/ompt/
-mkdir build
+mkdir build && cd build
 CC=clang CXX=clang++ cmake ..
 make
 ```
-No need to install the OMPT plugin, Taskgrind reads directly to 'valgrind/taskgrind/runtimes-tools/ompt/build'
-
+Installation of the OMPT plugin is not supported yet
 
 # Usage
 ## Dev mode
 ```
 cd valgrind/taskgrind
 make
-../vg-in-place --tool=taskgrind tests/test.exe
+make -C tests
+../vg-in-place --tool=taskgrind tests/...
 ```
 
-The function `void task_fini(void)` in `task.c` is run at the end of execution: add manually analyses here.
+The function `void task_fini(void)` in `task.c` run at the end of execution: add analyses here.
 Some code may be buggy at the moment, don't blindly trust generated data structures.
 You may want to dump generated data structures to dot files with
 ```
