@@ -530,7 +530,7 @@ taskgrind_pre_clo_init(void)
     VG_(needs_client_requests)(taskgrind_handle_client_request);
     VG_(basic_tool_funcs)(taskgrind_post_clo_init, taskgrind_instrument, taskgrind_fini);
 
-    TASKGRIND_DEBUG("replacing malloc");
+    TASKGRIND_DEBUG("Replacing malloc");
     VG_(needs_libc_freeres)();
     VG_(needs_cxx_freeres)();
     VG_(needs_malloc_replacement)(
@@ -586,11 +586,9 @@ taskgrind_prepare_env(HChar *** envp)
     VG_(env_setenv)(envp, "LIBOMP_USE_HIDDEN_HELPER_TASK", "0");
     VG_(env_setenv)(envp, "KMP_ENABLE_TASK_THROTTLING", "0");
 
-    // TODO : use 1 thread once llvm fixed
+    //TODO
     // https://github.com/llvm/llvm-project/issues/89398#issuecomment-2066822457
-    // valgrind is serializing anyway
-    // VG_(env_setenv)(envp, "OMP_NUM_THREADS", "1");
-    VG_(env_setenv)(envp, "OMP_NUM_THREADS", "2");
+    VG_(env_setenv)(envp, "OMP_NUM_THREADS", "1");
 
 }
 

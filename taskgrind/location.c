@@ -4,6 +4,7 @@
 # include "pub_tool_execontext.h"
 
 # include "location.h"
+# include "print.h"
 # include "task.h"
 
 // retrieve a single LoC pointing pointing to the given task seg
@@ -76,6 +77,11 @@ location_get_from_ip(
 HChar *
 task_seg_get_location(task_seg_t * seg, UInt use_dir, HChar * buffer, UInt len)
 {
+    // detect LLVM outlined symbols
+    static const char * sym[] = {
+        "omp_task_entry",
+        "omp_outlined",
+    };
     ExeContext * ec = seg->ctx;
 
     if (ec == NULL)
@@ -93,12 +99,15 @@ task_seg_get_location(task_seg_t * seg, UInt use_dir, HChar * buffer, UInt len)
         const HChar * name;
         if (VG_(get_fnname)(ep, ip, &name))
         {
-            // detect LLVM outlined sections
-            if (VG_(strstr)(name, "omp_task_entry"))
+            Int j;
+            for (j = 0 ; j < sizeof(sym) / sizeof(char *) ; ++j)
             {
-                HChar * r = location_get_from_ip(ep, ips[i], use_dir, buffer, len);
-                if (r)
-                    return r;
+                if (VG_(strstr)(name, sym[j]))
+                {
+                    HChar * r = location_get_from_ip(ep, ips[i], use_dir, buffer, len);
+                    if (r)
+                        return r;
+                }
             }
         }
     }

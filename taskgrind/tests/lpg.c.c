@@ -8,6 +8,9 @@ main(void)
             # pragma omp task
             {}
 
+            # pragma omp task
+            {}
+
             # pragma omp taskwait
         }
     }

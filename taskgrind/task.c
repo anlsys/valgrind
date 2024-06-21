@@ -80,7 +80,7 @@ task_seg_new(task_t * task)
     ThreadId tid = VG_(get_running_tid)();
     if (tid != VG_INVALID_THREADID)
     {
-        seg->ctx = NULL; // VG_(record_ExeContext)(tid, 0);
+        // seg->ctx = VG_(record_ExeContext)(tid, 0);
         seg->tid = tid;
     }
 
@@ -272,6 +272,9 @@ task_create(UWord id, task_type_t type, UWord undeferred)
 
             // in the future, link each next children with this barrier
             CURRENT_TASK->last_sync = task;
+
+            // A barrier has no instructions, retrieve context here
+            task_seg->ctx = VG_(record_ExeContext)(VG_(get_running_tid)(), 0);
 
             // no need to set 'pred' -> 'succ' as we already have 'pred' -> 'task' -> 'succ'
             break ;
