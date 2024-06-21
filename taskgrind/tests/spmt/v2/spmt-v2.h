@@ -1,0 +1,869 @@
+#ifndef __SPMT_H__
+# define __SPMT_H__
+
+# include <stdint.h>
+
+/* SPMT pointer type */
+# ifndef SPMT_PTR_T
+#  define SPMT_PTR_T     int
+#  define SPMT_PTR_T_ID "%d"
+# endif
+
+# define SPMT_NULL  ((void *) 0)
+
+/* Interfaces */
+# ifndef SPMT_F_MEMSET
+#  define SPMT_F_MEMSET(A, V, S) memset(A, V, S)
+# endif
+
+# ifndef SPMT_F_PRINTF
+#  define SPMT_F_PRINTF(...) printf(__VA_ARGS__)
+# endif
+
+# ifndef SPMT_F_ALLOC_NODE
+#  include <stdlib.h>
+#  define SPMT_F_ALLOC_NODE() malloc(sizeof(spmt_node_t))
+#  define SPMT_F_FREE_NODE(X) free(X)
+# else /* SPMT_F_ALLOC_NODE */
+#  ifndef SPMT_F_FREE_NODE
+#   error "You must define 'SPMT_F_FREE_NODE'"
+#  endif /* SPMT_F_FREE_NODE */
+# endif
+
+# ifndef SPMT_F_ASSERT
+#  include <assert.h>
+#  define SPMT_F_ASSERT(X) assert(X)
+# endif
+
+# define SPMT_MIN(X, Y) ((X) < (Y) ?  (X) : (Y))
+# define SPMT_MAX(X, Y) ((X) < (Y) ?  (Y) : (X))
+# define SPMT_ABS(X)    ((X) < 0)  ? -(X) : (X)
+
+typedef enum
+{
+    SPMT_LEFT       = 0,
+    SPMT_RIGHT      = 1,
+    SPMT_N_CHILDREN = 2,
+} spmt_direction_t;
+
+typedef enum
+{
+    SPMT_BLACK = 0,
+    SPMT_RED   = 1,
+} spmt_color_t;
+
+/* Represent the memory interval [a ; b[ */
+typedef struct  spmt_node_s
+{
+    struct spmt_node_s * parent;
+    union {
+        struct spmt_node_s * child[SPMT_N_CHILDREN];
+        struct {
+            struct spmt_node_s * left;
+            struct spmt_node_s * right;
+        };
+    };
+    SPMT_PTR_T a;
+    SPMT_PTR_T b;
+
+    spmt_color_t color;
+}               spmt_node_t;
+
+typedef struct  spmt_t
+{
+    spmt_node_t * root;
+}               spmt_t;
+
+typedef unsigned int (*spmt_dump_t)(const char *, ...);
+
+# define SPMT_FOREACH_CHILD_BEGIN(N, C, D)                  \
+    do {                                                    \
+        for (int D = SPMT_LEFT ; D < SPMT_N_CHILDREN ; ++D) \
+        {                                                   \
+            spmt_node_t * C = N->child[D];               \
+            if (C)                                          \
+            {
+# define SPMT_FOREACH_CHILD_END(N, C, D)                    \
+            }                                               \
+        }                                                   \
+    } while (0)
+
+/* Write the spmt to the given dot file */
+# define SPMT_TO_DOT(T, F)          \
+    do {                            \
+        FILE * f = fopen(F, "w");   \
+        __spmt_to_dot(T, f);        \
+        fclose(f);                  \
+    } while (0)
+
+# define SPMT_TO_PDF(T, F)                          \
+    do {                                            \
+        SPMT_TO_DOT(T, F ".dot");                   \
+        system("dot -Tpdf " F ".dot > " F ".pdf");  \
+    } while (0)
+
+static inline void
+__spmt_to_dot_node(spmt_node_t * node, FILE * f)
+{
+    const char * color = (node->color == SPMT_BLACK) ? "#000000" : "#FF0000";
+    fprintf(f, "    N%p[fontcolor=\"#ffffff\", label=\"[" SPMT_PTR_T_ID ".." SPMT_PTR_T_ID "[\", style=filled, fillcolor=\"%s\"] ;\n", node, node->a, node->b, color);
+    SPMT_FOREACH_CHILD_BEGIN(node, child, dir)
+    {
+        __spmt_to_dot_node(child, f);
+        fprintf(f, "    N%p->N%p ; \n", node, child);
+    }
+    SPMT_FOREACH_CHILD_END(node, child, dir);
+}
+
+static inline void
+__spmt_to_dot(spmt_t * spmt, FILE * f)
+{
+    fprintf(f, "digraph g {\n");
+    if (spmt->root != SPMT_NULL)
+        __spmt_to_dot_node(spmt->root, f);
+    fprintf(f, "}\n");
+}
+
+
+/* a foreach function */
+static inline void
+__spmt_foreach_stop(
+    spmt_node_t * node,
+    int (*f)(SPMT_PTR_T, SPMT_PTR_T, void *),
+    void * opaque,
+    int * stop
+) {
+    if (*stop)
+        return ;
+
+    if (f(node->a, node->b, opaque))
+    {
+        *stop = 1;
+        return ;
+    }
+
+    SPMT_FOREACH_CHILD_BEGIN(node, child, dir)
+    {
+        __spmt_foreach_stop(child, f, stop, opaque);
+        if (*stop)
+            return ;
+    }
+    SPMT_FOREACH_CHILD_END(node, child, dir);
+}
+
+# define SPMT_FOREACH_STOP(T, F, O)             \
+    do {                                        \
+        int stop = 0;                           \
+        __spmt_foreach_stop(T, F, O, &stop);    \
+    } while(0)
+
+static inline void
+__spmt_foreach(spmt_node_t * node, void (*f)(spmt_node_t *, void *), void * obj)
+{
+    if (node == SPMT_NULL)
+        return ;
+    f(node, obj);
+    __spmt_foreach(node->left,  f, obj);
+    __spmt_foreach(node->right, f, obj);
+}
+
+# define SPMT_FOREACH(T, F, O)      \
+    do {                            \
+        __spmt_foreach(T, F, O);    \
+    } while(0)
+
+
+/* Initialize a new spmt */
+# define SPMT_INITIALIZE(T)     \
+    do {                        \
+        (T)->root = SPMT_NULL;  \
+    } while (0)
+# define SPMT_INITIALIZE_STATIC { SPMT_NULL }
+
+/* Free the SPMT */
+# define SPMT_RELEASE(DST)              \
+    do {                                \
+        __spmt_release((DST)->root);    \
+        (DST)->root = SPMT_NULL;        \
+    } while (0)
+
+static inline void
+__spmt_release(spmt_node_t * node)
+{
+    if (!node)
+        return ;
+
+    SPMT_FOREACH_CHILD_BEGIN(node, child, dir)
+    {
+        __spmt_release(child);
+    }
+    SPMT_FOREACH_CHILD_END(node, child, dir);
+    SPMT_F_FREE_NODE(node);
+}
+
+/* Insert node 'N' in the spmt 'T' and set 'M' to '1' if the node was merged */
+# define SPMT_FILL(T, B, E)         \
+    do {                            \
+        __spmt_fill((T), (B), (E)); \
+    } while(0)
+
+static inline int
+__spmt_log2(int n)
+{
+    return 31 - __builtin_clz(n);
+}
+
+static inline int
+__spmt_twopow(int n)
+{
+    return (1 << n);
+}
+
+static inline int
+__spmt_height(spmt_node_t * node)
+{
+    if (node == SPMT_NULL)
+        return 0;
+    int l = __spmt_height(node->left);
+    int r = __spmt_height(node->right);
+    return 1 + SPMT_MAX(l, r);
+}
+
+static inline int
+__spmt_size(spmt_node_t * node)
+{
+    if (node == SPMT_NULL)
+        return 0;
+    int l = __spmt_size(node->left);
+    int r = __spmt_size(node->right);
+    return 1 + l + r;
+}
+
+static inline int
+__spmt_nodes_connect_value(int a, int b, int aa, int bb)
+{
+    return a == bb || b == aa;
+}
+
+static inline int
+__spmt_nodes_connect(spmt_node_t * x, spmt_node_t * y)
+{
+    return __spmt_nodes_connect_value(x->a, x->b, y->a, y->b);
+}
+
+static inline int
+__spmt_nodes_intersect_or_connect(spmt_node_t * x, spmt_node_t * y)
+{
+    return (x->a <= y->b && x->b >= y->a);
+}
+
+static inline int
+__spmt_nodes_intersect(spmt_node_t * x, spmt_node_t * y)
+{
+    return (x->a < y->b && x->b > y->a);
+}
+
+# ifndef NDEBUG
+
+static inline void
+__spmt_coherency_connect(spmt_t * spmt)
+{
+    int height    = __spmt_height(spmt->root);
+    int nelements = __spmt_size(spmt->root);
+    int ideal_height = __spmt_log2(nelements + 1);
+    SPMT_F_ASSERT(height <= 2 * ideal_height);
+}
+
+static inline void
+__spmt_coherency_balance(spmt_t * spmt)
+{
+    int height    = __spmt_height(spmt->root);
+    int nelements = __spmt_size(spmt->root);
+    int ideal_height = __spmt_log2(nelements + 1);
+    SPMT_F_ASSERT(height <= 2 * ideal_height);
+}
+
+static inline void
+__spmt_coherency_color(spmt_node_t * node)
+{
+    if (!node)
+        return ;
+
+    SPMT_F_ASSERT(node->color == SPMT_BLACK || node->color == SPMT_RED);
+    if (node->color == SPMT_RED)
+    {
+        SPMT_F_ASSERT(!node->left  || node->left->color  == SPMT_BLACK);
+        SPMT_F_ASSERT(!node->right || node->right->color == SPMT_BLACK);
+    }
+    __spmt_coherency_color(node->left);
+    __spmt_coherency_color(node->right);
+}
+
+static inline int
+__spmt_coherency_black_height(spmt_node_t * node)
+{
+    if (node == SPMT_NULL)
+        return 1;
+
+    int left_child_height  = __spmt_coherency_black_height(node->left);
+    int right_child_height = __spmt_coherency_black_height(node->right);
+    SPMT_F_ASSERT(left_child_height == right_child_height);
+
+    spmt_color_t color = (node->color == SPMT_BLACK) ? 1 : 0;
+    return color + left_child_height;
+}
+
+static inline void
+__spmt_coherency_interval_disjoint_nodes(spmt_node_t * x, void * obj)
+{
+    spmt_node_t * y = (spmt_node_t *) obj;
+    assert(x == y || !__spmt_nodes_intersect(x, y));
+}
+
+static inline void
+__spmt_coherency_interval_disjoint_foreach(spmt_node_t * node, void * obj)
+{
+    spmt_t * spmt = (spmt_t *) obj;
+    __spmt_foreach(spmt->root, __spmt_coherency_interval_disjoint_nodes, node);
+}
+
+static inline void
+__spmt_coherency_interval_disjoint(spmt_t * spmt)
+{
+    __spmt_foreach(spmt->root, __spmt_coherency_interval_disjoint_foreach, spmt);
+}
+
+static inline void
+__spmt_coherency(spmt_t * spmt)
+{
+    if (spmt->root)
+    {
+        // SPMT_F_ASSERT(spmt->root->color == SPMT_BLACK);
+        __spmt_coherency_color(spmt->root);
+        __spmt_coherency_black_height(spmt->root);
+        __spmt_coherency_interval_disjoint(spmt);
+    }
+    __spmt_coherency_balance(spmt);
+}
+
+# endif /* NDEBUG */
+
+static inline spmt_node_t *
+__spmt_node_new(spmt_color_t color, SPMT_PTR_T a, SPMT_PTR_T b)
+{
+    spmt_node_t * node = SPMT_F_ALLOC_NODE();
+    node->a      = a;
+    node->b      = b;
+    node->left   = SPMT_NULL;
+    node->right  = SPMT_NULL;
+    node->parent = SPMT_NULL;
+    node->color  = color;
+    return node;
+}
+
+///////////////
+// ROTATIONS //
+///////////////
+
+static inline int
+__spmt_child_dir(spmt_node_t * node)
+{
+    return (node == node->parent->left) ? SPMT_LEFT : SPMT_RIGHT;
+}
+
+static inline spmt_node_t *
+__spmt_get_sibling(spmt_node_t * node)
+{
+    SPMT_F_ASSERT(node->parent);
+    const spmt_direction_t dir = __spmt_child_dir(node);
+    return node->parent->child[1-dir];
+}
+
+static inline int
+__spmt_node_is_black(spmt_node_t * node)
+{
+    return node == SPMT_NULL || node->color == SPMT_BLACK;
+}
+
+/**
+ *      C              A
+ *     / \            / \
+ *    A   E    <-    B   C
+ *   / \                / \
+ *  B   D              D   E
+ */
+static inline void
+__spmt_rotate_left(spmt_t * spmt, spmt_node_t * A)
+{
+    assert(A->right);
+
+//  spmt_node_t * B = A->left;
+    spmt_node_t * C = A->right;
+    spmt_node_t * D = C->left;
+//  spmt_node_t * E = C->right;
+
+    C->left  = A;
+ // C->right = E;
+ // A->left  = B;
+    A->right = D;
+
+    C->parent = A->parent;
+    if (A->parent == SPMT_NULL)
+        spmt->root = C;
+    else if (A->parent->left == A)
+        A->parent->left = C;
+    else
+        A->parent->right = C;
+
+ // B->parent = A;
+    A->parent = C;
+    if (D)
+        D->parent = A;
+ // E->parent = C;
+}
+
+/**
+ *      A              B
+ *     / \            / \
+ *    B   C    ->    D   A
+ *   / \                / \
+ *  D   E              E   C
+ */
+static inline void
+__spmt_rotate_right(spmt_t * spmt, spmt_node_t * A)
+{
+    spmt_node_t * B = A->left;
+ // spmt_node_t * C = A->right;
+ // spmt_node_t * D = B->left;
+    spmt_node_t * E = B->right;
+
+ // B->left  = D;
+    B->right = A;
+    A->left  = E;
+ // A->right = C;
+
+    B->parent = A->parent;
+    if (A->parent == SPMT_NULL)
+        spmt->root = B;
+    else if (A->parent->left == A)
+        A->parent->left = B;
+    else
+        A->parent->right = B;
+
+    if (E)
+        E->parent = A;
+ // C->parent = A;
+    A->parent = B;
+ // D->parent = B;
+}
+
+static inline void
+__spmt_rotate_dir(spmt_t * T, spmt_node_t * P, spmt_direction_t dir)
+{
+    if (dir == SPMT_LEFT)
+        __spmt_rotate_left(T, P);
+    else
+        __spmt_rotate_right(T, P);
+}
+
+// fixup after insertion
+static inline void
+__spmt_balance_fixup(spmt_t * spmt, spmt_node_t * node)
+{
+    spmt_node_t * z = node;
+    while (z->parent && z->parent->color == SPMT_RED)
+    {
+        if (z->parent == z->parent->parent->left)
+        {
+            spmt_node_t * y = z->parent->parent->right;
+            if (y && y->color == SPMT_RED)
+            {
+                z->parent->color = SPMT_BLACK;
+                y->color = SPMT_BLACK;
+                z->parent->parent->color = SPMT_RED;
+                z = z->parent->parent;
+            }
+            else
+            {
+                if (z == z->parent->right)
+                {
+                    z = z->parent;
+                    __spmt_rotate_left(spmt, z);
+                }
+                z->parent->color = SPMT_BLACK;
+                z->parent->parent->color = SPMT_RED;
+                __spmt_rotate_right(spmt, z->parent->parent);
+            }
+        }
+        else
+        {
+            spmt_node_t * y = z->parent->parent->left;
+
+            if (y && y->color == SPMT_RED)
+            {
+                z->parent->color = SPMT_BLACK;
+                y->color = SPMT_BLACK;
+                z->parent->parent->color = SPMT_RED;
+                z = z->parent->parent;
+            }
+            else
+            {
+                if (z == z->parent->left)
+                {
+                    z = z->parent;
+                    __spmt_rotate_right(spmt, z);
+                }
+                z->parent->color = SPMT_BLACK;
+                z->parent->parent->color = SPMT_RED;
+                __spmt_rotate_left(spmt, z->parent->parent);
+            }
+        }
+    }
+    spmt->root->color = SPMT_BLACK;
+}
+
+static inline void
+__spmt_delete_node_fixup(spmt_t * spmt, spmt_node_t * node)
+{
+    if (node == spmt->root)
+    {
+        node->color = SPMT_BLACK;
+        return ;
+    }
+    SPMT_F_ASSERT(node->parent);
+
+    spmt_node_t * sibling = __spmt_get_sibling(node);
+
+    if (sibling->color == SPMT_RED)
+    {
+        sibling->color = SPMT_BLACK;
+        sibling->parent->color = SPMT_RED;
+        __spmt_rotate_dir(spmt, node->parent, __spmt_child_dir(node));
+
+        sibling = __spmt_get_sibling(node);
+    }
+
+    if (__spmt_node_is_black(sibling->left) && __spmt_node_is_black(sibling->right))
+    {
+        sibling->color = SPMT_RED;
+
+        if (node->parent->color == SPMT_RED)
+            node->parent->color = SPMT_BLACK;
+        else
+            __spmt_delete_node_fixup(spmt, node->parent);
+    }
+    else
+    {
+          spmt_direction_t dir = __spmt_child_dir(node);
+
+          if (dir == SPMT_LEFT && __spmt_node_is_black(sibling->right))
+          {
+              sibling->left->color = SPMT_BLACK;
+              sibling->color = SPMT_RED;
+              __spmt_rotate_right(spmt, sibling);
+              sibling = node->parent->right;
+          }
+          else if (dir == SPMT_RIGHT && __spmt_node_is_black(sibling->left))
+          {
+              sibling->right->color = SPMT_BLACK;
+              sibling->color = SPMT_RED;
+              __spmt_rotate_left(spmt, sibling);
+              sibling = node->parent->left;
+          }
+
+          sibling->color = node->parent->color;
+          node->parent->color = SPMT_BLACK;
+          if (dir == SPMT_LEFT)
+          {
+              sibling->right->color = SPMT_BLACK;
+                __spmt_rotate_left(spmt, node->parent);
+          }
+          else
+          {
+              sibling->left->color = SPMT_BLACK;
+              __spmt_rotate_right(spmt, node->parent);
+          }
+    }
+
+    SPMT_F_ASSERT(node->parent);
+}
+
+static inline void
+__spmt_transplant(spmt_t  * spmt, spmt_node_t * u, spmt_node_t * v)
+{
+    if (u->parent == SPMT_NULL)
+        spmt->root = v;
+    else
+    {
+        if (u == u->parent->left)
+            u->parent->left = v;
+        else
+            u->parent->right = v;
+    }
+    if (v)
+        v->parent = u->parent;
+}
+
+static inline void
+__spmt_delete_node(spmt_t * spmt, spmt_node_t * z)
+{
+    // When the deleted node has 2 child (non-NIL), then we can swap its
+    // value with its in-order successor (the leftmost child of the right
+    // subtree), and then delete the successor instead.
+    if (z->left && z->right)
+    {
+        spmt_node_t * node = z->right;
+        while (node->left)
+            node = node->left;
+        z->a = node->a;
+        z->b = node->b;
+        return __spmt_delete_node(spmt, node);
+    }
+    // When the deleted node has only 1 child (non-SPMT_NULL). In this case, just
+    // replace the node with its child, and color it black.  The single child
+    // (non-SPMT_NULL) must be red
+    else if (z->left && !z->right)
+    {
+        SPMT_F_ASSERT(z->color == SPMT_BLACK);
+        SPMT_F_ASSERT(z->left->color == SPMT_RED);
+        z->left->color = SPMT_BLACK;
+        __spmt_transplant(spmt, z, z->left);
+    }
+    else if (!z->left && z->right)
+    {
+        SPMT_F_ASSERT(z->right->color == SPMT_RED);
+        z->right->color = SPMT_BLACK;
+        __spmt_transplant(spmt, z, z->right);
+    }
+    // When the deleted node has no child (both SPMT_NULL)
+    else
+    {
+        // and is the root, replace it with SPMT_NULL. The tree is empty.
+        if (z == spmt->root)
+        {
+            spmt->root = SPMT_NULL;
+        }
+        // and is red, simply remove the leaf node.
+        if (z->color == SPMT_RED)
+        {
+            __spmt_transplant(spmt, z, SPMT_NULL);
+        }
+        // and is black, deleting it will create an imbalance
+        else
+        {
+            SPMT_F_ASSERT(z->parent);
+            SPMT_F_ASSERT(z->color == SPMT_BLACK);
+            SPMT_F_ASSERT(z->left == SPMT_NULL && z->right == SPMT_NULL);
+
+            __spmt_delete_node_fixup(spmt, z);
+            __spmt_transplant(spmt, z, SPMT_NULL);
+        }
+    }
+
+    SPMT_F_FREE_NODE(z);
+}
+
+static inline void
+__spmt_fill_fixup_merge_to_root(spmt_t * spmt, spmt_node_t * parent, spmt_node_t * node)
+{
+    if (parent == SPMT_NULL)
+        return ;
+
+__spmt_fill_fixup_merge_to_root:
+
+    if (__spmt_nodes_connect(parent, node))
+    {
+        parent->a = SPMT_MIN(node->a, parent->a);
+        parent->b = SPMT_MAX(node->b, parent->b);
+        __spmt_delete_node(spmt, node);
+        if (parent->left || parent->right)
+        {
+            if (parent->left)
+                __spmt_fill_fixup_merge_to_root(spmt, parent, parent->left);
+            if (parent->right)
+            {
+                // __spmt_fill_fixup_merge_to_root(spmt, parent, parent->right);
+                node = parent->right;
+                goto __spmt_fill_fixup_merge_to_root;
+            }
+            return ;
+        }
+        else
+        {
+            node = parent;
+        }
+    }
+    __spmt_fill_fixup_merge_to_root(spmt, parent->parent, node);
+}
+
+static inline void
+__spmt_fill_fixup_merge(spmt_t * spmt, spmt_node_t * node, SPMT_PTR_T a, SPMT_PTR_T b)
+{
+    a = SPMT_MIN(node->a, a);
+    b = SPMT_MAX(node->b, b);
+
+    node->a = a;
+    node->b = b;
+
+    __spmt_fill_fixup_merge_to_root(spmt, node->parent, node);
+}
+
+static inline void
+__spmt_fill_fixup(spmt_t * spmt, spmt_node_t * parent, spmt_direction_t dir, SPMT_PTR_T a, SPMT_PTR_T b)
+{
+    SPMT_F_ASSERT(parent->child[dir] == SPMT_NULL);
+
+    if (__spmt_nodes_connect_value(parent->a, parent->b, a, b))
+        return __spmt_fill_fixup_merge(spmt, parent, a, b);
+
+    spmt_node_t * node = __spmt_node_new(SPMT_RED, a, b);
+    parent->child[dir] = node;
+    node->parent = parent;
+
+    __spmt_balance_fixup(spmt, node);
+}
+
+static inline void
+__spmt_fill_from(spmt_t * spmt, spmt_node_t * parent, SPMT_PTR_T a, SPMT_PTR_T b)
+{
+    if (a >= b)
+        return ;
+
+    while (1)
+    {
+        // case (1)    J << I
+        if (b <= parent->a)
+        {
+            if (parent->left == SPMT_NULL)
+            {
+                __spmt_fill_fixup(spmt, parent, SPMT_LEFT, a, b);
+                break ;
+            }
+            else
+                parent = parent->left;
+        }
+
+        // case (2)     J >> I
+        else if (a >= parent->b)
+        {
+            if (parent->right == SPMT_NULL)
+            {
+                __spmt_fill_fixup(spmt, parent, SPMT_RIGHT, a, b);
+                break ;
+            }
+            else
+                parent = parent->right;
+        }
+
+        // case (3)     J c I
+        else if (parent->a <= a && b <= parent->b)
+        {
+            // nothing to do
+            break ;
+        }
+
+        // case (5)     I c J
+        else if (a <= parent->a && parent->b <= b)
+        {
+            __spmt_fill_from(spmt, parent, a,         parent->a);
+            __spmt_fill_from(spmt, parent, parent->b, b);
+            break ;
+        }
+
+        // case (6)     J < I
+        else if (a <= parent->a && b <= parent->b)
+        {
+            __spmt_fill_from(spmt, parent, a,         parent->a);
+            __spmt_fill_from(spmt, parent, parent->a, b);
+            break ;
+        }
+
+
+        // case (7)     J > I
+        else if (parent->a <= a && a <= parent->b)
+        {
+            __spmt_fill_from(spmt, parent, parent->b, b);
+            __spmt_fill_from(spmt, parent, a,         parent->b);
+            break ;
+        }
+    }
+}
+
+static inline void
+__spmt_fill(spmt_t * spmt, SPMT_PTR_T a, SPMT_PTR_T b)
+{
+    if (spmt->root == SPMT_NULL)
+        spmt->root = __spmt_node_new(SPMT_BLACK, a, b);
+    else
+        __spmt_fill_from(spmt, spmt->root, a, b);
+
+# ifndef NDEBUG
+#  pragma message("Coherency tests are set. Use -DNDEBUG if you need performance")
+    __spmt_coherency(spmt);
+# endif /* NDEBUG */
+}
+
+/* Dump the spmt */
+# define SPMT_DUMP(F, T)                \
+    do {                                \
+        __spmt_dump(F, (T)->root, 0);   \
+    } while (0)
+
+# define SPMT_DUMP_FILLED(F, T) SPMT_DUMP(F, T)
+
+static inline void
+__spmt_dump(spmt_dump_t print, spmt_node_t * parent, int depth)
+{
+    if (!parent)
+        return ;
+
+    print("%*c(%llu, %llu)\n", 2*depth + 1, ' ', parent->a, parent->b);
+    SPMT_FOREACH_CHILD_BEGIN(parent, child, dir)
+    {
+        __spmt_dump(print, child, depth+1);
+    }
+    SPMT_FOREACH_CHILD_END(parent, child, dir);
+}
+
+static inline int
+__spmt_intersect(
+    spmt_node_t * dst,
+    spmt_node_t * a,
+    spmt_node_t * b
+) {
+    (void) dst;
+    (void) a;
+    (void) b;
+    // TODO
+    return 0;
+}
+
+# define SPMT_INTERSECT(DST, A, B)      \
+    do {                                \
+        __spmt_intersect(DST, A, B);    \
+    } while (0)
+
+static inline void
+__spmt_append(
+    spmt_node_t * dst,
+    spmt_node_t * src
+) {
+    (void) dst;
+    (void) src;
+    // TODO
+}
+
+# define SPMT_APPEND(DST, SRC)      \
+    do {                            \
+        __spmt_append(DST, SRC);    \
+    } while (0)
+
+/* Return true if the spmt is empty */
+# define SPMT_IS_EMPTY(T) __spmt_is_empty(T)
+static inline int
+__spmt_is_empty(spmt_t * spmt)
+{
+    return spmt->root == SPMT_NULL;
+}
+
+#endif /* __SPMT_H__ */
