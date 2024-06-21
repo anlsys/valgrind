@@ -194,6 +194,8 @@ Run with 2 threads, and disable throttling
 - may or may not be an issue if order matters
 - no support in taskgrind
 
+
+
 ### Any synchronization primitives not reported to Taskgrind
 - Mutexes, conditions, ... - NO SUPPORT IN TASKGRIND YET
     - we could detect those using `omp_lock_t` via OMPT callbacks
@@ -326,3 +328,9 @@ for each segment s1  # n
     - cache-use - a task accesses fits / does not fit into cache lines
 
 - Task memory accesses mapping (see Numamma - https://github.com/numamma/numamma)
+
+
+
+
+# TODO
+- Stack and malloc : both issues are related to "memory liveness"

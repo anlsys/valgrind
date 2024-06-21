@@ -28,9 +28,16 @@ typedef enum    taskgrind_access_t
 // valgrind client requests
 typedef enum    taskgrind_client_request_t
 {
+    // a new task has been created
     VG_USERREQ__TASKGRIND_CREATE_EVENT      = VG_USERREQ_TOOL_BASE('T', 'G'),
+
+    // a new task start executed on the current thread
     VG_USERREQ__TASKGRIND_SCHEDULE_EVENT,
+
+    // depend(out: x) - send 'out' and 'address of x'
     VG_USERREQ__TASKGRIND_DEPEND_EVENT,
+
+    // Executing thread waits for the completion of all children tasks of the current task
     VG_USERREQ__TASKGRIND_SYNC_EVENT,
 
 }               taskgrind_client_request_t;

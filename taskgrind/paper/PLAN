@@ -16,25 +16,23 @@ MOTIVATIONS
    Not the direction taken over the past 50 years, for the sake of productivity
    Cite languages that tried that, and failed
 
-
 CONTEXT
 - Porting of code historically sequential towards many-core and heterogeneous
 - Express parallelism from sequential code
 
-
 PROBLEM
 - Parallelize is tedious and error-prone
 - How to ensure correctness ?
-
+- Verification tools exists that recompile to instrument parts of the code
+    - can produce false-negative on non-instrumented parts
 
 OBJECTIVES
-- "heavy instrumentation" tool to assist parallelization with 'strong' guarantees (no false-negative)
-
+- "heavy instrumentation" towards no false-negative
 
 CONTRIBUTIONS
-- Taskgrind : a parallel program debogger with task support - Connected to OpenMP via OMPT
-- TODO
-
+- A survey on issues related to "heavy instrumentations"
+- Some solutions to these issues
+- An implementation in Valgrind
 
 # Related works
 See GETTING-STARTED
