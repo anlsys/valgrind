@@ -343,5 +343,5 @@ taskgrind_pass_e1(task_t * root)
     if (E1_ERRORS)
         TASKGRIND_ERR("-> E1 reported %d possible determinacy races", E1_ERRORS);
     else
-        TASKGRIND_INFO("-> E1 found no determinacy races :-)");
+        TASKGRIND_INFO("-> E1 found no determinacy race :-)");
 }

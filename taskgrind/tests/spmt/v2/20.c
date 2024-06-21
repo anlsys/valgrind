@@ -2,6 +2,7 @@
 # include <stdlib.h>
 # include <string.h>
 
+// # include "spmt.h"
 # include "spmt-v2.h"
 
 # define FILL(X)                    \
@@ -18,17 +19,17 @@ main(void)
     spmt_t tree;
     SPMT_INITIALIZE(&tree);
 
-    int N = 1000;
+    int N = 1000000;
     for (int i = 0 ; i < N ; ++i)
     {
-        int x = rand() / (double)RAND_MAX * N;
+//        int x = rand() / (double)RAND_MAX * N;
+        int x = i;
         FILL(x);
     }
 
-    SPMT_DUMP((spmt_dump_t)printf, &tree);
-    puts("----------------------------------------------------");
-    SPMT_DUMP_FILLED((spmt_dump_t)printf, &tree);
-    SPMT_TO_PDF(&tree, "spmt");
+//    SPMT_DUMP((spmt_dump_t)printf, &tree);
+//    SPMT_TO_PDF(&tree, "spmt");
+//    printf("spmt size is %d\n", __spmt_size(tree.root));
     SPMT_RELEASE(&tree);
     return 0;
 }
