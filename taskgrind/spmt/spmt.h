@@ -894,7 +894,7 @@ __spmt_fill_from(spmt_t * spmt, spmt_node_t * parent, SPMT_PTR_T a, SPMT_PTR_T b
         else if (a <= aa && bb <= b)
         {
             __spmt_fill_from(spmt, parent,      a, aa);
-            __spmt_fill_from(spmt, spmt->root, bb,  b);
+            __spmt_fill_from(spmt, spmt->root, bb,  b); // 'parent' may have been deleted
             break ;
         }
 
@@ -902,16 +902,15 @@ __spmt_fill_from(spmt_t * spmt, spmt_node_t * parent, SPMT_PTR_T a, SPMT_PTR_T b
         else if (a <= parent->I.a && b <= parent->I.b)
         {
             __spmt_fill_from(spmt, parent,      a, aa);
-            __spmt_fill_from(spmt, spmt->root, aa,  b);
+            __spmt_fill_from(spmt, spmt->root, aa,  b); // 'parent' may have been deleted
             break ;
         }
-
 
         // case (7)     J > I
         else if (parent->I.a <= a && a <= parent->I.b)
         {
             __spmt_fill_from(spmt, parent,     bb, b);
-            __spmt_fill_from(spmt, spmt->root,  a, bb);
+            __spmt_fill_from(spmt, spmt->root,  a, bb); // 'parent' may have been deleted
             break ;
         }
     }
@@ -920,6 +919,9 @@ __spmt_fill_from(spmt_t * spmt, spmt_node_t * parent, SPMT_PTR_T a, SPMT_PTR_T b
 static inline void
 __spmt_fill(spmt_t * spmt, SPMT_PTR_T a, SPMT_PTR_T b)
 {
+    if (a >= b)
+        return ;
+
     if (spmt->root == SPMT_NULL)
         spmt->root = __spmt_node_new(SPMT_BLACK, a, b);
     else
@@ -957,7 +959,7 @@ __spmt_dump(spmt_dump_t print, spmt_node_t * parent, int depth)
  *  Compute the intersection A n B.
  *
  *  Store at most 'n' intersections to the 'intervals' array.
- *  The array is null-terminated at 'i' with the (0, 0) interval if i < n
+ *  Return the number of intervals stored
  *
  * in: A
  * in: B
@@ -997,11 +999,6 @@ __spmt_intersect(interval_t * intervals, int n, spmt_t * A, spmt_t * B)
 {
     int i = 0;
     __spmt_intersect_from(intervals, &i, n, A->root, B->root);
-    if (i < n)
-    {
-        intervals[i].a = 0;
-        intervals[i].b = 0;
-    }
     return i;
 }
 

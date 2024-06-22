@@ -17,8 +17,7 @@ static inline int
 pass_w1_addr_is_stack(SPMT_PTR_T addr)
 {
     // distance bellow the access is assumed on the stack (64Go of stacks lol)
-    static SPMT_PTR_T STACK_MAX_DISTANCE    = 0x0fffffffff;
-
+    static SPMT_PTR_T STACK_MAX_DISTANCE = (SPMT_PTR_T) 0x0fffffffff;
     return (TASKGRIND_BASE_STACK_PTR - STACK_MAX_DISTANCE <= addr) && (addr <= TASKGRIND_BASE_STACK_PTR);
 }
 

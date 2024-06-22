@@ -17,6 +17,7 @@
 
 # define SPMT_DISABLE_LIBSTDC
 
+# define NDEBUG
 # include "spmt/spmt.h"
 
 #endif /* __TASKGRIND_SPMT_H__ */

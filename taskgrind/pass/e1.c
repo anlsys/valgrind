@@ -19,24 +19,25 @@ report_err_alloc(interval_t * I)
 {
     taskgrind_alloc_record_t * record = taskgrind_alloc_record_get((void *) I->a);
     if (record == NULL)
-        return ;
-
-    tl_assert(record->ctx);
-
-    TASKGRIND_ERR("    %lu bytes from %p allocated in block %p of size %lu",
-            I->b - I->a, (void *) I->a, record->p, record->size);
-
-    ExeContext * ec = record->ctx;
-    DiEpoch ep = VG_(get_ExeContext_epoch)(ec);
-    Int n_ips = VG_(get_ExeContext_n_ips)(ec);
-    Addr * ips = VG_(get_ExeContext_ips)(ec);
-    HChar buffer[256];
-    UInt show_dir = 1;
-
-    for (Int i = i ; i < n_ips && i < N_MALLOC_ADDR_IPS ; ++i)
+        TASKGRIND_ERR("    %lu bytes from %p", I->b - I->a, (void *) I->a);
+    else
     {
-        location_get_from_ip(ep, ips[i], show_dir, buffer, sizeof(buffer));
-        TASKGRIND_ERR("       from %s", buffer);
+        tl_assert(record->ctx);
+        TASKGRIND_ERR("    %lu bytes from %p allocated in block %p of size %lu",
+                I->b - I->a, (void *) I->a, record->p, record->size);
+
+        ExeContext * ec = record->ctx;
+        DiEpoch ep = VG_(get_ExeContext_epoch)(ec);
+        Int n_ips = VG_(get_ExeContext_n_ips)(ec);
+        Addr * ips = VG_(get_ExeContext_ips)(ec);
+        HChar buffer[256];
+        UInt show_dir = 1;
+
+        for (Int i = i ; i < n_ips && i < N_MALLOC_ADDR_IPS ; ++i)
+        {
+            location_get_from_ip(ep, ips[i], show_dir, buffer, sizeof(buffer));
+            TASKGRIND_ERR("       from %s", buffer);
+        }
     }
 }
 
@@ -77,8 +78,7 @@ static inline int
 addr_is_stack(SPMT_PTR_T addr)
 {
     // distance bellow the access is assumed on the stack (64Go of stacks lol)
-    static SPMT_PTR_T STACK_MAX_DISTANCE    = 0x0fffffffff;
-
+    static SPMT_PTR_T STACK_MAX_DISTANCE = (SPMT_PTR_T) 0x0fffffffff;
     return (TASKGRIND_BASE_STACK_PTR - STACK_MAX_DISTANCE <= addr) && (addr <= TASKGRIND_BASE_STACK_PTR);
 }
 
@@ -248,4 +248,6 @@ taskgrind_pass_e1(task_t * root)
         TASKGRIND_ERR("-> E1 reported %d possible determinacy races", ERRORS);
     else
         TASKGRIND_INFO("-> E1 found no determinacy race :-)");
+
+    VG_(free)(intervals);
 }
