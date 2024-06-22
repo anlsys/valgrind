@@ -967,39 +967,32 @@ __spmt_dump(spmt_dump_t print, spmt_node_t * parent, int depth)
  * out: intervals
  * out: i
  */
-static inline void
-__spmt_intersect_from(interval_t * intervals, int * i, int n, spmt_node_t * A, spmt_node_t * B)
+static inline int
+__spmt_intersect_from(interval_t * intervals, int i, int n, spmt_node_t * A, spmt_node_t * B)
 {
-    if (A == SPMT_NULL || B == SPMT_NULL)
-        return ;
+    if (A == SPMT_NULL || B == SPMT_NULL || i >= n ||
+            !__spmt_intervals_intersect(&(A->includes.I), &(B->includes.I)))
+        return i;
 
-    if (*i >= n)
-        return ;
-
-    if (!__spmt_intervals_intersect(&(A->includes.I), &(B->includes.I)))
-        return ;
-
-    // TODO : maybe add interval here
-    (void) intervals;
     if (__spmt_nodes_intersect(A, B))
     {
-        intervals[*i].a = SPMT_MAX(A->I.a, B->I.a);
-        intervals[*i].b = SPMT_MIN(A->I.b, B->I.b);
-        ++(*i);
+        intervals[i].a = SPMT_MAX(A->I.a, B->I.a);
+        intervals[i].b = SPMT_MIN(A->I.b, B->I.b);
+        ++i;
     }
 
-    __spmt_intersect_from(intervals, i, n, A->left , B->left );
-    __spmt_intersect_from(intervals, i, n, A->left , B->right );
-    __spmt_intersect_from(intervals, i, n, A->right, B->left );
-    __spmt_intersect_from(intervals, i, n, A->right, B->right );
+    i = __spmt_intersect_from(intervals, i, n, A->left , B->left );
+    i = __spmt_intersect_from(intervals, i, n, A->left , B->right );
+    i = __spmt_intersect_from(intervals, i, n, A->right, B->left );
+    i = __spmt_intersect_from(intervals, i, n, A->right, B->right );
+
+    return i;
 }
 
 static inline int
 __spmt_intersect(interval_t * intervals, int n, spmt_t * A, spmt_t * B)
 {
-    int i = 0;
-    __spmt_intersect_from(intervals, &i, n, A->root, B->root);
-    return i;
+    return __spmt_intersect_from(intervals, 0, n, A->root, B->root);
 }
 
 # define SPMT_INTERSECT(I, N, A, B) __spmt_intersect(I, N, A, B)

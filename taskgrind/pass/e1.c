@@ -12,7 +12,7 @@ static int ERRORS = 0;
 
 // output parameters
 static int N_MALLOC_ADDR_TO_REPORT  = 5;
-static int N_MALLOC_ADDR_IPS        = 8;
+static int N_MALLOC_ADDR_IPS        = 5;
 
 static void
 report_err_alloc(interval_t * I)
@@ -108,7 +108,7 @@ compare_segments_independent(task_seg_t * seg_a, task_seg_t * seg_b)
     //  run intersections
     r += SPMT_INTERSECT(intervals, n, &seg_b->stores, &A_RW);
     if (r < N_MALLOC_ADDR_TO_REPORT)
-        r += SPMT_INTERSECT(intervals, n, &seg_a->stores, &B_RW);
+        r += SPMT_INTERSECT(intervals + r, n - r, &seg_a->stores, &B_RW);
 
     // intersection is empty
     if (r == 0)
