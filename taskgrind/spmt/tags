@@ -1,0 +1,145 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+FILL	19.c	7;"	d	file:
+FILL	20.c	7;"	d	file:
+I	spmt-v2.h	/^        interval_t I;$/;"	m	struct:spmt_node_s::__anon6
+I	spmt-v2.h	/^    interval_t I;$/;"	m	struct:spmt_node_s
+N	17.c	7;"	d	file:
+N_BLOCK	17.c	8;"	d	file:
+OFFSET	17.c	5;"	d	file:
+SPMT_ABS	spmt-v2.h	40;"	d
+SPMT_APPEND	spmt-v2.h	872;"	d
+SPMT_BLACK	spmt-v2.h	/^    SPMT_BLACK = 0,$/;"	e	enum:__anon2
+SPMT_DUMP	spmt-v2.h	827;"	d
+SPMT_DUMP_FILLED	spmt-v2.h	832;"	d
+SPMT_FILL	spmt-v2.h	227;"	d
+SPMT_FOREACH	spmt-v2.h	167;"	d
+SPMT_FOREACH_CHILD_BEGIN	spmt-v2.h	86;"	d
+SPMT_FOREACH_CHILD_END	spmt-v2.h	93;"	d
+SPMT_FOREACH_STOP	spmt-v2.h	151;"	d
+SPMT_F_ALLOC_NODE	spmt-v2.h	25;"	d
+SPMT_F_ASSERT	spmt-v2.h	35;"	d
+SPMT_F_FREE_NODE	spmt-v2.h	26;"	d
+SPMT_F_MEMSET	spmt-v2.h	16;"	d
+SPMT_F_PRINTF	spmt-v2.h	20;"	d
+SPMT_INITIALIZE	spmt-v2.h	174;"	d
+SPMT_INITIALIZE_STATIC	spmt-v2.h	178;"	d
+SPMT_INTERSECT	spmt-v2.h	857;"	d
+SPMT_IS_EMPTY	spmt-v2.h	896;"	d
+SPMT_LEFT	spmt-v2.h	/^    SPMT_LEFT       = 0,$/;"	e	enum:__anon1
+SPMT_MAX	spmt-v2.h	39;"	d
+SPMT_MIN	spmt-v2.h	38;"	d
+SPMT_NULL	spmt-v2.h	12;"	d
+SPMT_N_CHILDREN	spmt-v2.h	/^    SPMT_N_CHILDREN = 2,$/;"	e	enum:__anon1
+SPMT_PTR_T	spmt-v2.h	8;"	d
+SPMT_PTR_T_ID	spmt-v2.h	9;"	d
+SPMT_RED	spmt-v2.h	/^    SPMT_RED   = 1,$/;"	e	enum:__anon2
+SPMT_RELEASE	spmt-v2.h	181;"	d
+SPMT_RIGHT	spmt-v2.h	/^    SPMT_RIGHT      = 1,$/;"	e	enum:__anon1
+SPMT_SPACE	1.c	5;"	d	file:
+SPMT_SPACE	10.c	5;"	d	file:
+SPMT_SPACE	11.c	5;"	d	file:
+SPMT_SPACE	12.c	5;"	d	file:
+SPMT_SPACE	13.c	5;"	d	file:
+SPMT_SPACE	14.c	5;"	d	file:
+SPMT_SPACE	15.c	5;"	d	file:
+SPMT_SPACE	16.c	5;"	d	file:
+SPMT_SPACE	17.c	9;"	d	file:
+SPMT_SPACE	18.c	5;"	d	file:
+SPMT_SPACE	5.c	5;"	d	file:
+SPMT_SPACE	6.c	5;"	d	file:
+SPMT_SPACE	7.c	5;"	d	file:
+SPMT_SPACE	8.c	5;"	d	file:
+SPMT_SPACE	9.c	5;"	d	file:
+SPMT_TO_DOT	spmt-v2.h	99;"	d
+SPMT_TO_PDF	spmt-v2.h	106;"	d
+SPMT_UNION	spmt-v2.h	885;"	d
+STEP	17.c	6;"	d	file:
+__SPMT_H__	spmt-v2.h	2;"	d
+__spmt_append	spmt-v2.h	/^__spmt_append(spmt_t * DST, spmt_t * SRC)$/;"	f
+__spmt_balance_fixup	spmt-v2.h	/^__spmt_balance_fixup(spmt_t * spmt, spmt_node_t * node)$/;"	f
+__spmt_child_dir	spmt-v2.h	/^__spmt_child_dir(spmt_node_t * node)$/;"	f
+__spmt_coherency	spmt-v2.h	/^__spmt_coherency(spmt_t * spmt)$/;"	f
+__spmt_coherency_balance	spmt-v2.h	/^__spmt_coherency_balance(spmt_t * spmt)$/;"	f
+__spmt_coherency_black_height	spmt-v2.h	/^__spmt_coherency_black_height(spmt_node_t * node)$/;"	f
+__spmt_coherency_color	spmt-v2.h	/^__spmt_coherency_color(spmt_node_t * node)$/;"	f
+__spmt_coherency_connect	spmt-v2.h	/^__spmt_coherency_connect(spmt_t * spmt)$/;"	f
+__spmt_coherency_interval_disjoint	spmt-v2.h	/^__spmt_coherency_interval_disjoint(spmt_t * spmt)$/;"	f
+__spmt_coherency_interval_disjoint_foreach	spmt-v2.h	/^__spmt_coherency_interval_disjoint_foreach(spmt_t * spmt, spmt_node_t * node, void * obj)$/;"	f
+__spmt_coherency_interval_disjoint_nodes	spmt-v2.h	/^__spmt_coherency_interval_disjoint_nodes(spmt_t * spmt, spmt_node_t * x, void * obj)$/;"	f
+__spmt_delete_node	spmt-v2.h	/^__spmt_delete_node(spmt_t * spmt, spmt_node_t * z)$/;"	f
+__spmt_delete_node_fixup	spmt-v2.h	/^__spmt_delete_node_fixup(spmt_t * spmt, spmt_node_t * node)$/;"	f
+__spmt_dump	spmt-v2.h	/^__spmt_dump(spmt_dump_t print, spmt_node_t * parent, int depth)$/;"	f
+__spmt_fill	spmt-v2.h	/^__spmt_fill(spmt_t * spmt, SPMT_PTR_T a, SPMT_PTR_T b)$/;"	f
+__spmt_fill_fixup	spmt-v2.h	/^__spmt_fill_fixup(spmt_t * spmt, spmt_node_t * parent, spmt_direction_t dir, SPMT_PTR_T a, SPMT_PTR_T b)$/;"	f
+__spmt_fill_fixup_merge	spmt-v2.h	/^__spmt_fill_fixup_merge(spmt_node_t * node, SPMT_PTR_T a, SPMT_PTR_T b)$/;"	f
+__spmt_fill_fixup_merge_to_root	spmt-v2.h	/^__spmt_fill_fixup_merge_to_root(spmt_t * spmt, spmt_node_t * parent, spmt_node_t * node)$/;"	f
+__spmt_fill_from	spmt-v2.h	/^__spmt_fill_from(spmt_t * spmt, spmt_node_t * parent, SPMT_PTR_T a, SPMT_PTR_T b)$/;"	f
+__spmt_foreach	spmt-v2.h	/^__spmt_foreach(spmt_node_t * node, void (*f)(spmt_t *, spmt_node_t *, void *), void * obj)$/;"	f
+__spmt_foreach_stop	spmt-v2.h	/^__spmt_foreach_stop($/;"	f
+__spmt_get_sibling	spmt-v2.h	/^__spmt_get_sibling(spmt_node_t * node)$/;"	f
+__spmt_height	spmt-v2.h	/^__spmt_height(spmt_node_t * node)$/;"	f
+__spmt_includes_fixup	spmt-v2.h	/^__spmt_includes_fixup(spmt_t * spmt, spmt_node_t * node)$/;"	f
+__spmt_includes_fixup_interval	spmt-v2.h	/^__spmt_includes_fixup_interval(spmt_node_t * node)$/;"	f
+__spmt_includes_fixup_node	spmt-v2.h	/^__spmt_includes_fixup_node(spmt_node_t * node)$/;"	f
+__spmt_intersect	spmt-v2.h	/^__spmt_intersect(spmt_t * DST, spmt_t * A, spmt_t * B)$/;"	f
+__spmt_is_empty	spmt-v2.h	/^__spmt_is_empty(spmt_t * spmt)$/;"	f
+__spmt_log2	spmt-v2.h	/^__spmt_log2(int n)$/;"	f
+__spmt_node_is_black	spmt-v2.h	/^__spmt_node_is_black(spmt_node_t * node)$/;"	f
+__spmt_node_new	spmt-v2.h	/^__spmt_node_new(spmt_color_t color, SPMT_PTR_T a, SPMT_PTR_T b)$/;"	f
+__spmt_nodes_connect	spmt-v2.h	/^__spmt_nodes_connect(spmt_node_t * x, spmt_node_t * y)$/;"	f
+__spmt_nodes_connect_value	spmt-v2.h	/^__spmt_nodes_connect_value(int a, int b, int aa, int bb)$/;"	f
+__spmt_nodes_intersect	spmt-v2.h	/^__spmt_nodes_intersect(spmt_node_t * x, spmt_node_t * y)$/;"	f
+__spmt_nodes_intersect_or_connect	spmt-v2.h	/^__spmt_nodes_intersect_or_connect(spmt_node_t * x, spmt_node_t * y)$/;"	f
+__spmt_release	spmt-v2.h	/^__spmt_release(spmt_node_t * node)$/;"	f
+__spmt_rotate_dir	spmt-v2.h	/^__spmt_rotate_dir(spmt_t * T, spmt_node_t * P, spmt_direction_t dir)$/;"	f
+__spmt_rotate_left	spmt-v2.h	/^__spmt_rotate_left(spmt_t * spmt, spmt_node_t * A)$/;"	f
+__spmt_rotate_right	spmt-v2.h	/^__spmt_rotate_right(spmt_t * spmt, spmt_node_t * A)$/;"	f
+__spmt_size	spmt-v2.h	/^__spmt_size(spmt_node_t * node)$/;"	f
+__spmt_to_dot	spmt-v2.h	/^__spmt_to_dot(spmt_t * spmt, FILE * f)$/;"	f
+__spmt_to_dot_node	spmt-v2.h	/^__spmt_to_dot_node(spmt_node_t * node, FILE * f)$/;"	f
+__spmt_transplant	spmt-v2.h	/^__spmt_transplant(spmt_t  * spmt, spmt_node_t * u, spmt_node_t * v)$/;"	f
+__spmt_twopow	spmt-v2.h	/^__spmt_twopow(int n)$/;"	f
+__spmt_union	spmt-v2.h	/^__spmt_union(spmt_t * DST, spmt_t * A, spmt_t * B)$/;"	f
+a	spmt-v2.h	/^    SPMT_PTR_T a, b;$/;"	m	struct:__anon3
+b	spmt-v2.h	/^    SPMT_PTR_T a, b;$/;"	m	struct:__anon3
+child	spmt-v2.h	/^        struct spmt_node_s * child[SPMT_N_CHILDREN];$/;"	m	union:spmt_node_s::__anon4	typeref:struct:spmt_node_s::__anon4::spmt_node_s
+color	spmt-v2.h	/^    spmt_color_t color;$/;"	m	struct:spmt_node_s
+f	9.c	/^f(SPMT_PTR_T begin, SPMT_PTR_T end, void * opaque)$/;"	f	file:
+includes	spmt-v2.h	/^    } includes;$/;"	m	struct:spmt_node_s	typeref:struct:spmt_node_s::__anon6
+interval_t	spmt-v2.h	/^} interval_t;$/;"	t	typeref:struct:__anon3
+left	spmt-v2.h	/^            struct spmt_node_s * left;$/;"	m	struct:spmt_node_s::__anon4::__anon5	typeref:struct:spmt_node_s::__anon4::__anon5::spmt_node_s
+main	1.c	/^int main(void)$/;"	f
+main	10.c	/^int main(void)$/;"	f
+main	11.c	/^int main(void)$/;"	f
+main	12.c	/^int main(void)$/;"	f
+main	13.c	/^int main(void)$/;"	f
+main	14.c	/^int main(void)$/;"	f
+main	15.c	/^int main(void)$/;"	f
+main	16.c	/^int main(void)$/;"	f
+main	17.c	/^int main(void)$/;"	f
+main	18.c	/^int main(void)$/;"	f
+main	19.c	/^main(void)$/;"	f
+main	2.c	/^int main(void)$/;"	f
+main	20.c	/^main(void)$/;"	f
+main	3.c	/^int main(void)$/;"	f
+main	4.c	/^int main(void)$/;"	f
+main	5.c	/^int main(void)$/;"	f
+main	6.c	/^int main(void)$/;"	f
+main	7.c	/^int main(void)$/;"	f
+main	8.c	/^int main(void)$/;"	f
+main	9.c	/^int main(void)$/;"	f
+parent	spmt-v2.h	/^    struct spmt_node_s * parent;$/;"	m	struct:spmt_node_s	typeref:struct:spmt_node_s::spmt_node_s
+right	spmt-v2.h	/^            struct spmt_node_s * right;$/;"	m	struct:spmt_node_s::__anon4::__anon5	typeref:struct:spmt_node_s::__anon4::__anon5::spmt_node_s
+root	spmt-v2.h	/^    spmt_node_t * root;$/;"	m	struct:spmt_t
+spmt_color_t	spmt-v2.h	/^} spmt_color_t;$/;"	t	typeref:enum:__anon2
+spmt_direction_t	spmt-v2.h	/^} spmt_direction_t;$/;"	t	typeref:enum:__anon1
+spmt_dump_t	spmt-v2.h	/^typedef unsigned int (*spmt_dump_t)(const char *, ...);$/;"	t
+spmt_node_s	spmt-v2.h	/^typedef struct  spmt_node_s$/;"	s
+spmt_node_t	spmt-v2.h	/^}               spmt_node_t;$/;"	t	typeref:struct:spmt_node_s
+spmt_t	spmt-v2.h	/^typedef struct  spmt_t$/;"	s
+spmt_t	spmt-v2.h	/^}               spmt_t;$/;"	t	typeref:struct:spmt_t

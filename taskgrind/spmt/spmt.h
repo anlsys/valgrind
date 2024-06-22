@@ -12,11 +12,11 @@
 
 /* SPMT pointer type */
 # ifndef SPMT_PTR_T
-#  define SPMT_PTR_T     int
-#  define SPMT_PTR_T_ID "%d"
+#  define SPMT_PTR_T        long unsigned int
+#  define SPMT_PTR_T_ID     "%lu"
 # endif
 
-# define SPMT_NULL  ((void *) 0)
+# define SPMT_NULL ((void *) 0)
 
 /* Interfaces */
 # ifndef SPMT_F_MEMSET
@@ -27,14 +27,12 @@
 #  define SPMT_F_PRINTF(...) printf(__VA_ARGS__)
 # endif
 
-# ifndef SPMT_F_ALLOC_NODE
+# ifndef SPMT_F_ALLOC
 #  include <stdlib.h>
-#  define SPMT_F_ALLOC_NODE() malloc(sizeof(spmt_node_t))
-#  define SPMT_F_FREE_NODE(X) free(X)
-# else /* SPMT_F_ALLOC_NODE */
-#  ifndef SPMT_F_FREE_NODE
-#   error "You must define 'SPMT_F_FREE_NODE'"
-#  endif /* SPMT_F_FREE_NODE */
+#  define SPMT_F_ALLOC(S)       malloc(S)
+#  define SPMT_F_FREE(X)        free(S)
+#  define SPMT_F_ALLOC_NODE()   malloc(sizeof(spmt_node_t))
+#  define SPMT_F_FREE_NODE(X)   free(X)
 # endif
 
 # ifndef SPMT_F_ASSERT
@@ -83,10 +81,20 @@ typedef struct  spmt_node_s
     spmt_color_t color;
 }               spmt_node_t;
 
+/* sparse memory tree */
 typedef struct  spmt_t
 {
     spmt_node_t * root;
 }               spmt_t;
+
+/* an array with the result of two spmt intersection */
+typedef struct  spmt_inter_s
+{
+    /* U(i=0:n) [ I[2*i]..I[2*i+1] [ */
+    SPMT_PTR_T * intervals;
+    SPMT_PTR_T n;
+}               spmt_inter_t;
+
 
 typedef unsigned int (*spmt_dump_t)(const char *, ...);
 
@@ -94,7 +102,7 @@ typedef unsigned int (*spmt_dump_t)(const char *, ...);
     do {                                                    \
         for (int D = SPMT_LEFT ; D < SPMT_N_CHILDREN ; ++D) \
         {                                                   \
-            spmt_node_t * C = N->child[D];               \
+            spmt_node_t * C = N->child[D];                  \
             if (C)                                          \
             {
 # define SPMT_FOREACH_CHILD_END(N, C, D)                    \
@@ -102,6 +110,7 @@ typedef unsigned int (*spmt_dump_t)(const char *, ...);
         }                                                   \
     } while (0)
 
+# ifndef SPMT_DISABLE_LIBSTDC
 static inline void
 __spmt_to_dot_node(spmt_node_t * node, FILE * f)
 {
@@ -148,6 +157,16 @@ __spmt_to_pdf(spmt_t * spmt, const char * fpath)
     do {                        \
         __spmt_to_pdf(T, F);    \
     } while (0)
+
+# endif /* SPMT_DISABLE_LIBSTDC */
+
+/* Return true if the spmt is empty */
+# define SPMT_IS_EMPTY(T) __spmt_is_empty(T)
+static inline int
+__spmt_is_empty(spmt_t * spmt)
+{
+    return spmt->root == SPMT_NULL;
+}
 
 static inline void
 __spmt_foreach_node(
@@ -255,9 +274,15 @@ __spmt_nodes_intersect_or_are_succesive(spmt_node_t * x, spmt_node_t * y)
 }
 
 static inline int
+__spmt_intervals_intersect(interval_t * I, interval_t * J)
+{
+    return (I->a < J->b && I->b > J->a);
+}
+
+static inline int
 __spmt_nodes_intersect(spmt_node_t * x, spmt_node_t * y)
 {
-    return (x->I.a < y->I.b && x->I.b > y->I.a);
+    return __spmt_intervals_intersect(&(x->I), &(y->I));
 }
 
 # ifndef NDEBUG
@@ -442,8 +467,6 @@ __spmt_includes_fixup_node(spmt_node_t * node)
 static inline void
 __spmt_rotate_left(spmt_t * spmt, spmt_node_t * A)
 {
-    assert(A->right);
-
 //  spmt_node_t * B = A->left;
     spmt_node_t * C = A->right;
     spmt_node_t * D = C->left;
@@ -833,8 +856,11 @@ __spmt_fill_from(spmt_t * spmt, spmt_node_t * parent, SPMT_PTR_T a, SPMT_PTR_T b
         // It would require rebalancing and recoloring the tree to ensure properties
         // However, i do not think there is practical use-case for Taskgrind purposes
 
+        SPMT_PTR_T aa = parent->I.a;
+        SPMT_PTR_T bb = parent->I.b;
+
         // case (1)    J << I
-        if (b <= parent->I.a)
+        if (b <= aa)
         {
             if (parent->left == SPMT_NULL)
             {
@@ -846,7 +872,7 @@ __spmt_fill_from(spmt_t * spmt, spmt_node_t * parent, SPMT_PTR_T a, SPMT_PTR_T b
         }
 
         // case (2)     J >> I
-        else if (a >= parent->I.b)
+        else if (a >= bb)
         {
             if (parent->right == SPMT_NULL)
             {
@@ -858,25 +884,25 @@ __spmt_fill_from(spmt_t * spmt, spmt_node_t * parent, SPMT_PTR_T a, SPMT_PTR_T b
         }
 
         // case (3)     J c I
-        else if (parent->I.a <= a && b <= parent->I.b)
+        else if (aa <= a && b <= bb)
         {
             // nothing to do
             break ;
         }
 
         // case (5)     I c J
-        else if (a <= parent->I.a && parent->I.b <= b)
+        else if (a <= aa && bb <= b)
         {
-            __spmt_fill_from(spmt, parent, a,           parent->I.a);
-            __spmt_fill_from(spmt, parent, parent->I.b, b);
+            __spmt_fill_from(spmt, parent,      a, aa);
+            __spmt_fill_from(spmt, spmt->root, bb,  b);
             break ;
         }
 
         // case (6)     J < I
         else if (a <= parent->I.a && b <= parent->I.b)
         {
-            __spmt_fill_from(spmt, parent, a,           parent->I.a);
-            __spmt_fill_from(spmt, parent, parent->I.a, b);
+            __spmt_fill_from(spmt, parent,      a, aa);
+            __spmt_fill_from(spmt, spmt->root, aa,  b);
             break ;
         }
 
@@ -884,8 +910,8 @@ __spmt_fill_from(spmt_t * spmt, spmt_node_t * parent, SPMT_PTR_T a, SPMT_PTR_T b
         // case (7)     J > I
         else if (parent->I.a <= a && a <= parent->I.b)
         {
-            __spmt_fill_from(spmt, parent, parent->I.b, b);
-            __spmt_fill_from(spmt, parent, a,           parent->I.b);
+            __spmt_fill_from(spmt, parent,     bb, b);
+            __spmt_fill_from(spmt, spmt->root,  a, bb);
             break ;
         }
     }
@@ -927,19 +953,59 @@ __spmt_dump(spmt_dump_t print, spmt_node_t * parent, int depth)
     SPMT_FOREACH_CHILD_END(parent, child, dir);
 }
 
-static inline int
-__spmt_intersect(spmt_t * DST, spmt_t * A, spmt_t * B)
+/*
+ *  Compute the intersection A n B.
+ *
+ *  Store at most 'n' intersections to the 'intervals' array.
+ *  The array is null-terminated at 'i' with the (0, 0) interval if i < n
+ *
+ * in: A
+ * in: B
+ * in: n
+ * out: intervals
+ * out: i
+ */
+static inline void
+__spmt_intersect_from(interval_t * intervals, int * i, int n, spmt_node_t * A, spmt_node_t * B)
 {
-    (void) DST;
-    (void) A;
-    (void) B;
-    return 0;
+    if (A == SPMT_NULL || B == SPMT_NULL)
+        return ;
+
+    if (*i >= n)
+        return ;
+
+    if (!__spmt_intervals_intersect(&(A->includes.I), &(B->includes.I)))
+        return ;
+
+    // TODO : maybe add interval here
+    (void) intervals;
+    if (__spmt_nodes_intersect(A, B))
+    {
+        intervals[*i].a = SPMT_MAX(A->I.a, B->I.a);
+        intervals[*i].b = SPMT_MIN(A->I.b, B->I.b);
+        ++(*i);
+    }
+
+    __spmt_intersect_from(intervals, i, n, A->left , B->left );
+    __spmt_intersect_from(intervals, i, n, A->left , B->right );
+    __spmt_intersect_from(intervals, i, n, A->right, B->left );
+    __spmt_intersect_from(intervals, i, n, A->right, B->right );
 }
 
-# define SPMT_INTERSECT(DST, A, B)      \
-    do {                                \
-        __spmt_intersect(DST, A, B);    \
-    } while (0)
+static inline int
+__spmt_intersect(interval_t * intervals, int n, spmt_t * A, spmt_t * B)
+{
+    int i = 0;
+    __spmt_intersect_from(intervals, &i, n, A->root, B->root);
+    if (i < n)
+    {
+        intervals[i].a = 0;
+        intervals[i].b = 0;
+    }
+    return i;
+}
+
+# define SPMT_INTERSECT(I, N, A, B) __spmt_intersect(I, N, A, B)
 
 static inline int
 __spmt_append_add(spmt_t * SRC, spmt_node_t * node, void * obj)
@@ -979,13 +1045,5 @@ __spmt_union(spmt_t * DST, spmt_t * A, spmt_t * B)
         else                                \
             __spmt_union(DST, A, B);        \
     } while (0)
-
-/* Return true if the spmt is empty */
-# define SPMT_IS_EMPTY(T) __spmt_is_empty(T)
-static inline int
-__spmt_is_empty(spmt_t * spmt)
-{
-    return spmt->root == SPMT_NULL;
-}
 
 #endif /* __SPMT_H__ */

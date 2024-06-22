@@ -121,6 +121,11 @@ taskgrind_instrument_mem_access(
     Int size,
     task_mem_access_type_t access_type
 ) {
+# if 0
+# pragma message("disable mem instrument")
+    return ;
+# endif
+
     IRExpr ** argv;
     IRDirty * di;
     void * fn;
@@ -439,34 +444,8 @@ taskgrind_print_debug_usage(void)
 }
 
 static Bool
-taskgrind_clo_error(const HChar * err)
-{
-    VG_(printf)("Error usage: %s\n", err);
-    taskgrind_print_usage();
-    VG_(exit)(1);
-    return False;
-}
-
-static Bool
 taskgrind_process_cmd_line_option(const HChar * arg)
 {
-    #if 0
-    if (VG_(strcmp)(arg, "--record") == 0)
-    {
-        if (!VG_STR_CLO(arg, "--record", clo_record))
-        {
-            HChar * record;
-            struct vki_timeval tv;
-            struct vki_timezone tz;
-
-            record  = (HChar *) VG_(malloc)("clo_record", sizeof(UChar) * 1024);
-            VG_(gettimeofday)(&tv, &tz);
-            VG_(snprintf)(record, 1024, "taskgrind-%ld", 1000000 * tv.tv_sec + tv.tv_usec);
-            clo_record = (const HChar *) record;
-        }
-    }
-#endif
-
     if (VG_(strcmp)(arg, "--dump") == 0)
     {
         CLOS.dump = 1;
@@ -495,10 +474,6 @@ taskgrind_post_clo_init(void)
     else
         TASKGRIND_INFO("Instrumenting every memory accesses");
 
-#if 0
-     if (clo_record)
-        TASKGRIND_INFO("Recording task graph to '%s'", clo_record);
-#endif
     task_init();
 }
 

@@ -89,6 +89,7 @@ pass_w1_check_deps(task_t * pred, task_t * succ)
 
 #endif
 
+# if 0
     spmt_t pred_l;
     task_accesses_union(pred, &pred_l, 1, 0);
 
@@ -175,6 +176,7 @@ pass_w1_check_deps(task_t * pred, task_t * succ)
     {
         //TASKGRIND_INFO("  No needless dependencies detected, all good :-)");
     }
+# endif
 }
 
 static void

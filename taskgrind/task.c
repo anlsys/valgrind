@@ -561,6 +561,10 @@ void
 task_mem_load(Addr addr, SizeT size)
 {
     task_seg_t * seg = task_seg_get_current();
+    tl_assert(seg);
+
+    SPMT_FILL(&seg->loads, addr, addr + size);
+    task_seg_mem_access(seg, addr, size);
 
     #if 0
     if (addr == 68537960 && seg->uid == 768)
@@ -572,17 +576,17 @@ task_mem_load(Addr addr, SizeT size)
 
     }
     #endif
-
-    tl_assert(seg);
-    SPMT_FILL(&seg->loads, addr, addr + size);
-
-    task_seg_mem_access(seg, addr, size);
 }
 
 void
 task_mem_store(Addr addr, SizeT size)
 {
     task_seg_t * seg = task_seg_get_current();
+    tl_assert(seg);
+
+    SPMT_FILL(&seg->stores, addr, addr + size);
+    task_seg_mem_access(seg, addr, size);
+
 
     #if 0
     if (addr == 68537960 && seg->uid == 768)
@@ -595,10 +599,7 @@ task_mem_store(Addr addr, SizeT size)
     }
     #endif
 
-    tl_assert(seg);
-    SPMT_FILL(&seg->stores, addr, addr + size);
-
-    task_seg_mem_access(seg, addr, size);
+    // TASKGRIND_DEBUG("store %u %lu %lu", seg->uid, addr, addr+size);
 }
 
 void

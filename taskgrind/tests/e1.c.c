@@ -16,14 +16,12 @@ main(void)
             # pragma omp task
             {
                 int * x = (int *) malloc(1 * sizeof(int));
-//                printf("x==%p\n",x);
                 x[0] = 42;
             }
 
             # pragma omp task
             {
                 int * x = (int *) malloc(1 * sizeof(int));
-//                printf("x==%p\n",x);
                 x[0] = 42;
             }
         }
