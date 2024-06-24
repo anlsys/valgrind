@@ -4,6 +4,7 @@
 # include "pub_tool_mallocfree.h"   /* malloc, free */
 
 # define SPMT_F_ALLOC(S)        VG_(malloc)("taskgrind.spmt", S)
+# define SPMT_F_REALLOC(P, S)   VG_(realloc)("taskgrind.spmt", P, S)
 # define SPMT_F_FREE(X)         VG_(free)(X)
 # define SPMT_F_ALLOC_NODE(S)   SPMT_F_ALLOC(sizeof(spmt_node_t))
 # define SPMT_F_FREE_NODE(X)    SPMT_F_FREE(X)
@@ -17,7 +18,7 @@
 
 # define SPMT_DISABLE_LIBSTDC
 
-# define NDEBUG
+// # define NDEBUG
 # include "spmt/spmt.h"
 
 #endif /* __TASKGRIND_SPMT_H__ */
