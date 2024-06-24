@@ -8,7 +8,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright IBM Corp. 2010-2021
+   Copyright IBM Corp. 2010-2024
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
@@ -550,6 +550,27 @@ system_call(IRExpr *sysno)
       forces any TempRegs caching ArchRegs to be flushed. */
    dis_res->whatNext    = Dis_StopHere;
    dis_res->jk_StopHere = Ijk_Sys_syscall;
+}
+
+/* An extension */
+static void
+extension(ULong id, ULong variant)
+{
+   vassert(id < (1 << S390_EXT_ID_NBITS));
+   vassert(variant <= ~((ULong) 0) >> S390_EXT_ID_NBITS);
+
+   /* Store the extension ID in the pseudo register. */
+   ULong ext_id = id | (variant << S390_EXT_ID_NBITS);
+   stmt(IRStmt_Put(S390X_GUEST_OFFSET(guest_SYSNO), mkU64(ext_id)));
+
+   /* Store the current IA into guest_IP_AT_SYSCALL. */
+   stmt(IRStmt_Put(S390X_GUEST_OFFSET(guest_IP_AT_SYSCALL),
+                   mkU64(guest_IA_curr_instr)));
+
+   put_IA(mkaddr_expr(guest_IA_next_instr));
+
+   dis_res->whatNext    = Dis_StopHere;
+   dis_res->jk_StopHere = Ijk_Extension;
 }
 
 /* A side exit that branches back to the current insn if CONDITION is
@@ -14405,7 +14426,6 @@ static const HChar *
 s390_irgen_KEB(UChar r1, IRTemp op2addr)
 {
    return s390_irgen_CxB("keb", r1, op2addr, Ity_F32, Iop_CmpF32);
-   return "keb";
 }
 
 static const HChar *
@@ -16589,20 +16609,11 @@ s390_irgen_VSCEG(UChar v1, IRTemp op2addr, UChar m3)
 static const HChar *
 s390_irgen_VPDI(UChar v1, UChar v2, UChar v3, UChar m4)
 {
-   /* Theese bits are reserved by specification */
-   vassert((m4 & 2) == 0);
-   vassert((m4 & 8) == 0);
+   /* These bits are reserved by specification */
+   s390_insn_assert("vpdi", (m4 & 2) == 0 && (m4 & 8) == 0);
 
-   if((m4 & 4) != 0)
-      put_vr_dw0(v1, get_vr_dw1(v2));
-   else
-      put_vr_dw0(v1, get_vr_dw0(v2));
-
-   if((m4 & 1) != 0)
-      put_vr_dw1(v1, get_vr_dw1(v3));
-   else
-      put_vr_dw1(v1, get_vr_dw0(v3));
-
+   put_vr_qw(v1, binop(Iop_64HLtoV128, m4 & 4 ? get_vr_dw1(v2) : get_vr_dw0(v2),
+                       m4 & 1 ? get_vr_dw1(v3) : get_vr_dw0(v3)));
    return "vpdi";
 }
 
@@ -17078,59 +17089,7 @@ s390_irgen_LCBB(UChar r1, IRTemp op2addr, UChar m3)
    return "lcbb";
 }
 
-/* Regarding the use of 
-   // Dummy helper which is used to signal VEX library that memory was loaded
-   sha512_loadparam 
-     = unsafeIRDirty_0_N(0, "s390x_dirtyhelper_PPNO_sha512_load_param_block",
-                             &s390x_dirtyhelper_PPNO_sha512_load_param_block,
-                             mkIRExprVec_0());
-
-   in the following function (s390_irgen_PPNO).  This is a workaround to get
-   around the fact that IRDirty annotations cannot indicate two memory side
-   effects, which are unfortunately necessary here.  It will possibly lead to
-   losing undefinedness (undefinedness in some inputs might not be propagated
-   to the outputs as it shouod, in Memcheck).  The correct fix would be to
-   extend IRDirty to represent two memory side effects, but that's quite a bit
-   of work.
-
-   Here's a summary of what this insn does.
-
-   // getReg(RegisterNumber n) returns the value of GPR number 'n'
-
-   // reg1 and reg2 are even
-   void ppno(RegisterNumber reg1, RegisterNumber reg2) {
-
-       switch(getReg(0)) {
-       case 0x0:
-           // Query mode, ignore reg1 and reg2
-           // Write 16 bytes                    at  getReg(1)
-           break;
-
-       case 0x3:
-           // SHA-512 generate mode, ignore reg2
-
-           // Read 240 bytes                    at  getReg(1)
-           // Write getReg(reg1 + 1) bytes      at  getReg(reg1)
-           // Write some of 240 bytes starting  at  getReg(1)
-           break;
-
-       case 0x83:
-           // SHA-512 seed mode, ignore reg1
-
-           // Read some of 240 bytes starting  at  getReg(1)
-           // Read getReg(reg2 + 1) bytes      at  getReg(reg2)
-           // Write 240 bytes                  at  getReg(1)
-           break;
-
-       default:
-           // Specification exception, abort execution.
-       }
-   }
-*/
-/* Also known as "prno"
-   If you implement new functions please don't forget to update
-   "s390x_dirtyhelper_PPNO_query" function.
- */
+/* Also known as "PRNO" */
 static const HChar *
 s390_irgen_PPNO(UChar r1, UChar r2)
 {
@@ -17139,132 +17098,24 @@ s390_irgen_PPNO(UChar r1, UChar r2)
       return "ppno";
    }
 
-   /* Theese conditions lead to specification exception */
-   vassert(r1 % 2 == 0);
-   vassert(r2 % 2 == 0);
-   vassert((r1 != 0) && (r2 != 0));
+   /* Check for obvious specification exceptions */
+   s390_insn_assert("ppno", r1 % 2 == 0 && r2 % 2 == 0 && r1 != 0 && r2 != 0);
 
-   IRDirty *query, *sha512_gen, *sha512_seed, *sha512_loadparam;
-   IRTemp gpr1num = newTemp(Ity_I64);
-   IRTemp gpr2num = newTemp(Ity_I64);
-
-   IRTemp funcCode = newTemp(Ity_I8);
-   IRTemp is_query = newTemp(Ity_I1);
-   IRTemp is_sha512_gen = newTemp(Ity_I1);
-   IRTemp is_sha512_seed = newTemp(Ity_I1);
-   IRTemp is_sha512 = newTemp(Ity_I1);
-
-   assign(funcCode, unop(Iop_64to8, binop(Iop_And64, get_gpr_dw0(0),
-                                          mkU64(0xffULL))));
-   assign(gpr1num, mkU64(r1));
-   assign(gpr2num, mkU64(r2));
-
-   assign(is_query, binop(Iop_CmpEQ8, mkexpr(funcCode), mkU8(S390_PPNO_QUERY)));
-   assign(is_sha512_gen, binop(Iop_CmpEQ8, mkexpr(funcCode),
-                               mkU8(S390_PPNO_SHA512_GEN)));
-   assign(is_sha512_seed, binop(Iop_CmpEQ8, mkexpr(funcCode),
-                                mkU8(S390_PPNO_SHA512_SEED)));
-   assign(is_sha512, binop(Iop_CmpEQ8,
-                           mkU8(S390_PPNO_SHA512_GEN),
-                           binop(Iop_And8,
-                                 mkexpr(funcCode),
-                                 mkU8(S390_PPNO_SHA512_GEN)
-                                 )
-                           ));
-
-   query = unsafeIRDirty_0_N(0, "s390x_dirtyhelper_PPNO_query",
-                             &s390x_dirtyhelper_PPNO_query,
-                             mkIRExprVec_3(IRExpr_GSPTR(), mkexpr(gpr1num),
-                                           mkexpr(gpr2num)));
-   query->guard = mkexpr(is_query);
-   query->nFxState = 1;
-   vex_bzero(&query->fxState, sizeof(query->fxState));
-   query->fxState[0].fx     = Ifx_Read;
-   query->fxState[0].offset = S390X_GUEST_OFFSET(guest_r0);
-   query->fxState[0].size   = 2 * sizeof(ULong); /* gpr0 and gpr1 are read */
-   query->mAddr = get_gpr_dw0(1);
-   query->mSize = S390_PPNO_PARAM_BLOCK_SIZE_QUERY;
-   query->mFx   = Ifx_Write;
-
-   IRTemp gen_cc = newTemp(Ity_I64);
-   sha512_gen = unsafeIRDirty_1_N(gen_cc, 0, "s390x_dirtyhelper_PPNO_sha512",
-                             &s390x_dirtyhelper_PPNO_sha512,
-                             mkIRExprVec_3(IRExpr_GSPTR(), mkexpr(gpr1num),
-                                           mkexpr(gpr2num)));
-   sha512_gen->guard = mkexpr(is_sha512_gen);
-   sha512_gen->nFxState = 3;
-   vex_bzero(&sha512_gen->fxState, sizeof(sha512_gen->fxState));
-   sha512_gen->fxState[0].fx     = Ifx_Read;
-   sha512_gen->fxState[0].offset = S390X_GUEST_OFFSET(guest_r0);
-   sha512_gen->fxState[0].size   = 2 * sizeof(ULong); /* gpr0 and gpr1 are read */
-   sha512_gen->fxState[1].fx     = Ifx_Read;
-   sha512_gen->fxState[1].offset = S390X_GUEST_OFFSET(guest_r0) + r1 * sizeof(ULong);
-   sha512_gen->fxState[1].size   = sizeof(ULong);
-   sha512_gen->fxState[2].fx     = Ifx_Modify;
-   sha512_gen->fxState[2].offset = S390X_GUEST_OFFSET(guest_r0) + (r1 + 1) * sizeof(ULong);
-   sha512_gen->fxState[2].size   = sizeof(ULong);
-   sha512_gen->mAddr = get_gpr_dw0(r1);
-   sha512_gen->mSize = S390_PPNO_MAX_SIZE_SHA512_GEN;
-   sha512_gen->mFx   = Ifx_Write;
-
-   IRTemp unused = newTemp(Ity_I64);
-   sha512_seed = unsafeIRDirty_1_N(unused, 0, "s390x_dirtyhelper_PPNO_sha512",
-                             &s390x_dirtyhelper_PPNO_sha512,
-                             mkIRExprVec_3(IRExpr_GSPTR(), mkexpr(gpr1num),
-                                           mkexpr(gpr2num)));
-   sha512_seed->guard = mkexpr(is_sha512_seed);
-   sha512_seed->nFxState = 2;
-   vex_bzero(&sha512_seed->fxState, sizeof(sha512_seed->fxState));
-   sha512_seed->fxState[0].fx     = Ifx_Read;
-   sha512_seed->fxState[0].offset = S390X_GUEST_OFFSET(guest_r0);
-   sha512_seed->fxState[0].size   = 2 * sizeof(ULong); /* gpr0 and gpr1 are read */
-   sha512_seed->fxState[1].fx     = Ifx_Read;
-   sha512_seed->fxState[1].offset = S390X_GUEST_OFFSET(guest_r0) + r2 * sizeof(ULong);
-   sha512_seed->fxState[1].size   = 2 * sizeof(ULong); /* r2 and r2 + 1 are read */
-   sha512_seed->mAddr = get_gpr_dw0(r2);
-   sha512_seed->mSize = S390_PPNO_MAX_SIZE_SHA512_SEED;
-   sha512_seed->mFx   = Ifx_Write;
-
-   /* Dummy helper which is used to signal VEX library that memory was loaded */
-   sha512_loadparam =
-      unsafeIRDirty_0_N(0, "s390x_dirtyhelper_PPNO_sha512_load_param_block",
-                        &s390x_dirtyhelper_PPNO_sha512_load_param_block,
-                        mkIRExprVec_0());
-   sha512_loadparam->guard = mkexpr(is_sha512);
-   sha512_loadparam->nFxState = 0;
-   vex_bzero(&sha512_loadparam->fxState, sizeof(sha512_loadparam->fxState));
-   sha512_loadparam->mAddr = get_gpr_dw0(1);
-   sha512_loadparam->mSize = S390_PPNO_PARAM_BLOCK_SIZE_SHA512;
-   sha512_loadparam->mFx   = Ifx_Read;
-
-   IRDirty* sha512_saveparam =
-      unsafeIRDirty_0_N(0, "s390x_dirtyhelper_PPNO_sha512_save_param_block",
-                        &s390x_dirtyhelper_PPNO_sha512_load_param_block,
-                        mkIRExprVec_0());
-   sha512_saveparam->guard = mkexpr(is_sha512);
-   sha512_saveparam->nFxState = 0;
-   vex_bzero(&sha512_saveparam->fxState, sizeof(sha512_saveparam->fxState));
-   sha512_saveparam->mAddr = get_gpr_dw0(1);
-   sha512_saveparam->mSize = S390_PPNO_PARAM_BLOCK_SIZE_SHA512;
-   sha512_saveparam->mFx   = Ifx_Write;
-
-   stmt(IRStmt_Dirty(query));
-   stmt(IRStmt_Dirty(sha512_loadparam));
-   stmt(IRStmt_Dirty(sha512_gen));
-   stmt(IRStmt_Dirty(sha512_seed));
-   stmt(IRStmt_Dirty(sha512_saveparam));
-
-   IRTemp cc = newTemp(Ity_I64);
-   assign(cc,
-          mkite(mkexpr(is_sha512_gen),
-                mkexpr(gen_cc),
-                mkU64(0)
-               )
-         );
-
-   s390_cc_thunk_fill(mkU64(S390_CC_OP_SET), mkexpr(cc), mkU64(0), mkU64(0));
-
+   extension(S390_EXT_PRNO, r1 | (r2 << 4));
    return "ppno";
+}
+
+static const HChar *
+s390_irgen_DFLTCC(UChar r3, UChar r1, UChar r2)
+{
+   s390_insn_assert("dfltcc", s390_host_has_dflt);
+
+   /* Check for obvious specification exceptions */
+   s390_insn_assert("dfltcc", r1 % 2 == 0 && r1 != 0 &&
+                    r2 % 2 == 0 && r2 != 0 && r3 >= 2);
+
+   extension(S390_EXT_DFLT, r1 | (r2 << 4) | (r3 << 8));
+   return "dfltcc";
 }
 
 enum s390_VStrX {
@@ -19724,6 +19575,121 @@ s390_irgen_VSTEBRG(UChar v1, IRTemp op2addr, UChar m3)
    return "vstebrg";
 }
 
+static const HChar *
+s390_irgen_VCxx(const HChar *mnem, s390x_vec_op_details_t details,
+                UShort v2_offs, UShort v2_size)
+{
+   s390_insn_assert(mnem, s390_host_has_nnpa);
+
+   IRDirty* d = unsafeIRDirty_0_N(0, "s390x_dirtyhelper_vec_op",
+                                  &s390x_dirtyhelper_vec_op,
+                                  mkIRExprVec_2(IRExpr_GSPTR(),
+                                                mkU64(details.serialized)));
+   d->nFxState = 2;
+   vex_bzero(&d->fxState, sizeof(d->fxState));
+   d->fxState[0].fx = Ifx_Read;
+   d->fxState[0].offset = S390X_GUEST_OFFSET(guest_v0)
+      + details.v2 * sizeof(V128) + v2_offs;
+   d->fxState[0].size = v2_size;
+   d->fxState[1].fx = Ifx_Write;
+   d->fxState[1].offset = S390X_GUEST_OFFSET(guest_v0)
+      + details.v1 * sizeof(V128);
+   d->fxState[1].size = sizeof(V128);
+
+   stmt(IRStmt_Dirty(d));
+   return mnem;
+}
+
+static const HChar *
+s390_irgen_VCNF(UChar v1, UChar v2, UChar m3, UChar m4)
+{
+   s390x_vec_op_details_t details = { .serialized = 0ULL };
+   details.op = S390_VEC_OP_VCNF;
+   details.v1 = v1;
+   details.v2 = v2;
+   details.m3 = m3;
+   details.m4 = m4;
+   return s390_irgen_VCxx("vcnf", details, 0, sizeof(V128));
+}
+
+static const HChar *
+s390_irgen_VCLFNH(UChar v1, UChar v2, UChar m3, UChar m4)
+{
+   s390x_vec_op_details_t details = { .serialized = 0ULL };
+   details.op = S390_VEC_OP_VCLFNH;
+   details.v1 = v1;
+   details.v2 = v2;
+   details.m3 = m3;
+   details.m4 = m4;
+   return s390_irgen_VCxx("vclfnh", details, 0, sizeof(V128) / 2);
+}
+
+static const HChar *
+s390_irgen_VCFN(UChar v1, UChar v2, UChar m3, UChar m4)
+{
+   s390x_vec_op_details_t details = { .serialized = 0ULL };
+   details.op = S390_VEC_OP_VCFN;
+   details.v1 = v1;
+   details.v2 = v2;
+   details.m3 = m3;
+   details.m4 = m4;
+   return s390_irgen_VCxx("vcfn", details, 0, sizeof(V128));
+}
+
+static const HChar *
+s390_irgen_VCLFNL(UChar v1, UChar v2, UChar m3, UChar m4)
+{
+   s390x_vec_op_details_t details = { .serialized = 0ULL };
+   details.op = S390_VEC_OP_VCLFNL;
+   details.v1 = v1;
+   details.v2 = v2;
+   details.m3 = m3;
+   details.m4 = m4;
+   return s390_irgen_VCxx("vclfnl", details, sizeof(V128) / 2,
+                          sizeof(V128) / 2);
+}
+
+static const HChar *
+s390_irgen_VCRNF(UChar v1, UChar v2, UChar v3, UChar m4, UChar m5)
+{
+   s390_insn_assert("vcrnf", s390_host_has_nnpa);
+
+   s390x_vec_op_details_t details = { .serialized = 0ULL };
+   details.op = S390_VEC_OP_VCRNF;
+   details.v1 = v1;
+   details.v2 = v2;
+   details.v3 = v3;
+   details.m4 = m4;
+   details.m5 = m5;
+   details.m6 = 0;
+   IRDirty* d = unsafeIRDirty_0_N(0, "s390x_dirtyhelper_vec_op",
+                                  &s390x_dirtyhelper_vec_op,
+                                  mkIRExprVec_2(IRExpr_GSPTR(),
+                                                mkU64(details.serialized)));
+   d->nFxState = 3;
+   vex_bzero(&d->fxState, sizeof(d->fxState));
+   d->fxState[0].fx = Ifx_Read;
+   d->fxState[0].offset = S390X_GUEST_OFFSET(guest_v0) + v2 * sizeof(V128);
+   d->fxState[0].size = sizeof(V128);
+   d->fxState[1].fx = Ifx_Read;
+   d->fxState[1].offset = S390X_GUEST_OFFSET(guest_v0) + v3 * sizeof(V128);
+   d->fxState[1].size = sizeof(V128);
+   d->fxState[2].fx = Ifx_Write;
+   d->fxState[2].offset = S390X_GUEST_OFFSET(guest_v0) + v1 * sizeof(V128);
+   d->fxState[2].size = sizeof(V128);
+
+   stmt(IRStmt_Dirty(d));
+   return "vcrnf";
+}
+
+static const HChar *
+s390_irgen_NNPA(void)
+{
+   s390_insn_assert("nnpa", s390_host_has_nnpa);
+   extension(S390_EXT_NNPA, 0);
+   return "nnpa";
+}
+
 /* New insns are added here.
    If an insn is contingent on a facility being installed also
    check whether the list of supported facilities in function
@@ -19961,6 +19927,8 @@ s390_decode_4byte_and_irgen(const UChar *bytes)
    case 0x8000: /* SSM */ goto unimplemented;
    case 0x8200: /* LPSW */ goto unimplemented;
    case 0x9300: /* TS */ goto unimplemented;
+   case 0xb200: /* LBEAR */ goto unimplemented;
+   case 0xb201: /* STBEAR */ goto unimplemented;
    case 0xb202: /* STIDP */ goto unimplemented;
    case 0xb204: /* SCK */ goto unimplemented;
    case 0xb205: s390_format_S_RD(s390_irgen_STCK, S_b2(ovl), S_d2(ovl));
@@ -20052,6 +20020,7 @@ s390_decode_4byte_and_irgen(const UChar *bytes)
    case 0xb286: /* QSI */ goto unimplemented;
    case 0xb287: /* LSCTL */ goto unimplemented;
    case 0xb28e: /* QCTRI */ goto unimplemented;
+   case 0xb28f: /* QPACI */ goto unimplemented;
    case 0xb299: s390_format_S_RD(s390_irgen_SRNM, S_b2(ovl), S_d2(ovl));
                                  goto ok;
    case 0xb29c: s390_format_S_RD(s390_irgen_STFPC, S_b2(ovl), S_d2(ovl));
@@ -20496,8 +20465,10 @@ s390_decode_4byte_and_irgen(const UChar *bytes)
    case 0xb931: s390_format_RRE_RR(s390_irgen_CLGFR, RRE_r1(ovl),
                                    RRE_r2(ovl));  goto ok;
    case 0xb938: /* SORTL */ goto unimplemented;
-   case 0xb939: /* DFLTCC */ goto unimplemented;
+   case 0xb939: s390_format_RRF_R0RR2(s390_irgen_DFLTCC, RRF4_r3(ovl),
+                                      RRF4_r1(ovl), RRF4_r2(ovl)); goto ok;
    case 0xb93a: /* KDSA */ goto unimplemented;
+   case 0xb93b: s390_format_E(s390_irgen_NNPA);  goto ok;
    case 0xb93c: s390_format_RRE_RR(s390_irgen_PPNO, RRE_r1(ovl),
                                    RRE_r2(ovl));  goto ok;
    case 0xb93e: /* KIMD */ goto unimplemented;
@@ -20589,6 +20560,7 @@ s390_decode_4byte_and_irgen(const UChar *bytes)
    case 0xb989: s390_format_RRE_RR(s390_irgen_SLBGR, RRE_r1(ovl),
                                    RRE_r2(ovl));  goto ok;
    case 0xb98a: /* CSPG */ goto unimplemented;
+   case 0xb98b: /* RDP */ goto unimplemented;
    case 0xb98d: /* EPSW */ goto unimplemented;
    case 0xb98e: /* IDTE */ goto unimplemented;
    case 0xb98f: /* CRDTE */ goto unimplemented;
@@ -21415,19 +21387,48 @@ s390_decode_6byte_and_irgen(const UChar *bytes)
                                                 VRS_rxb(ovl));  goto ok;
    case 0xe60000000049ULL: /* VLIP */ goto unimplemented;
    case 0xe60000000050ULL: /* VCVB */ goto unimplemented;
+   case 0xe60000000051ULL: /* VCLZDP */ goto unimplemented;
    case 0xe60000000052ULL: /* VCVBG */ goto unimplemented;
+   case 0xe60000000054ULL: /* VUPKZH */ goto unimplemented;
+   case 0xe60000000055ULL: s390_format_VRRa_VVMM(s390_irgen_VCNF,
+                                                 VRRa_v1(ovl), VRRa_v2(ovl),
+                                                 VRRa_m3(ovl), VRRa_m4(ovl),
+                                                 VRRa_rxb(ovl));  goto ok;
+   case 0xe60000000056ULL: s390_format_VRRa_VVMM(s390_irgen_VCLFNH,
+                                                 VRRa_v1(ovl), VRRa_v2(ovl),
+                                                 VRRa_m3(ovl), VRRa_m4(ovl),
+                                                 VRRa_rxb(ovl));  goto ok;
+   case 0xe6000000005dULL: s390_format_VRRa_VVMM(s390_irgen_VCFN,
+                                                 VRRa_v1(ovl), VRRa_v2(ovl),
+                                                 VRRa_m3(ovl), VRRa_m4(ovl),
+                                                 VRRa_rxb(ovl));  goto ok;
+   case 0xe6000000005eULL: s390_format_VRRa_VVMM(s390_irgen_VCLFNL,
+                                                 VRRa_v1(ovl), VRRa_v2(ovl),
+                                                 VRRa_m3(ovl), VRRa_m4(ovl),
+                                                 VRRa_rxb(ovl));  goto ok;
    case 0xe60000000058ULL: /* VCVD */ goto unimplemented;
    case 0xe60000000059ULL: /* VSRP */ goto unimplemented;
    case 0xe6000000005aULL: /* VCVDG */ goto unimplemented;
    case 0xe6000000005bULL: /* VPSOP */ goto unimplemented;
+   case 0xe6000000005cULL: /* VUPKZL */ goto unimplemented;
    case 0xe6000000005fULL: /* VTP */ goto unimplemented;
+   case 0xe60000000070ULL: /* VPKZR */ goto unimplemented;
    case 0xe60000000071ULL: /* VAP */ goto unimplemented;
+   case 0xe60000000072ULL: /* VSRPR */ goto unimplemented;
    case 0xe60000000073ULL: /* VSP */ goto unimplemented;
+   case 0xe60000000075ULL: s390_format_VRRa_VVVMM(s390_irgen_VCRNF,
+                                                  VRRa_v1(ovl), VRRa_v2(ovl),
+                                                  VRRa_v3(ovl),
+                                                  VRRa_m3(ovl), VRRa_m4(ovl),
+                                                  VRRa_rxb(ovl)); goto ok;
    case 0xe60000000077ULL: /* VCP */ goto unimplemented;
    case 0xe60000000078ULL: /* VMP */ goto unimplemented;
    case 0xe60000000079ULL: /* VMSP */ goto unimplemented;
+   case 0xe60000000074ULL: /* VSCHP */ goto unimplemented;
    case 0xe6000000007aULL: /* VDP */ goto unimplemented;
    case 0xe6000000007bULL: /* VRP */ goto unimplemented;
+   case 0xe6000000007cULL: /* VSCSHP */ goto unimplemented;
+   case 0xe6000000007dULL: /* VCSPH */ goto unimplemented;
    case 0xe6000000007eULL: /* VSDP */ goto unimplemented;
    case 0xe70000000000ULL: s390_format_VRX_VRRDM(s390_irgen_VLEB, VRX_v1(ovl),
                                                  VRX_x2(ovl), VRX_b2(ovl),
@@ -22075,6 +22076,7 @@ s390_decode_6byte_and_irgen(const UChar *bytes)
    case 0xeb000000006eULL: s390_format_SIY_IRD(s390_irgen_ALSI, SIY_i2(ovl),
                                                SIY_b1(ovl), SIY_dl1(ovl),
                                                SIY_dh1(ovl));  goto ok;
+   case 0xeb0000000071ULL: /* LPSWEY */ goto unimplemented;
    case 0xeb000000007aULL: s390_format_SIY_IRD(s390_irgen_AGSI, SIY_i2(ovl),
                                                SIY_b1(ovl), SIY_dl1(ovl),
                                                SIY_dh1(ovl));  goto ok;
