@@ -6,23 +6,21 @@
 
 // should report: 2 siblings tasks are data-dependent but no dependency expressed
 
-__thread int myVar;
+_Thread_local int x[4096];
+// extern _Thread_local int y[1024];
 
 int
 main(void)
 {
-    int * x = (int *) malloc(1 * sizeof(int));
-    printf("x addr is %llu\n", (long long unsigned int) x);
-
     # pragma omp parallel
     {
         # pragma omp single nowait
         {
-            # pragma omp task shared(x)
-                myVar = 0;
+            # pragma omp task
+                x[0] = 0;
 
-            # pragma omp task shared(x)
-                myVar = 1;
+            # pragma omp task
+                x[0] = 1;
         }
 
     }

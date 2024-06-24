@@ -114,7 +114,7 @@ typedef struct  task_seg_s
     // the execution context
     ThreadId tid;
     ExeContext * ctx;
-    ULong tls;
+    Addr tls;
 
     // a unique identifier for this segment in [0, N_SEGMENTS[
     UInt uid;

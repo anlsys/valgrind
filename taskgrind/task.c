@@ -123,7 +123,7 @@ __task_init(task_t * task, UWord id, task_type_t type, UWord undeferred)
 #elif defined(VGA_amd64)
         task->sp = state->guest_RSP;
 #else
-        tl_assert("Arch not supported" && 0);
+# error "Arch not supported"
 #endif
     }
 
@@ -549,6 +549,8 @@ task_sync(void)
 static inline void
 task_seg_mem_access(task_seg_t * seg, Addr addr, SizeT size)
 {
+    // TASKGRIND_DEBUG("Checking address %p", (void *) addr);
+
     if (seg->ctx == NULL)
     {
         ThreadId tid = VG_(get_running_tid)();
@@ -556,9 +558,11 @@ task_seg_mem_access(task_seg_t * seg, Addr addr, SizeT size)
         {
             seg->ctx = VG_(record_ExeContext)(tid, 0);
 
-#if defined(VGA_amd64)
             VexGuestArchState * state = VG_(get_CurrentThreadArchState)();
-            seg->tls = state->guest_FS_CONST;
+#if defined(VGA_amd64)
+            seg->tls = (Addr) state->guest_FS_CONST;
+# elif defined(VGA_x86)
+            seg->tls = (Addr) state->guest_FS;
 #else
 # pragma message("TLS support not implemented for this architecture")
 #endif

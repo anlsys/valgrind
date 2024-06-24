@@ -9,7 +9,7 @@ CFLAGS+=-Wno-int-to-pointer-cast -Wno-unused-value
 
 LDFLAGS=
 
-SRC=$(wildcard *.c spmt/*.c)
+SRC=$(wildcard *.c)
 EXE=$(SRC:.c=.exe)
 
 all: $(EXE)

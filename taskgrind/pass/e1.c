@@ -15,6 +15,7 @@ static int ERRORS = 0;
 static int N_MALLOC_ADDR_TO_REPORT  = 5;
 static int N_MALLOC_ADDR_IPS        = 10;
 
+// Dump allocation context for the given interval
 static void
 report_err_alloc(interval_t * I)
 {
@@ -63,7 +64,7 @@ report_err(task_seg_t * seg_a, task_seg_t * seg_b, int r)
 #endif
 
     // output error
-    for (int i = 0 ; i < r ; ++i)
+    for (int i = 0 ; i < r && i < N_MALLOC_ADDR_TO_REPORT ; ++i)
         if (intervals[i].a) // if null, then it is a removed false positive
             report_err_alloc(intervals + i);
 
@@ -84,16 +85,60 @@ addr_is_stack(SPMT_PTR_T addr)
     return (TASKGRIND_BASE_STACK_PTR - STACK_MAX_DISTANCE <= addr) && (addr <= TASKGRIND_BASE_STACK_PTR);
 }
 
-// TODO : set this distance more precisely, as TLS seems to be allocated close to the heap
-// maybe see https://www.akkadia.org/drepper/tls.pdf
+// TODO: experimental code, with several assumptions
+//  - architecture - VGA_amd64 - VGA_x86
+//  - using a variant II
 //
+#if defined(VGA_amd64) || defined(VGA_x86)
+
+typedef struct
+{
+    union {
+        ULong counter;
+        Addr addr;
+    };
+    Addr unused;
+} dtv_t;
+
+#endif
+
 // Return true if the address executed within the segment 'seg' is stored in
 // the executing thread TLS
 static inline int
 addr_is_tls(task_seg_t * seg, SPMT_PTR_T addr)
 {
-    static SPMT_PTR_T TLS_MAX_DISTANCE = (SPMT_PTR_T) 1000;
-    return addr < seg->tls + TLS_MAX_DISTANCE;
+// TLS support - see docs/tls.pdf
+//
+#if defined(VGA_amd64) || defined(VGA_x86)
+
+    // FS register value, that is tp(t) starting of the TCB for the thread 't'
+    Addr tp_t = seg->tls;
+
+    // dtv(t) array location
+    Addr ** dtv_loc = (Addr **) (tp_t + 0x8);
+    dtv_t * dtv = (dtv_t *) dtv_loc[0];
+
+    // assertion for Variant II
+    tl_assert(              tp_t < (Addr) dtv);
+    tl_assert(dtv[1].addr < tp_t             );
+
+    // dtv[0] is gen(t)
+    // dtv[1] is dtv(t,1)
+    // dtv[2] is dtv(t,2)
+    // [...]
+    // dtv[n] is dtv(t, n)
+    TASKGRIND_DEBUG("tid=%d ; x=%p ; gen(t)=(%p,_) ; dtv[1]=(%p, _) ; dtv[2]=(%p, _)",
+            (int)    seg->tid,
+            (void *) addr,
+            (void *) dtv[0].addr,
+            (void *) dtv[1].addr,
+            (void *) dtv[2].addr
+    );
+    return 0;
+#else
+# pragma message("TLS not supported for this architecture")
+    return 0;
+#endif
 }
 
 // Mark the interval as false-positive
