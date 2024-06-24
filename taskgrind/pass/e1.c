@@ -11,6 +11,9 @@
 // total errors detected
 static int ERRORS = 0;
 
+// threhsold above which errors are no longer reported
+static int MAX_ERRORS = 1000;
+
 // output parameters
 static int N_MALLOC_ADDR_TO_REPORT  = 5;
 static int N_MALLOC_ADDR_IPS        = 10;
@@ -50,6 +53,14 @@ static int n_intervals          = 0;
 static inline void
 report_err(task_seg_t * seg_a, task_seg_t * seg_b, int r)
 {
+    // bound error reporting
+    if (++ERRORS >= MAX_ERRORS)
+    {
+        if (ERRORS == MAX_ERRORS)
+            TASKGRIND_WARN("Too many errors, I stop reporting kek (errors will still be accounted)");
+        return ;
+    }
+
     // retrieve location
     HChar loc_a[256];
     task_seg_get_location(seg_a, 0, loc_a, sizeof(loc_a));
@@ -67,8 +78,6 @@ report_err(task_seg_t * seg_a, task_seg_t * seg_b, int r)
     for (int i = 0 ; i < r && i < N_MALLOC_ADDR_TO_REPORT ; ++i)
         if (intervals[i].a) // if null, then it is a removed false positive
             report_err_alloc(intervals + i);
-
-    ++ERRORS;
 }
 
 // TODO: analysis code bellow is experimental and temporary
@@ -94,7 +103,7 @@ addr_is_stack(SPMT_PTR_T addr)
 typedef struct
 {
     union {
-        ULong counter;
+        ULong gen;
         Addr addr;
     };
     Addr unused;
@@ -102,13 +111,21 @@ typedef struct
 
 #endif
 
+// [WIP] only partial support for Variant II of X86_64, see 'docs/tls.pdf'
 // Return true if the address executed within the segment 'seg' is stored in
 // the executing thread TLS
+//
+// TODO : analysis are run after the process terminated, so its probably a bad
+// idea to dereference TCB/DTV structures here... even though it seems to work
+// on minimal benchmarks
+//  - move TLS detection at run-time
+//  - find how to retrieve 'M' : the number of modules loaded <=> the dtv size
+//
 static inline int
 addr_is_tls(task_seg_t * seg, SPMT_PTR_T addr)
 {
-// TLS support - see docs/tls.pdf
-//
+    TASKGRIND_DEBUG("testing %p", (void *) addr);
+
 #if defined(VGA_amd64) || defined(VGA_x86)
 
     // FS register value, that is tp(t) starting of the TCB for the thread 't'
@@ -127,13 +144,21 @@ addr_is_tls(task_seg_t * seg, SPMT_PTR_T addr)
     // dtv[2] is dtv(t,2)
     // [...]
     // dtv[n] is dtv(t, n)
-    TASKGRIND_DEBUG("tid=%d ; x=%p ; gen(t)=(%p,_) ; dtv[1]=(%p, _) ; dtv[2]=(%p, _)",
-            (int)    seg->tid,
-            (void *) addr,
-            (void *) dtv[0].addr,
-            (void *) dtv[1].addr,
-            (void *) dtv[2].addr
-    );
+
+    // TLS address must be before the TCB with Variant II
+    if (addr > tp_t)
+        return 0;
+
+    // loop on each dtv(t, i) entry
+    int m = 1;
+    while (1)
+    {
+        Addr tlsoffset_t_i = dtv[m].addr;
+        if (addr <= tlsoffset_t_i)
+            return 1;
+        // TODO : how to iterate on TCB blocks ? only read first one currently ...
+        break ;
+    }
     return 0;
 #else
 # pragma message("TLS not supported for this architecture")
@@ -186,7 +211,7 @@ compare_segments_independent_accesses(
             if (seg_a->tls == seg_b->tls)
                 mark_false_positive(I, &false_positive);
         }
-        // most likely accessing the heap 
+        // most likely accessing the heap
         else
         {
         }

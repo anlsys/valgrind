@@ -4,6 +4,7 @@
 # include "pub_tool_libcassert.h"       /* tl_assert */
 # include "malloc_record.h"             /* taskgrind_record_alloc */
 
+# include "malloc.h"
 # include "print.h"
 
 static inline

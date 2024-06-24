@@ -104,6 +104,8 @@ taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
 
         default:
         {
+            // TODO : what is the client request '0x4d430101' that appeared
+            // between June 2023 and June 2024 ?
             TASKGRIND_WARN("Unknown client request code %llx", (ULong)arg[0]);
             return False;
         }
@@ -554,11 +556,10 @@ taskgrind_prepare_env(HChar *** envp)
     TASKGRIND_INFO("Loading OMPT Plugin from %s", absolute_so);
     VG_(env_setenv)(envp, "OMP_TOOL_LIBRARIES", absolute_so);
     VG_(env_setenv)(envp, "LIBOMP_USE_HIDDEN_HELPER_TASK", "0");
-    VG_(env_setenv)(envp, "KMP_ENABLE_TASK_THROTTLING", "0");
 
-    //TODO
     // https://github.com/llvm/llvm-project/issues/89398#issuecomment-2066822457
     VG_(env_setenv)(envp, "OMP_NUM_THREADS", "1");
+    VG_(env_setenv)(envp, "KMP_ENABLE_TASK_THROTTLING", "0");
 
 }
 
