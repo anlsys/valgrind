@@ -121,11 +121,6 @@ taskgrind_instrument_mem_access(
     Int size,
     task_mem_access_type_t access_type
 ) {
-# if 0
-# pragma message("disable mem instrument")
-    return ;
-# endif
-
     IRExpr ** argv;
     IRDirty * di;
     void * fn;

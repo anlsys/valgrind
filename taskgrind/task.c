@@ -553,7 +553,16 @@ task_seg_mem_access(task_seg_t * seg, Addr addr, SizeT size)
     {
         ThreadId tid = VG_(get_running_tid)();
         if (tid != VG_INVALID_THREADID)
+        {
             seg->ctx = VG_(record_ExeContext)(tid, 0);
+
+#if defined(VGA_amd64)
+            VexGuestArchState * state = VG_(get_CurrentThreadArchState)();
+            seg->tls = state->guest_FS_CONST;
+#else
+# pragma message("TLS support not implemented for this architecture")
+#endif
+        }
     }
 }
 
@@ -639,7 +648,7 @@ task_fini(void)
     {
         taskgrind_export_tcfg(&ROOT_TASK);
         taskgrind_export_tdgx_recursive(&ROOT_TASK);
-        taskgrind_export_lpg((task_seg_t *)array_first(&ROOT_TASK.segs));
+        taskgrind_export_lpg(&ROOT_TASK);
     }
 
     TASKGRIND_INFO("Starting analysis on a %u segments graph...", SEGS.n);

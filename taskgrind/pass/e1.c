@@ -1,4 +1,5 @@
 # include "error.h"
+# include "pass.h"
 # include "print.h"
 # include "location.h"
 # include "task.h"
@@ -12,14 +13,14 @@ static int ERRORS = 0;
 
 // output parameters
 static int N_MALLOC_ADDR_TO_REPORT  = 5;
-static int N_MALLOC_ADDR_IPS        = 5;
+static int N_MALLOC_ADDR_IPS        = 10;
 
 static void
 report_err_alloc(interval_t * I)
 {
     taskgrind_alloc_record_t * record = taskgrind_alloc_record_get((void *) I->a);
     if (record == NULL)
-        TASKGRIND_ERR("    %lu bytes from %p", I->b - I->a, (void *) I->a);
+        TASKGRIND_ERR("    %lu bytes from %p (unknown allocation)", I->b - I->a, (void *) I->a);
     else
     {
         tl_assert(record->ctx);
@@ -41,8 +42,9 @@ report_err_alloc(interval_t * I)
     }
 }
 
-// intervals buffer for intersecting segment accesses
-static interval_t * intervals = NULL;
+// intervals buffer of size 'n' for intersecting segment accesses
+static interval_t * intervals   = NULL;
+static int n_intervals          = 0;
 
 static inline void
 report_err(task_seg_t * seg_a, task_seg_t * seg_b, int r)
@@ -62,7 +64,8 @@ report_err(task_seg_t * seg_a, task_seg_t * seg_b, int r)
 
     // output error
     for (int i = 0 ; i < r ; ++i)
-        report_err_alloc(intervals + i);
+        if (intervals[i].a) // if null, then it is a removed false positive
+            report_err_alloc(intervals + i);
 
     ++ERRORS;
 }
@@ -77,9 +80,80 @@ report_err(task_seg_t * seg_a, task_seg_t * seg_b, int r)
 static inline int
 addr_is_stack(SPMT_PTR_T addr)
 {
-    // distance bellow the access is assumed on the stack (64Go of stacks lol)
-    static SPMT_PTR_T STACK_MAX_DISTANCE = (SPMT_PTR_T) 0x0fffffffff;
+    static SPMT_PTR_T STACK_MAX_DISTANCE = (SPMT_PTR_T) 64*1000*1000*1000;
     return (TASKGRIND_BASE_STACK_PTR - STACK_MAX_DISTANCE <= addr) && (addr <= TASKGRIND_BASE_STACK_PTR);
+}
+
+// TODO : set this distance more precisely, as TLS seems to be allocated close to the heap
+// maybe see https://www.akkadia.org/drepper/tls.pdf
+//
+// Return true if the address executed within the segment 'seg' is stored in
+// the executing thread TLS
+static inline int
+addr_is_tls(task_seg_t * seg, SPMT_PTR_T addr)
+{
+    static SPMT_PTR_T TLS_MAX_DISTANCE = (SPMT_PTR_T) 1000;
+    return addr < seg->tls + TLS_MAX_DISTANCE;
+}
+
+// Mark the interval as false-positive
+static inline void
+mark_false_positive(interval_t * I, int * false_positive)
+{
+    I->a = 0;
+    I->b = 0;
+    ++(*false_positive);
+}
+
+static int
+compare_segments_independent_accesses(
+    task_seg_t * seg_a,
+    task_seg_t * seg_b,
+    spmt_t * A,
+    spmt_t * B
+) {
+    // run intersections
+    int r = SPMT_INTERSECT(intervals, &n_intervals, A, B);
+    if (r == 0)
+        return 0;
+
+    // TODO : stack accesses logic may be broken
+
+    // intersection is not empty
+    int task_stack_pointer = (seg_a->task->sp < seg_b->task->sp) ? seg_a->task->sp : seg_b->task->sp;
+    int false_positive = 0;
+
+    for (int i = 0 ; i < r ; ++i)
+    {
+        interval_t * I = intervals + i;
+
+        // accessing on the stack
+        if (addr_is_stack(I->a))
+        {
+            // bellow the segment stack pointer
+            if (I->b < task_stack_pointer)
+                mark_false_positive(I, &false_positive);
+        }
+        // accessing a TLS
+        else if (addr_is_tls(seg_a, I->a) || addr_is_tls(seg_b, I->a))
+        {
+            // on the same thread
+            if (seg_a->tls == seg_b->tls)
+                mark_false_positive(I, &false_positive);
+        }
+        // most likely accessing the heap 
+        else
+        {
+        }
+    }
+
+    // only false positive
+    if (false_positive == r)
+        return 0;
+
+    // some actual errors
+    report_err(seg_a, seg_b, r);
+    return r - false_positive;
 }
 
 // Confront memory accesses of both segments and report errors
@@ -92,48 +166,22 @@ compare_segments_independent(task_seg_t * seg_a, task_seg_t * seg_b)
     // else, it means there exist memory addresses for which at least one
     // writes while the other accesses it
 
-    const int n = N_MALLOC_ADDR_TO_REPORT;
-    int r = 0;
-
     //  a.W n (b.R u b.W) == {}
-    spmt_t A_RW;
-    SPMT_INITIALIZE(&A_RW);
-    SPMT_UNION(&A_RW, &seg_a->loads, &seg_a->stores);
-
-    //  b.W n (a.R u a.W) == {}
     spmt_t B_RW;
     SPMT_INITIALIZE(&B_RW);
     SPMT_UNION(&B_RW, &seg_b->loads, &seg_b->stores);
-
-    //  run intersections
-    r += SPMT_INTERSECT(intervals, n, &seg_b->stores, &A_RW);
-    if (r < N_MALLOC_ADDR_TO_REPORT)
-        r += SPMT_INTERSECT(intervals + r, n - r, &seg_a->stores, &B_RW);
-
-    // intersection is empty
-    if (r == 0)
-        goto finish;
-
-    // intersection is not empty
-    int task_stack_pointer = (seg_a->task->sp < seg_b->task->sp) ? seg_a->task->sp : seg_b->task->sp;
-    int contains_heap_accesses = 0;
-    int contains_parent_stack_accesses = 0;
-
-    for (int i = 0 ; i < r ; ++i)
-    {
-        interval_t * I = intervals + i;
-        if (!addr_is_stack(I->a) || !addr_is_stack(I->b))
-            contains_heap_accesses = 1;
-        else if (I->b > task_stack_pointer)
-            contains_parent_stack_accesses = 1;
-    }
-
-    if (contains_heap_accesses || contains_parent_stack_accesses)
-        report_err(seg_a, seg_b, r);
-
-finish:
-    SPMT_RELEASE(&A_RW);
+    int r = compare_segments_independent_accesses(seg_a, seg_b, &seg_a->stores, &B_RW);
     SPMT_RELEASE(&B_RW);
+
+    //  b.W n (a.R u a.W) == {}
+    if (r == 0)
+    {
+        spmt_t A_RW;
+        SPMT_INITIALIZE(&A_RW);
+        SPMT_UNION(&A_RW, &seg_a->loads, &seg_a->stores);
+        compare_segments_independent_accesses(seg_a, seg_b, &seg_b->stores, &A_RW);
+        SPMT_RELEASE(&A_RW);
+    }
 
     return 0;
 }
@@ -215,7 +263,8 @@ taskgrind_pass_e1(task_t * root)
     compute_reachability();
 
     // allocate array to report intersections
-    intervals = (interval_t *) VG_(malloc)("taskgrind_pass_e1", N_MALLOC_ADDR_TO_REPORT * sizeof(interval_t));
+    n_intervals = 64;
+    intervals = (interval_t *) VG_(malloc)("taskgrind_pass_e1", n_intervals * sizeof(interval_t));
 
     // check errors
     UInt n = SEGS.n;

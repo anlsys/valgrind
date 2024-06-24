@@ -112,8 +112,9 @@ typedef struct  task_seg_s
     array_t successors;
 
     // the execution context
-    ExeContext * ctx;
     ThreadId tid;
+    ExeContext * ctx;
+    ULong tls;
 
     // a unique identifier for this segment in [0, N_SEGMENTS[
     UInt uid;

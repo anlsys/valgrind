@@ -3,6 +3,7 @@
 # include "pub_tool_libcassert.h"
 # include "pub_tool_execontext.h"
 
+# include "dot.h"
 # include "print.h"
 # include "location.h"
 # include "task.h"
@@ -216,12 +217,13 @@ dump_lpg(VgFile * fp, task_seg_ref_t * pred_ref)
 }
 
 void
-taskgrind_export_lpg(task_seg_ref_t * root)
+taskgrind_export_lpg(task_t * root)
 {
     VgFile * fp = create_file("lpg.dot");
 
     VG_(fprintf)(fp, "digraph G {\n");
-    dump_lpg(fp, root);
+    task_seg_ref_t ref = { .task = root, .id = 0, .flag = 0 };
+    dump_lpg(fp, &ref);
     VG_(fprintf)(fp, "}\n");
 
     VG_(fclose)(fp);
