@@ -1111,3 +1111,63 @@ keywords = {multithreaded architectures, shared cache, chip multiprocessors, sch
 location = {Barcelona, Spain},
 series = {SPAA '04}
 }
+
+@InProceedings{Matar18,
+author="Matar, Hassan Salehe
+and Unat, Didem",
+editor="Aldinucci, Marco
+and Padovani, Luca
+and Torquati, Massimo",
+title="Runtime Determinacy Race Detection for OpenMP Tasks",
+booktitle="Euro-Par 2018: Parallel Processing",
+year="2018",
+publisher="Springer International Publishing",
+address="Cham",
+pages="31--45",
+abstract="One potential problem when writing parallel programs with OpenMP is to introduce determinacy races where for a given input, the program may unexpectedly produce different final outputs at different runs. Such startling behavior can result from incorrect ordering of OpenMP tasks. We present a method to detect determinacy races in OpenMP tasks at runtime. Based on OpenMP program semantics, our proposed solution models an OpenMP program as a collection of tasks with inferred dependencies among them where a task is implicitly created with a parallel region construct or explicitly created with a task construct. We define happens-before relation among tasks based on such dependencies for determining an execution order when detecting determinacy races. Based on this formalization, we developed a tool, TaskSanitizer, which detects and reports concurrent memory accesses whose tasks do not have common dependencies. Finally, TaskSanitizer works at runtime, has been able to find bugs in micro-benchmarks and it is reasonably efficient to be utilized in a working environment.",
+isbn="978-3-319-96983-1"
+}
+
+
+@inproceedings{determinator,
+author = {Feng, Mingdong and Leiserson, Charles E.},
+title = {Efficient detection of determinacy races in Cilk programs},
+year = {1997},
+isbn = {0897918908},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi.org/10.1145/258492.258493},
+doi = {10.1145/258492.258493},
+booktitle = {Proceedings of the Ninth Annual ACM Symposium on Parallel Algorithms and Architectures},
+pages = {1–11},
+numpages = {11},
+location = {Newport, Rhode Island, USA},
+series = {SPAA '97}
+}
+
+@article{elf-tls,
+	title = {{Technical Report - ELF Handling For Thread-Local Storage}},
+	author = {Drepper, Ulrich},
+	year = {2013},
+}
+
+
+@article{valgrind,
+	author = {Nethercote, Nicholas and Seward, Julian},
+	title = {Valgrind: a framework for heavyweight dynamic binary instrumentation},
+	year = {2007},
+	issue_date = {June 2007},
+	publisher = {Association for Computing Machinery},
+	address = {New York, NY, USA},
+	volume = {42},
+	number = {6},
+	issn = {0362-1340},
+	url = {https://doi.org/10.1145/1273442.1250746},
+	doi = {10.1145/1273442.1250746},
+	abstract = {Dynamic binary instrumentation (DBI) frameworks make it easy to build dynamic binary analysis (DBA) tools such as checkers and profilers. Much of the focus on DBI frameworks has been on performance; little attention has been paid to their capabilities. As a result, we believe the potential of DBI has not been fully exploited.In this paper we describe Valgrind, a DBI framework designed for building heavyweight DBA tools. We focus on its unique support for shadow values-a powerful but previously little-studied and difficult-to-implement DBA technique, which requires a tool to shadow every register and memory value with another value that describes it. This support accounts for several crucial design features that distinguish Valgrind from other DBI frameworks. Because of these features, lightweight tools built with Valgrind run comparatively slowly, but Valgrind can be used to build more interesting, heavyweight tools that are difficult or impossible to build with other DBI frameworks such as Pin and DynamoRIO.},
+	journal = {SIGPLAN Not.},
+	month = {jun},
+	pages = {89–100},
+	numpages = {12},
+	keywords = {Memcheck, Valgrind, dynamic binary analysis, dynamic binary instrumentation, shadow values}
+}

@@ -2,3 +2,20 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Introduction}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+CONTEXT
+With the ever growing intra-node parallelism in supercomputers, porting simulation codes while ensuring parallel execution correctness is challenging.
+\emph{Determinacy races} are concurrent programming hazards, when two accesses on the memory address are not ordered and at least one is writing~\cite{determinator}.
+The presence of determinacy races often hints correctness issues, as its output becomes non-deterministic given the same input.
+
+MOTIVATIONS
+- [...]
+- Lightweight can produce false-negative on non-instrumented parts
+-> Heavyweight~\cite{valgrind}
+
+OBJECTIVES
+- Explore heavyweight dynamic binary instrumentation towards a no-false-negative determinacy-race detector.
+
+ CONTRIBUTIONS
+- Taskgrind: a Valgrind tool for heavyweight parallel program determinacy race detection.
+- A survey on issues related to "heavy instrumentations"

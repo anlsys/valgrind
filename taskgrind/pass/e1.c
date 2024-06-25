@@ -38,7 +38,8 @@ report_err_alloc(interval_t * I)
         HChar buffer[256];
         UInt show_dir = 1;
 
-        for (Int i = i ; i < n_ips && i < N_MALLOC_ADDR_IPS ; ++i)
+        // i = 1 to skip taskgrind allocator replacement
+        for (Int i = 1 ; i < n_ips && i < N_MALLOC_ADDR_IPS ; ++i)
         {
             location_get_from_ip(ep, ips[i], show_dir, buffer, sizeof(buffer));
             TASKGRIND_ERR("       from %s", buffer);
@@ -124,7 +125,7 @@ typedef struct
 static inline int
 addr_is_tls(task_seg_t * seg, SPMT_PTR_T addr)
 {
-    TASKGRIND_DEBUG("testing %p", (void *) addr);
+//    TASKGRIND_DEBUG("testing %p", (void *) addr);
 
 #if defined(VGA_amd64) || defined(VGA_x86)
 
@@ -214,6 +215,35 @@ compare_segments_independent_accesses(
         // most likely accessing the heap
         else
         {
+            // TODO : removing false positive coming from KMP memory allocator
+            // Any accesses on memory allocated as part of a callstack
+            // including any 'SUPPRESS_FN' is assumed race-free
+            taskgrind_alloc_record_t * record = taskgrind_alloc_record_get((void *) I->a);
+            static const HChar * SUPPRESS_FN[] = {
+                "__kmp_task_alloc",
+            };
+
+            ExeContext * ec = record->ctx;
+            DiEpoch ep = VG_(get_ExeContext_epoch)(ec);
+            Int n_ips = VG_(get_ExeContext_n_ips)(ec);
+            Addr * ips = VG_(get_ExeContext_ips)(ec);
+
+            for (int j = 0 ; j < n_ips ; ++j)
+            {
+                const char * fn = NULL;
+                VG_(get_fnname)(ep, ips[j], &fn);
+                if (fn)
+                {
+                    for (Int k = 0 ; k < sizeof(SUPPRESS_FN) / sizeof(const HChar *) ; ++k)
+                    {
+                        if (VG_(strstr)(fn, SUPPRESS_FN[k]))
+                        {
+                            mark_false_positive(I, &false_positive);
+                            break ;
+                        }
+                    } /* each suppress fn */
+                } /* if fnname */
+            } /* for each frame */
         }
     }
 
