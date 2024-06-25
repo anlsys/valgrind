@@ -1,0 +1,103 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Background}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+\subsection{Valgrind}
+% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+
+
+% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+\subsection{Segment Graph}
+% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+- Similarly to \cite{Matar18}, Taskgrind reason on a \emph{segment graph}
+	- nodes = non-divisible sequence of instructions
+	- there is a path between Ni and Nj if a synchronization imposes the ordering of the two sequences of instructions (said differently: if a path exists, then 'Ni' happens-before 'Nj').
+- Valgrind client requests to build the segment graph
+
+
+
+% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+\subsection{Collecting Memory Accesses}
+% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+A taskgrind task ('ttask') is a sequence of segment ...
+% (then referenced as 'ttask' to avoid confusion with OpenMP, Cilk, ) 
+
+- Taskgrind builds a segment graph during the execution, and keep track of 'the current segment'
+- Accesses are accumulated in compact interval trees (one for load, one for stores)
+(self-balancing red-black tree)	
+- Finding determinacy race given this graph becomes trivial - O(n²) with 'n' the number of nodes
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Building a Segment Graph}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+\subsection{OpenMP}
+% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+- OMPT tool
+	- Convert OMPT callbacks to a Taskgrind segment graph
+		- create(T) - the executing thread creates the task 'T'
+		- schedule(T) - the executing thread schedules the task 'T'
+		- depend(T, list<in|out|outset, addr>) - openmp-like dependences
+			- the first segment the successor depends on the last segment of the predecessor
+		- detach
+			- when omp-fulfill-event(e) is raised, create an empty segment S
+			- successors of e.T also depends on S
+		- sync(children|all) - the executing thread must wait for
+			- all children tasks completion
+			- all descendant tasks completion
+		
+Remark:
+	- a parallel-for loop chunk is interpreted as a single-segment ttask
+	- a target
+		- nowait 	- is interpreted as a task
+		- wait 		- is interpreted as an undefered task
+	
+% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+\subsection{QThreads}
+% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+TODO
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Pitfalls with Heavyweight Instrumentation}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Finding determinacy race given the segment graph and segment accesses is rather straightforward
+
+foreach segment s1
+	foreach segment s2 != s1
+		if no path exists between s1 and s2
+			foreach address of s1.W n (s2.read u s2.write)
+				report determinacy race on X from segments s1 and s2
+
+No false-negative, hence detecting semantical errors even if the execution was correct.
+But, way too many false-positive.
+       
+       
+% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+\subsection{Memory Recycling}
+% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+- heap memory with malloc; work-around : we override the allocator and transform 'free' to a 'no-op'
+- problem with LLVM - it has its own allocator for internal data structures that may be recycled (e.g. tasks descriptor)
+
+% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+\subsection{Thread-Local Accesses}
+% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+- Stack accesses
+	- we register the frame pointer
+- Thread Local Storage (TLS)~\cite{elf-tls}
+	- standard with `-Thread-local` : OK, Valgrind already has some routines to help parsing TCB/DTV
+	- non-standard
+		- `array[omp-get-thread-num()]` or same with pthreads... can hardly be detected
+
+% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+\subsection{Parallel Runtimes Non-Determinacy}
+% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+For instance, KMP non-deterministic itself (task scheduling may be different between executions)
+We simply blacklist all KMP-runtime symbols from instrumentation
+
+
+
+
+

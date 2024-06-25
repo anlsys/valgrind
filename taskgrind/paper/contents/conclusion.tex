@@ -4,5 +4,17 @@
 
 % https://www.cs.utexas.edu/~EWD/transcriptions/EWD03xx/EWD303.html
 
-This paper introduced Taskgrind: a parallel programming model determinacy race detector relying on heavyweight dynamic binary instrumentation.
+This paper introduced Taskgrind: a determinacy race detector relying on heavyweight dynamic binary instrumentation (DBI).
+It targets application codes relying on a well-defined parallel programming model semantic, that needs to be bridged with its segment graph interfaces.
+Taskgrind currently embeds an OMPT tool with support for most OpenMP parallel constructs (for loops, tasks, dependences, targets, detach, ...).
+
+TODO : cilk/qthreads
+
+As opposed to compile-time instrumentation (such as LLVM Sanitizers), heavyweight DBI (such as Valgrind) ensures no determinacy-race may be missed due to non-instrumented code.
+However, it requires a lot of engineering to filter-out the many false-positive that can arise.
+We have illustrated a few in this paper such as memory recycling, thread-local accesses, and inherent non-determinacy of parallel runtime systems.
+
+
+
+
 
