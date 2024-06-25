@@ -262,15 +262,13 @@ for (int i = 0 ; i < 2 ; ++i)
 ```
 
 
+### OpenMP limitations
+#### Workshare
+Cannot map parallel for chunk creation (from callback_work) to chunk scheduling (callback_dispatch)
 
 ### LLVM specific behaviors in single-thread
-#### Workshare
-Only one "work" callback
-```
-# pragma omp for schedule(static, 1)
-for (int i = 0 ; i < 4 ; ++i)
-{}
-```
+#### Workshare / Sections
+Dispatch not raised with a single thread - https://github.com/llvm/llvm-project/issues/96698
 
 #### Parallel region
 No "sync" callback
@@ -279,19 +277,6 @@ No "sync" callback
 {
 } // no sync callback raised
 ```
-
-#### Sections
-No 'ompt_dispatch_section' callbacks
-```
-# pragma omp sections
-{
-    # pragma omp section
-    { // no callbak raised
-    }
-}
-```
-#### How Taskgrind manages it
-Run with 2 threads :-(
 
 # DETECTION ALGORITHM
 - n = number of segments

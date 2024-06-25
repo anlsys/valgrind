@@ -79,10 +79,7 @@ task_seg_new(task_t * task)
 
     ThreadId tid = VG_(get_running_tid)();
     if (tid != VG_INVALID_THREADID)
-    {
-        // seg->ctx = VG_(record_ExeContext)(tid, 0);
         seg->tid = tid;
-    }
 
     task_seg_ref_t seg_ref;
     seg_ref.task = task;
@@ -252,8 +249,11 @@ task_create(UWord id, task_type_t type, UWord undeferred)
     // TODO : barrier and taskwait are 2 different things, fix me
     switch (type)
     {
-        // if the task is a barrier
+        // TODO : implement 'TASK_TYPE_IMPLICIT_BARRIER' - for now fallback to
+        // taskwait (which is semantically wrong, but OK as long as we have no
+        // nested tasks
         case (TASK_TYPE_IMPLICIT_BARRIER):
+        case (TASK_TYPE_IMPLICIT_TASKWAIT):
         {
             // for each children task of the current task (excluding the new barrier)
             ARRAY_FOREACH_BEGIN(&CURRENT_TASK->children, task_t **, child)
@@ -280,6 +280,24 @@ task_create(UWord id, task_type_t type, UWord undeferred)
             break ;
         }
 
+//        case (TASK_TYPE_IMPLICIT_BARRIER):
+//        {
+//            tl_assert(0 && "Not implemented");
+//            break ;
+//        }
+
+        case (TASK_TYPE_IMPLICIT_TASKGROUP):
+        {
+            tl_assert(0 && "Not implemented");
+            break ;
+        }
+
+        case (TASK_TYPE_UNKNOWN):
+        case (TASK_TYPE_EXPLICIT):
+        case (TASK_TYPE_IMPLICIT):
+        case (TASK_TYPE_IMPLICIT_ROOT):
+        case (TASK_TYPE_IMPLICIT_OUTSET):
+        case (TASK_TYPE_IMPLICIT_UNKNOWN):
         default:
         {
             // 'task' -> 'succ'
@@ -319,10 +337,8 @@ task_seg_get_current(void)
 void
 task_schedule(UWord id)
 {
-    task_t * prev, * next;
-
-    prev    = CURRENT_TASK;
-    next    = task_get(id);
+    task_t * prev = CURRENT_TASK;
+    task_t * next = task_get(id);
     tl_assert(prev);
     tl_assert(next);
     tl_assert(prev != next);
@@ -539,10 +555,26 @@ task_depend(UWord id, UWord addr, UWord type)
 // adding an empty task node which depend on all previously created tasks with
 // no successors (leaves)
 void
-task_sync(void)
+task_sync(taskgrind_sync_t mode)
 {
     // create an empty task (the sync barrier)
-    task_create(TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_BARRIER, 0);
+    task_create(
+            TASKGRIND_CLIENT_ID_PRIVATE,
+            mode == TASKGRIND_SYNC_BARRIER ? TASK_TYPE_IMPLICIT_BARRIER : TASK_TYPE_IMPLICIT_TASKWAIT,
+            0
+    );
+}
+
+// the current task allows the completion of the passed task
+void
+task_detach_fulfill(UWord id, taskgrind_fulfill_mode_t mode)
+{
+    tl_assert(CURRENT_TASK);
+
+    task_t * task = task_get(id);
+    tl_assert(task);
+
+
 }
 
 // memory accesses

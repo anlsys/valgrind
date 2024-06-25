@@ -1,6 +1,8 @@
 # include "pub_tool_errormgr.h"
 # include "pub_tool_libcassert.h"
 
+# include "error.h"
+
 Bool
 taskgrind_eq_Error(VgRes res, const Error * e1, const Error * e2)
 {

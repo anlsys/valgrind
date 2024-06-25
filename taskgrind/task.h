@@ -7,6 +7,7 @@
 
 # include "taskgrind_uthash.h"
 # include "taskgrind_spmt.h"
+# include "taskgrind.h"
 
 # include "array.h"
 
@@ -18,7 +19,9 @@ typedef enum    task_type_e
     TASK_TYPE_IMPLICIT,
     TASK_TYPE_IMPLICIT_ROOT,
     TASK_TYPE_IMPLICIT_OUTSET,
+    TASK_TYPE_IMPLICIT_TASKWAIT,
     TASK_TYPE_IMPLICIT_BARRIER,
+    TASK_TYPE_IMPLICIT_TASKGROUP,
     TASK_TYPE_IMPLICIT_UNKNOWN,
 }               task_type_t;
 
@@ -168,7 +171,8 @@ extern array_t SEGS;
 task_t * task_create(UWord id, task_type_t type, UWord undeferred);
 void task_schedule(UWord id);
 void task_depend(UWord id, UWord addr, UWord type);
-void task_sync(void);
+void task_sync(taskgrind_sync_t mode);
+void task_detach_fulfill(UWord id, taskgrind_fulfill_mode_t mode);
 
 // FUNCTIONS FOR MEMORY ACCESSES DETECTED
 void task_mem_load(Addr addr, SizeT size);

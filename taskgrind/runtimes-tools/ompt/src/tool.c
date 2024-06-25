@@ -45,6 +45,9 @@ static atomic_int NEXT_TASK_ID = 0;
 // number of running openmp threads
 static int NTHREADS = 1;
 
+// number of procs
+static int NPROCS = 1;
+
 void
 on_ompt_callback_task_create(
         ompt_data_t * encountering_task_data,
@@ -76,9 +79,11 @@ on_ompt_callback_task_schedule(
     ompt_task_status_t prior_task_status,
     ompt_data_t * next_task_data
 ) {
-    // INFO("[SCHEDULE] prior_task_data = %p, next_task_data = %p", prior_task_data, next_task_data);
+    INFO("[SCHEDULE] prior_task_data = %p, next_task_data = %p", prior_task_data, next_task_data);
     if (next_task_data)
         TASKGRIND_SCHEDULE_EVENT(next_task_data->value);
+    else
+        TASKGRIND_DETACH_FULFILL_EVENT(prior_task_data->value, prior_task_status == ompt_task_early_fulfill ? TASKGRIND_FULFILL_EARLY : TASKGRIND_FULFILL_LATE);
 }
 
 void
@@ -222,7 +227,36 @@ on_ompt_callback_sync_region(
     {
         case (ompt_scope_begin):
         {
-            TASKGRIND_SYNC_EVENT();
+            switch (kind)
+            {
+                case (ompt_sync_region_barrier):
+                case (ompt_sync_region_barrier_implicit):
+                case (ompt_sync_region_barrier_explicit):
+                case (ompt_sync_region_barrier_implementation):
+                {
+                    TASKGRIND_SYNC_EVENT(TASKGRIND_SYNC_BARRIER);
+                    break ;
+                }
+
+                case (ompt_sync_region_taskwait):
+                {
+                    TASKGRIND_SYNC_EVENT(TASKGRIND_SYNC_TASKWAIT);
+                    break ;
+                }
+
+                case (ompt_sync_region_taskgroup):
+                {
+                    TASKGRIND_SYNC_EVENT(TASKGRIND_SYNC_TASKGROUP);
+                    break ;
+                }
+
+                case (ompt_sync_region_reduction):
+                default:
+                {
+                    assert(0 && "Not implemented");
+                    break ;
+                }
+            }
             break ;
         }
 
@@ -268,6 +302,13 @@ on_ompt_callback_work(
 
                 case (ompt_scope_begin):
                 {
+                    // assuming taskgrind run with 1 thread, virtually create
+                    // 'NPROC' tasks for that parallel loop
+                    for (int i = 0 ; i < NPROCS ; ++i)
+                    {
+                        uint64_t task_id = ++NEXT_TASK_ID;
+                        TASKGRIND_CREATE_EVENT(task_id, TASKGRIND_TASK_TYPE_IMPLICIT, 0);
+                    }
                     break ;
                 }
 
@@ -379,7 +420,10 @@ on_ompt_callback_parallel_begin(
     int flags,
     const void * codeptr_ra
 ) {
-    NTHREADS = requested_parallelism;
+    // NTHREADS = requested_parallelism;
+    
+    // assume taskgrind run with 1 thread
+    NTHREADS = 1;
 }
 
 void
@@ -418,6 +462,10 @@ int ompt_initialize(
     register_callback(ompt_callback_dispatch);
     register_callback(ompt_callback_parallel_begin);
     register_callback(ompt_callback_parallel_end);
+
+    ompt_get_num_procs_t ompt_get_num_procs = (ompt_get_num_procs_t) lookup("ompt_get_num_procs");
+    NPROCS = ompt_get_num_procs ? ompt_get_num_procs() : 1;
+
     return 1;
 }
 

@@ -98,7 +98,13 @@ taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
 
         case VG_USERREQ__TASKGRIND_SYNC_EVENT:
         {
-            task_sync();
+            task_sync(arg[1]);
+            return True;
+        }
+
+        case VG_USERREQ__TASKGRIND_DETACH_FULFILL_EVENT:
+        {
+            task_detach_fulfill(arg[1], arg[2]);
             return True;
         }
 

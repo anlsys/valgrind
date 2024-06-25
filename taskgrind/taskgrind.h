@@ -25,11 +25,35 @@ typedef enum    taskgrind_access_t
     TASKGRIND_OUTSET,
 }               taskgrind_access_t;
 
+// Taskgrind sync type
+typedef enum    taskgrind_sync_t
+{
+    // wait for all descendent tasks
+    TASKGRIND_SYNC_BARRIER,
+
+    // wait for children tasks
+    TASKGRIND_SYNC_TASKWAIT,
+
+    // wait for the group task
+    TASKGRIND_SYNC_TASKGROUP,
+
+}               taskgrind_sync_t;
+
+// Taskgrind fulfill mode
+typedef enum    taskgrind_fulfill_mode_t
+{
+    // the task executed before the allow completion event fulfilled
+    TASKGRIND_FULFILL_LATE,
+
+    // the opposite
+    TASKGRIND_FULFILL_EARLY,
+}               taskgrind_fulfill_mode_t;
+
 // valgrind client requests
 typedef enum    taskgrind_client_request_t
 {
     // a new task has been created
-    VG_USERREQ__TASKGRIND_CREATE_EVENT      = VG_USERREQ_TOOL_BASE('T', 'G'),
+    VG_USERREQ__TASKGRIND_CREATE_EVENT = VG_USERREQ_TOOL_BASE('T', 'G'),
 
     // a new task start executed on the current thread
     VG_USERREQ__TASKGRIND_SCHEDULE_EVENT,
@@ -37,8 +61,13 @@ typedef enum    taskgrind_client_request_t
     // depend(out: x) - send 'out' and 'address of x'
     VG_USERREQ__TASKGRIND_DEPEND_EVENT,
 
-    // Executing thread waits for the completion of all children tasks of the current task
+    // Executing thread waits for the completion of the current tasks
+    //  - 0 - children
+    //  - 1 - descendent
     VG_USERREQ__TASKGRIND_SYNC_EVENT,
+
+    // The current task allow the completion of the passed parameter task
+    VG_USERREQ__TASKGRIND_DETACH_FULFILL_EVENT,
 
 }               taskgrind_client_request_t;
 
@@ -62,7 +91,13 @@ typedef enum    taskgrind_client_request_t
     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_DEPEND_EVENT, (_qzz_key), (_qzz_addr), (_qzz_access_type), 0, 0)
 
 // Notify taskgring of a barrier requiring current task children completion
-#define TASKGRIND_SYNC_EVENT()  \
-    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_SYNC_EVENT, 0, 0, 0, 0, 0)
+//  - arg[1] is a 'taskgrind_sync_t'
+#define TASKGRIND_SYNC_EVENT(_qzz_type)  \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_SYNC_EVENT, (_qzz_type), 0, 0, 0, 0)
 
+// Notify taskgrind of that the current task allows the completion of the given task
+//  - arg[1] - the task unique identifier (> 0)
+//  - arg[2] - the fulfill mode (early or late) - see taskgrind_fulfill_mode_t
+# define TASKGRIND_DETACH_FULFILL_EVENT(_qzz_key, _qzz_type) \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_DETACH_FULFILL_EVENT, (_qzz_key), (_qzz_type), 0, 0, 0)
 #endif /* TASKGRIND_API_H */
