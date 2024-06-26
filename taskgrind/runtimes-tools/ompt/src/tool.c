@@ -79,7 +79,7 @@ on_ompt_callback_task_schedule(
     ompt_task_status_t prior_task_status,
     ompt_data_t * next_task_data
 ) {
-    INFO("[SCHEDULE] prior_task_data = %p, next_task_data = %p", prior_task_data, next_task_data);
+//    INFO("[SCHEDULE] prior_task_data = %p, next_task_data = %p", prior_task_data, next_task_data);
     if (next_task_data)
         TASKGRIND_SCHEDULE_EVENT(next_task_data->value);
     else

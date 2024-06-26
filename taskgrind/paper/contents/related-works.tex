@@ -3,3 +3,14 @@
 \section{Related Work} \label{sec:relworks}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+Extended from - LLOV: A Fast Static Data-Race Checker for OpenMP Programs
+
+                         LLOV         Archer          ROMP       TaskSanitizer        Taskgrind
+Instrumentation      compile-time  compile-time   compile-time   compile-time       JIT translation
+OpenMP Support
+   for					 yes	        yes          yes             yes                yes
+   critical, atomic      no             yes          yes             yes                no
+   task                  no             yes          yes             yes                yes      
+   task depend           no           yes/no ?      yes/no ?         yes                yes      
+   task detach           no             no            no             no                 yes      
+Detection

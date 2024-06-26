@@ -8,9 +8,13 @@ This paper introduced Taskgrind: a determinacy race detector relying on heavywei
 It targets application codes relying on a well-defined parallel programming model semantic, that needs to be bridged with its segment graph interfaces.
 Taskgrind currently embeds an OMPT tool with support for most OpenMP parallel constructs (for loops, tasks, dependences, targets, detach, ...).
 
-TODO : cilk/qthreads
 
-As opposed to compile-time instrumentation (such as LLVM Sanitizers), heavyweight DBI (such as Valgrind) ensures no determinacy-race may be missed due to non-instrumented code.
+Many work-arounds for memory (free to NOOP, suppress errors on memory allocated by the LLVM allocator)
+We could replace the LLVM allocator similarly to the system allocator, actually release the memory, and add a concept of "memory liveness"
+
+TODO: Cilk/QThreads
+
+As opposed to compile-time instrumentation (such as LLVM Sanitizers), heavyweight DBA ensures no determinacy-race may be missed due to non-instrumented code.
 However, it requires a lot of engineering to filter-out the many false-positive that can arise.
 We have illustrated a few in this paper such as memory recycling, thread-local accesses, and inherent non-determinacy of parallel runtime systems.
 

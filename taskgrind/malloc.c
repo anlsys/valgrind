@@ -57,7 +57,7 @@ taskgrind___builtin_new(ThreadId tid, SizeT n)
 }
 
 void *
-taskgrind___builtin_new_aligned(ThreadId tid, SizeT n, SizeT align)
+taskgrind___builtin_new_aligned(ThreadId tid, SizeT n, SizeT align, SizeT orig_align)
 {
     TASKGRIND_DEBUG("new aligned");
     return alloc_and_record(tid, n, align, 0);
@@ -70,14 +70,14 @@ taskgrind___builtin_vec_new(ThreadId tid, SizeT n)
 }
 
 void *
-taskgrind___builtin_vec_new_aligned(ThreadId tid, SizeT n, SizeT align)
+taskgrind___builtin_vec_new_aligned(ThreadId tid, SizeT n, SizeT align, SizeT orig_alig)
 {
     TASKGRIND_DEBUG("vec new aligned");
     return alloc_and_record(tid, n, align, 0);
 }
 
 void *
-taskgrind_memalign(ThreadId tid, SizeT align, SizeT n)
+taskgrind_memalign(ThreadId tid, SizeT align, SizeT orig_align, SizeT n)
 {
     TASKGRIND_DEBUG("mem aligned");
     return alloc_and_record(tid, n, align, 0);

@@ -127,6 +127,8 @@ addr_is_tls(task_seg_t * seg, SPMT_PTR_T addr)
 {
 //    TASKGRIND_DEBUG("testing %p", (void *) addr);
 
+    return 0;
+
 #if defined(VGA_amd64) || defined(VGA_x86)
 
     // FS register value, that is tp(t) starting of the TCB for the thread 't'
@@ -222,6 +224,10 @@ compare_segments_independent_accesses(
             static const HChar * SUPPRESS_FN[] = {
                 "__kmp_task_alloc",
             };
+
+            // TODO : if llvm is not compiled with debug symbols, cannot detect
+            if (!record)
+                continue ;
 
             ExeContext * ec = record->ctx;
             DiEpoch ep = VG_(get_ExeContext_epoch)(ec);

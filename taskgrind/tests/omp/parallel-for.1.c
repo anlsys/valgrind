@@ -10,15 +10,8 @@ main(void)
     int * x = (int *) malloc(1 * sizeof(int));
     printf("x addr is %llu\n", (long long unsigned int) x);
 
-    # pragma omp parallel
-    {
-        # pragma omp sections
-        {
-            # pragma omp section
-            {
-            }
-        }
-    }
+    # pragma omp parallel for
+    for (int i = 0 ; i < 16 ; ++i);
 
     return 0;
 }
