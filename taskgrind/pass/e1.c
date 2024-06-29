@@ -18,31 +18,50 @@ static int MAX_ERRORS = 1000;
 static int N_MALLOC_ADDR_TO_REPORT  = 5;
 static int N_MALLOC_ADDR_IPS        = 10;
 
+// TODO: currently, this is used as a quick and dirty fix to ignore stack
+// accesses, detecting them if they are 'close' to the current stack pointer
+// (<1Go).  Otherwise, stack accesses causes every tasks to be inter-dependent,
+// as they only execute on the same thread, on the same stack, one after
+// another
+static inline int
+addr_is_stack(SPMT_PTR_T addr)
+{
+    static SPMT_PTR_T STACK_MAX_DISTANCE = (SPMT_PTR_T) 64*1000*1000*1000;
+    return (TASKGRIND_BASE_STACK_PTR - STACK_MAX_DISTANCE <= addr) && (addr <= TASKGRIND_BASE_STACK_PTR);
+}
+
 // Dump allocation context for the given interval
 static void
 report_err_alloc(interval_t * I)
 {
-    taskgrind_alloc_record_t * record = taskgrind_alloc_record_get((void *) I->a);
-    if (record == NULL)
-        TASKGRIND_ERR("    %lu bytes from %p (unknown allocation)", I->b - I->a, (void *) I->a);
+    if (addr_is_stack(I->a))
+    {
+        TASKGRIND_ERR("    %lu bytes from %p (stack access)", I->b - I->a, (void *) I->a);
+    }
     else
     {
-        tl_assert(record->ctx);
-        TASKGRIND_ERR("    %lu bytes from %p allocated in block %p of size %lu",
-                I->b - I->a, (void *) I->a, record->p, record->size);
-
-        ExeContext * ec = record->ctx;
-        DiEpoch ep = VG_(get_ExeContext_epoch)(ec);
-        Int n_ips = VG_(get_ExeContext_n_ips)(ec);
-        Addr * ips = VG_(get_ExeContext_ips)(ec);
-        HChar buffer[256];
-        UInt show_dir = 1;
-
-        // i = 1 to skip taskgrind allocator replacement
-        for (Int i = 1 ; i < n_ips && i < N_MALLOC_ADDR_IPS ; ++i)
+        taskgrind_alloc_record_t * record = taskgrind_alloc_record_get((void *) I->a);
+        if (record == NULL)
+            TASKGRIND_ERR("    %lu bytes from %p (unknown allocation)", I->b - I->a, (void *) I->a);
+        else
         {
-            location_get_from_ip(ep, ips[i], show_dir, buffer, sizeof(buffer));
-            TASKGRIND_ERR("       from %s", buffer);
+            tl_assert(record->ctx);
+            TASKGRIND_ERR("    %lu bytes from %p allocated in block %p of size %lu",
+                    I->b - I->a, (void *) I->a, record->p, record->size);
+
+            ExeContext * ec = record->ctx;
+            DiEpoch ep = VG_(get_ExeContext_epoch)(ec);
+            Int n_ips = VG_(get_ExeContext_n_ips)(ec);
+            Addr * ips = VG_(get_ExeContext_ips)(ec);
+            HChar buffer[256];
+            UInt show_dir = 1;
+
+            // i = 1 to skip taskgrind allocator replacement
+            for (Int i = 1 ; i < n_ips && i < N_MALLOC_ADDR_IPS ; ++i)
+            {
+                location_get_from_ip(ep, ips[i], show_dir, buffer, sizeof(buffer));
+                TASKGRIND_ERR("       from %s", buffer);
+            }
         }
     }
 }
@@ -82,19 +101,6 @@ report_err(task_seg_t * seg_a, task_seg_t * seg_b, int r)
 }
 
 // TODO: analysis code bellow is experimental and temporary
-
-// TODO: currently, this is used as a quick and dirty fix to ignore stack
-// accesses, detecting them if they are 'close' to the current stack pointer
-// (<1Go).  Otherwise, stack accesses causes every tasks to be inter-dependent,
-// as they only execute on the same thread, on the same stack, one after
-// another
-static inline int
-addr_is_stack(SPMT_PTR_T addr)
-{
-    static SPMT_PTR_T STACK_MAX_DISTANCE = (SPMT_PTR_T) 64*1000*1000*1000;
-    return (TASKGRIND_BASE_STACK_PTR - STACK_MAX_DISTANCE <= addr) && (addr <= TASKGRIND_BASE_STACK_PTR);
-}
-
 // TODO: experimental code, with several assumptions
 //  - architecture - VGA_amd64 - VGA_x86
 //  - using a variant II
@@ -125,9 +131,6 @@ typedef struct
 static inline int
 addr_is_tls(task_seg_t * seg, SPMT_PTR_T addr)
 {
-//    TASKGRIND_DEBUG("testing %p", (void *) addr);
-
-    return 0;
 
 #if defined(VGA_amd64) || defined(VGA_x86)
 
@@ -190,10 +193,7 @@ compare_segments_independent_accesses(
     if (r == 0)
         return 0;
 
-    // TODO : stack accesses logic may be broken
-
     // intersection is not empty
-    int task_stack_pointer = (seg_a->task->sp < seg_b->task->sp) ? seg_a->task->sp : seg_b->task->sp;
     int false_positive = 0;
 
     for (int i = 0 ; i < r ; ++i)
@@ -203,9 +203,24 @@ compare_segments_independent_accesses(
         // accessing on the stack
         if (addr_is_stack(I->a))
         {
-            // bellow the segment stack pointer
-            if (I->b < task_stack_pointer)
+            // both accessing parent stack
+            if      (seg_a->task->sp  < I->a && seg_b->task->sp  < I->b)
+            {
+                // TASKGRIND_DEBUG("both accessing parent stack");
+            }
+            else if (seg_a->task->sp  < I->a && seg_b->task->sp >= I->b)
+            {
+                // TASKGRIND_DEBUG("'a' accessing parent stack, 'b' accessing its own stack");
+            }
+            else if (seg_a->task->sp >= I->a && seg_b->task->sp < I->b)
+            {
+                // TASKGRIND_DEBUG("'a' accessing its own stack, 'b' accessing parent stack");
+            }
+            else if (seg_a->task->sp >= I->a && seg_b->task->sp >= I->b)
+            {
+                // TASKGRIND_DEBUG("both accessing their own stack");
                 mark_false_positive(I, &false_positive);
+            }
         }
         // accessing a TLS
         else if (addr_is_tls(seg_a, I->a) || addr_is_tls(seg_b, I->a))
@@ -223,7 +238,12 @@ compare_segments_independent_accesses(
             taskgrind_alloc_record_t * record = taskgrind_alloc_record_get((void *) I->a);
             static const HChar * SUPPRESS_FN[] = {
                 "__kmp_task_alloc",
+                "___kmp_allocate",
+                "___kmp_fast_allocate",
+                "__kmpc_omp_task_alloc",
+                "bget",
             };
+            static const unsigned SUPPRESS_FN_SIZE = sizeof(SUPPRESS_FN) / sizeof(const HChar *);
 
             // TODO : if llvm is not compiled with debug symbols, cannot detect
             if (!record)
@@ -240,14 +260,18 @@ compare_segments_independent_accesses(
                 VG_(get_fnname)(ep, ips[j], &fn);
                 if (fn)
                 {
-                    for (Int k = 0 ; k < sizeof(SUPPRESS_FN) / sizeof(const HChar *) ; ++k)
+                    int k;
+                    for (k = 0 ; k < SUPPRESS_FN_SIZE ; ++k)
                     {
                         if (VG_(strstr)(fn, SUPPRESS_FN[k]))
                         {
                             mark_false_positive(I, &false_positive);
                             break ;
                         }
-                    } /* each suppress fn */
+                    }
+                    if (k < SUPPRESS_FN_SIZE)
+                        break ;
+
                 } /* if fnname */
             } /* for each frame */
         }
