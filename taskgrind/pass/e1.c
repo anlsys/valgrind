@@ -100,76 +100,19 @@ report_err(task_seg_t * seg_a, task_seg_t * seg_b, int r)
             report_err_alloc(intervals + i);
 }
 
-// TODO: analysis code bellow is experimental and temporary
-// TODO: experimental code, with several assumptions
-//  - architecture - VGA_amd64 - VGA_x86
-//  - using a variant II
-//
-#if defined(VGA_amd64) || defined(VGA_x86)
-
-typedef struct
-{
-    union {
-        ULong gen;
-        Addr addr;
-    };
-    Addr unused;
-} dtv_t;
-
-#endif
-
-// [WIP] only partial support for Variant II of X86_64, see 'docs/tls.pdf'
-// Return true if the address executed within the segment 'seg' is stored in
-// the executing thread TLS
-//
-// TODO : analysis are run after the process terminated, so its probably a bad
-// idea to dereference TCB/DTV structures here... even though it seems to work
-// on minimal benchmarks
-//  - move TLS detection at run-time
-//  - find how to retrieve 'M' : the number of modules loaded <=> the dtv size
-//
+// [WIP] only partial TLS support for Variant II of X86_64, see 'docs/tls.pdf'
+// TODO: currently only support static TLS
+// TODO: only checking the first address of the access, should instead check the entire range (and see if it intersects or include the TLS)
 static inline int
 addr_is_tls(task_seg_t * seg, SPMT_PTR_T addr)
 {
+//    TASKGRIND_DEBUG("seg=%u, checking TLS with tp=%p, static_offset=%p, addr=%p", seg->uid, (void *) seg->tls.tp, (void *) seg->tls.static_offset, (void *) addr);
 
-#if defined(VGA_amd64) || defined(VGA_x86)
-
-    // FS register value, that is tp(t) starting of the TCB for the thread 't'
-    Addr tp_t = seg->tls;
-
-    // dtv(t) array location
-    Addr ** dtv_loc = (Addr **) (tp_t + 0x8);
-    dtv_t * dtv = (dtv_t *) dtv_loc[0];
-
-    // assertion for Variant II
-    tl_assert(              tp_t < (Addr) dtv);
-    tl_assert(dtv[1].addr < tp_t             );
-
-    // dtv[0] is gen(t)
-    // dtv[1] is dtv(t,1)
-    // dtv[2] is dtv(t,2)
-    // [...]
-    // dtv[n] is dtv(t, n)
-
-    // TLS address must be before the TCB with Variant II
-    if (addr > tp_t)
+    // no TLS
+    if (seg->tls.tp == 0 || (seg->tls.static_offset == 0 && array_is_empty(&(seg->tls.dynamic_blocks))))
         return 0;
 
-    // loop on each dtv(t, i) entry
-    int m = 1;
-    while (1)
-    {
-        Addr tlsoffset_t_i = dtv[m].addr;
-        if (addr <= tlsoffset_t_i)
-            return 1;
-        // TODO : how to iterate on TCB blocks ? only read first one currently ...
-        break ;
-    }
-    return 0;
-#else
-# pragma message("TLS not supported for this architecture")
-    return 0;
-#endif
+    return seg->tls.static_offset <= addr && addr <= seg->tls.tp;
 }
 
 // Mark the interval as false-positive
@@ -222,12 +165,14 @@ compare_segments_independent_accesses(
                 mark_false_positive(I, &false_positive);
             }
         }
-        // accessing a TLS
-        else if (addr_is_tls(seg_a, I->a) || addr_is_tls(seg_b, I->a))
+        // the same thread executed both segments and accessed its TLS
+        else if (seg_a->tid == seg_b->tid && addr_is_tls(seg_a, I->a))
         {
-            // on the same thread
-            if (seg_a->tls == seg_b->tls)
-                mark_false_positive(I, &false_positive);
+            tl_assert(addr_is_tls(seg_b, I->a));
+            tl_assert(seg_a->tls.tp == seg_b->tls.tp);
+            tl_assert(seg_a->tls.static_offset == seg_b->tls.static_offset);
+
+            mark_false_positive(I, &false_positive);
         }
         // most likely accessing the heap
         else

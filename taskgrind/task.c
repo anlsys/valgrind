@@ -75,6 +75,9 @@ task_seg_new(task_t * task)
     array_init(&seg->successors, 4, sizeof(task_seg_ref_t));
     seg->ctx = NULL;
     seg->uid = SEGS.n;
+    seg->tls.tp = 0;
+    seg->tls.static_offset = 0;
+    array_clear(&seg->tls.dynamic_blocks);
     seg->dfs_version = 0;
 
     ThreadId tid = VG_(get_running_tid)();
@@ -157,6 +160,80 @@ task_seg_set_edge(task_seg_t * pred, task_t * succ, UInt seg_id)
     array_push(&pred->successors, &seg_ref);
 }
 
+// TODO: code with several assumptions
+//  - architecture - VGA_amd64 - VGA_x86
+//  - using a variant II
+//  - DTV location located at TCB+0x8
+#if defined(VGA_amd64) || defined(VGA_x86)
+    
+typedef struct
+{
+    union { 
+        ULong gen;
+        Addr addr;
+    };
+    Addr unused;
+} dtv_t;
+
+#endif
+
+// the given segment terminated
+static inline void
+task_seg_fini(task_t * task, task_seg_t * seg)
+{
+    // Save the current TLS information
+    // [WIP] only partial support for Variant II of X86_64, see 'docs/tls.pdf'
+    // TODO : is it correct dereferencing TCB/DTV structures like I do here ?
+    // TODO : find how to retrieve 'N' = 'N1' + 'N2'
+    // TODO : find how to retrieve 'N1' : the number of static TLS blocks
+    // TODO : find how to retrieve 'N2' : the number of modules loaded for dynamic TLS
+    // -> the impl. currently assumes 'N1=1' and 'N2=0'
+
+    VexGuestArchState * state = VG_(get_CurrentThreadArchState)();
+# if defined(VGA_amd64) || defined(VGA_x86)
+
+#  if defined(VGA_amd64)
+    seg->tls.tp = (Addr) state->guest_FS_CONST;
+#  else /* defined(VGA_x86) */
+    seg->tls.tp = (Addr) state->guest_FS;
+# endif
+
+    Addr ** dtv_loc = (Addr **) (seg->tls.tp + 0x8);
+    dtv_t * dtv = (dtv_t *) dtv_loc[0];
+
+    // assertion for Variant II
+    tl_assert(              seg->tls.tp < (Addr) dtv);
+    tl_assert(dtv[1].addr < seg->tls.tp             );
+
+    // dtv[0]     is gen(t)
+    // dtv[1]     is dtv(t,1)   - static
+    // dtv[2]     is dtv(t,2)   - static
+    // [...]
+    // dtv[N1]    is dtv(t, N1) - static
+    // dtv[N1+1]  is dtv(t, N1) - dynamic
+    // [...]
+    // dtv[N1+N2] is dtv(t, n)  - dynamic
+
+    // loop on each dtv(t, i) entry
+    int N1 = 1;
+    int N2 = 0;
+    int N  = N1 + N2;
+    seg->tls.static_offset  = dtv[N1].addr;
+    array_clear(&(seg->tls.dynamic_blocks));
+
+    // TODO : find N = N1 + N2
+# if 0
+    for (int m = 1 ; m <= N ; ++m)
+    {
+        Addr tlsoffset_t_m = dtv[m].addr;
+    }
+# endif
+
+#else
+# pragma message("TLS support not implemented for this architecture")
+# endif
+}
+
 // set the edge pred -> succ in the TDG
 static inline void
 task_set_edge(task_t * pred, task_t * succ)
@@ -235,8 +312,11 @@ task_create(UWord id, task_type_t type, UWord undeferred)
     // retrieve the current seg
     task_t * pred = CURRENT_TASK;
     task_seg_t * pred_seg = (task_seg_t *) array_penultimate(&pred->segs);
-       // int pred_seg_idx = pred->segs.n - 2;
+ // int pred_seg_idx = pred->segs.n - 2;
     tl_assert(pred_seg);
+
+    // callback : the previous segment terminated
+    task_seg_fini(pred, pred_seg);
 
     // retrieve the new task seg
     task_seg_t * task_seg = (task_seg_t *) array_first(&task->segs);
@@ -338,6 +418,9 @@ void
 task_schedule(UWord id)
 {
     task_t * prev = CURRENT_TASK;
+    task_seg_t * prev_seg = task_seg_get_current();
+    task_seg_fini(prev, prev_seg);
+
     task_t * next = task_get(id);
     tl_assert(prev);
     tl_assert(next);
@@ -587,18 +670,7 @@ task_seg_mem_access(task_seg_t * seg, Addr addr, SizeT size)
     {
         ThreadId tid = VG_(get_running_tid)();
         if (tid != VG_INVALID_THREADID)
-        {
             seg->ctx = VG_(record_ExeContext)(tid, 0);
-
-            VexGuestArchState * state = VG_(get_CurrentThreadArchState)();
-#if defined(VGA_amd64)
-            seg->tls = (Addr) state->guest_FS_CONST;
-# elif defined(VGA_x86)
-            seg->tls = (Addr) state->guest_FS;
-#else
-# pragma message("TLS support not implemented for this architecture")
-#endif
-        }
     }
 }
 
