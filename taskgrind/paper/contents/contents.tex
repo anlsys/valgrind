@@ -3,6 +3,14 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+\subsection{Segment Graph}
+% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+- Similarly to \cite{Matar18}, Taskgrind reason on a \emph{segment graph}
+- nodes = non-divisible sequence of instructions
+- there is a path between Ni and Nj if a synchronization imposes the ordering of the two sequences of instructions (said differently: if a path exists, then 'Ni' happens-before 'Nj').
+
+
+% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Valgrind}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 - Valgrind tool = core + a tool plugin
@@ -12,17 +20,14 @@
 	- Client requests
 	- Function replacement, for instance to wrap the memory allocator
 	- ...
-
-% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
-\subsection{Segment Graph}
-% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
-- Similarly to \cite{Matar18}, Taskgrind reason on a \emph{segment graph}
-	- nodes = non-divisible sequence of instructions
-	- there is a path between Ni and Nj if a synchronization imposes the ordering of the two sequences of instructions (said differently: if a path exists, then 'Ni' happens-before 'Nj').
-
+	
+from [Valgrind]- R3: Instrument read/write instructions. Valgrind supports this
+requirement—all reads and writes of registers and memory are vis-
+ible in the IR and instrumentable. The IR’s load/store nature makes
+instrumentation of memory accesses particularly easy
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Taskgrind: a Valgrind tool for parallel programming model determinacy race detection}
+\section{Taskgrind: a Valgrind tool for determinacy race detection}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 Scheme showing the Application (client) / Taskgrind (the tool) / Analyzer / Valgrind (the core) / the PM tool (OMPT, Qthreads...)
@@ -33,56 +38,60 @@ Scheme showing the Application (client) / Taskgrind (the tool) / Analyzer / Valg
 		- Note: Taskgrind could use function replacement to wrap any parallel libraries and re-implement OMPT internally, for instance
 		- but interfaces exists, more convenient and portable to use them
 
-% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
-\subsection{Building a Segment Graph}
-% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
-A taskgrind task ('ttask') is a sequence of segment ...
-% (then referenced as 'ttask' to avoid confusion with OpenMP, Cilk, ) 
+
 
 - Taskgrind builds a segment graph during the execution, and keep track of 'the current segment'
 - Accesses are accumulated in compact interval trees (one for load, one for stores)
 (self-balancing red-black tree)	
 - Finding determinacy race given this graph becomes trivial - O(n²) with 'n' the number of nodes
 
-from [Valgrind]- R3: Instrument read/write instructions. Valgrind supports this
-requirement—all reads and writes of registers and memory are vis-
-ible in the IR and instrumentable. The IR’s load/store nature makes
-instrumentation of memory accesses particularly easy
 
-Scheme showing the Application (client) / Taskgrind (the tool) / Valgrind (the core) / the PM tool (OMPT, Qthreads...)
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
-\subsection{OpenMP}
+\subsection{Recording Parallel Execution}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+
+\paragraph{OpenMP}
 - OMPT tool
-	- Convert OMPT callbacks to a Taskgrind segment graph
-		- create(T) - the executing thread creates the task 'T'
-		- schedule(T) - the executing thread schedules the task 'T'
-		- depend(T, list<in|out|outset, addr>) - openmp-like dependences
-			- the first segment the successor depends on the last segment of the predecessor
-		- detach
-			- when omp-fulfill-event(e) is raised, create an empty segment S
-			- successors of e.T also depends on S
-		- sync(children|all) - the executing thread must wait for
-			- all children tasks completion
-			- all descendant tasks completion
-		
+- Convert OMPT callbacks to a Taskgrind segment graph
+- create(T) - the executing thread creates the task 'T'
+- schedule(T) - the executing thread schedules the task 'T'
+- depend(T, list<in|out|outset, addr>) - openmp-like dependences
+- the first segment the successor depends on the last segment of the predecessor
+- detach
+- when omp-fulfill-event(e) is raised, create an empty segment S
+- successors of e.T also depends on S
+- sync(children|all) - the executing thread must wait for
+- all children tasks completion
+- all descendant tasks completion
+
 Remark:
-	- a parallel-for loop chunk could be interpreted as a single-segment ttask - cannot map a chunk creation (work callback) with its schedule (dispatch callback)
-	- a target
-		- nowait 	- is a task
-		- wait 		- is an undefered task
-		so targetting CPU, it should work
-	
+- a parallel-for loop chunk could be interpreted as a single-segment ttask - cannot map a chunk creation (work callback) with its schedule (dispatch callback)
+- a target
+- nowait 	- is a task
+- wait 		- is an undefered task
+so targetting CPU, it should work
+
+\paragraph{QThreads}
+
+\paragraph{Cilk}
+
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
-\subsection{QThreads}
+\subsection{Collecting Memory Accesses}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
-TODO
+- Accesses are accumulated in compact interval trees (one for load, one for stores)
+(self-balancing red-black tree)	
 
 
+% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+\subsection{Analyzing Instrumented Execution}
+% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+
+Taskgrind not only represent the execution 
 
 
-Finding determinacy race given the segment graph and segment accesses is rather straightforward
+\paragraph{Determinacy Race}
+Finding determinacy race given this graph becomes trivial - O(n²) with 'n' the number of segments
 
 foreach segment s1
 	foreach segment s2 != s1
@@ -91,6 +100,9 @@ foreach segment s1
 				report determinacy race on X from segments s1 and s2
 
 No false-negative, hence detecting semantical errors even if the execution was correct.
+
+\paragraph{???}
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -120,8 +132,9 @@ But, way too many false-positive. We show a few examples
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Parallel Runtimes Non-Determinacy}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
-For instance, KMP non-deterministic itself (task scheduling may be different between executions)
-We simply blacklist all KMP-runtime symbols from instrumentation
+Non-determinacy is not always an issue.
+For instance, most OpenMP implementation task-scheduling is non-deterministic it-self : given a task-based program and its input, tasks may be scheduled in different partial order and on different cores.
+We simply blacklist all the parallel runtime system symbols from instrumentation to avoid reporting such issues.
 
 
 
