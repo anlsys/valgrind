@@ -76,8 +76,7 @@ task_seg_new(task_t * task)
     seg->ctx = NULL;
     seg->uid = SEGS.n;
     seg->tls.tp = 0;
-    seg->tls.static_offset = 0;
-    array_clear(&seg->tls.dynamic_blocks);
+    array_init(&seg->tls.dtv, 4, sizeof(Addr) * 2);
     seg->dfs_version = 0;
 
     ThreadId tid = VG_(get_running_tid)();
@@ -135,9 +134,7 @@ __task_init(task_t * task, UWord id, task_type_t type, UWord undeferred)
 static inline task_t *
 task_new(UWord id, task_type_t type, UWord undeferred)
 {
-    task_t * task;
-
-    task = (task_t *) VG_(malloc)("task_new", sizeof(task_t));
+    task_t * task = (task_t *) VG_(malloc)("task_new", sizeof(task_t));
     __task_init(task, id, type, undeferred);
     return task;
 }
@@ -165,12 +162,13 @@ task_seg_set_edge(task_seg_t * pred, task_t * succ, UInt seg_id)
 //  - using a variant II
 //  - DTV location located at TCB+0x8
 #if defined(VGA_amd64) || defined(VGA_x86)
-    
+
 typedef struct
 {
     union { 
         ULong gen;
         Addr addr;
+        Addr counter;
     };
     Addr unused;
 } dtv_t;
@@ -187,7 +185,7 @@ task_seg_fini(task_t * task, task_seg_t * seg)
     // TODO : find how to retrieve 'N' = 'N1' + 'N2'
     // TODO : find how to retrieve 'N1' : the number of static TLS blocks
     // TODO : find how to retrieve 'N2' : the number of modules loaded for dynamic TLS
-    // -> the impl. currently assumes 'N1=1' and 'N2=0'
+    // -> the impl. currently assumes 'N=N1' and 'N2=0'
 
     VexGuestArchState * state = VG_(get_CurrentThreadArchState)();
 # if defined(VGA_amd64) || defined(VGA_x86)
@@ -215,19 +213,21 @@ task_seg_fini(task_t * task, task_seg_t * seg)
     // dtv[N1+N2] is dtv(t, n)  - dynamic
 
     // loop on each dtv(t, i) entry
-    int N1 = 1;
-    int N2 = 0;
-    int N  = N1 + N2;
-    seg->tls.static_offset  = dtv[N1].addr;
-    array_clear(&(seg->tls.dynamic_blocks));
 
-    // TODO : find N = N1 + N2
-# if 0
-    for (int m = 1 ; m <= N ; ++m)
+    // https://sourceware.org/git/?p=glibc.git;a=blob;f=elf/dl-tls.c;h=670dbc42fc2e3334739e115dd12390a8abefbd49;hb=HEAD#l484
+    unsigned N = dtv[-1].counter;
+    array_clear(&(seg->tls.dtv));
+
+    // TODO : this code is wrong if there is dynamic TLS block in the dtv
+    for (int m = 1 ; m <= N && dtv[m].addr ; ++m)
     {
-        Addr tlsoffset_t_m = dtv[m].addr;
+        Addr block[2] = {
+                                     dtv[m  ].addr,
+            (m == 1) ? seg->tls.tp : dtv[m-1].addr
+        };
+        // TASKGRIND_DEBUG("tls [%p, %p]", block[0], block[1]);
+        array_push(&seg->tls.dtv, &block);
     }
-# endif
 
 #else
 # pragma message("TLS support not implemented for this architecture")

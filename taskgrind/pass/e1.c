@@ -73,6 +73,8 @@ static int n_intervals          = 0;
 static inline void
 report_err(task_seg_t * seg_a, task_seg_t * seg_b, int r)
 {
+//    TASKGRIND_DEBUG("Reporting err for seg %u and %u\n", seg_a->uid, seg_b->uid);
+
     // bound error reporting
     if (++ERRORS >= MAX_ERRORS)
     {
@@ -109,10 +111,17 @@ addr_is_tls(task_seg_t * seg, SPMT_PTR_T addr)
 //    TASKGRIND_DEBUG("seg=%u, checking TLS with tp=%p, static_offset=%p, addr=%p", seg->uid, (void *) seg->tls.tp, (void *) seg->tls.static_offset, (void *) addr);
 
     // no TLS
-    if (seg->tls.tp == 0 || (seg->tls.static_offset == 0 && array_is_empty(&(seg->tls.dynamic_blocks))))
+    if (seg->tls.tp == 0 || array_is_empty(&(seg->tls.dtv)))
         return 0;
 
-    return seg->tls.static_offset <= addr && addr <= seg->tls.tp;
+    ARRAY_FOREACH_BEGIN(&seg->tls.dtv, Addr *, block)
+    {
+        if (block[0] <= addr && addr <= block[1])
+            return 1;
+    }
+    ARRAY_FOREACH_END(&seg->tls.dtv, Addr[2], block);
+
+    return 0;
 }
 
 // Mark the interval as false-positive
@@ -170,7 +179,6 @@ compare_segments_independent_accesses(
         {
             tl_assert(addr_is_tls(seg_b, I->a));
             tl_assert(seg_a->tls.tp == seg_b->tls.tp);
-            tl_assert(seg_a->tls.static_offset == seg_b->tls.static_offset);
 
             mark_false_positive(I, &false_positive);
         }

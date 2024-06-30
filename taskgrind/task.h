@@ -126,11 +126,8 @@ typedef struct  task_seg_s
         // Address of the TCB (frontier between TCB and static TLS)
         Addr tp;
 
-        // 'Left-most' address of static TLS
-        Addr static_offset;
-
-        // Array of couple (a, b) representing a dynamic TLS block [a; b[
-        array_t dynamic_blocks;
+        // Array of couple (a, b) representing a TLS block [a; b[
+        array_t dtv;
 
     } tls;
 
