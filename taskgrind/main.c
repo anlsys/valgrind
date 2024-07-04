@@ -130,6 +130,18 @@ taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
 //  Instrumentation
 ///////////////////////////////////////////////////////////////////////////////
 
+// Only accesses in this whitelist are instrumented if passing the '--whitelist' CLA
+static const HChar * WHITELIST_FN[] = {
+    "omp_task_entry"
+};
+
+// Accesses in these functions are ignored
+static const HChar * BLACKLIST_FN[] = {
+    "on_ompt",          // ignore ompt plugin code
+    "__kmp",            // ignore llvm runtime code
+    "outlined_debug",   // ignore llvm debug micro tasks
+};
+
 static void
 taskgrind_instrument_mem_access(
     IRSB * sb,
@@ -208,24 +220,30 @@ taskgrind_instrument(
     const HChar * fn;
     VG_(get_fnname)(ep, addr, &fn);
 
-    // ignore all accesses outside outermost basic bloc if requested by users
-    if (!fn || (CLOS.outermost_only && !VG_(strstr)(fn, "omp_task_entry")))
-        return sb_in;
+    if (fn)
+    {
+        if (CLOS.whitelist)
+        {
+            int instrument = 0;
+            for (int i = 0 ; i < sizeof(WHITELIST_FN) / sizeof(const HChar *) ; ++i)
+            {
+                if (VG_(strstr)(fn, WHITELIST_FN[i]))
+                {
+                    instrument = 1;
+                    break ;
+                }
+            }
+            if (!instrument)
+                return sb_in;
+        }
 
-    // Ignore run-time code
-    // Accesses in these functions can be ignored
-    static const HChar * SUPPRESS_FN[] = {
-        "on_ompt",          // ignore ompt plugin code
-        "__kmp",            // ignore llvm runtime code
-        "outlined_debug",   // ignore llvm debug micro tasks
-        // "dl_lookup_symbol",
-        // "free",
-        // "malloc"
-    };
-
-    for (int i = 0 ; i < sizeof(SUPPRESS_FN) / sizeof(const HChar *) ; ++i)
-        if (VG_(strstr)(fn, SUPPRESS_FN[i]))
-            return sb_in;
+        if (CLOS.blacklist)
+        {
+            for (int i = 0 ; i < sizeof(BLACKLIST_FN) / sizeof(const HChar *) ; ++i)
+                if (VG_(strstr)(fn, BLACKLIST_FN[i]))
+                    return sb_in;
+        }
+    }
 
     // deep copy code until marker
     IRSB * sb_out = deepCopyIRSBExceptStmts(sb_in);
@@ -440,9 +458,9 @@ static void
 taskgrind_print_usage(void)
 {
     VG_(printf)(
-"    --dump            Dump internal data structures to dot files\n"
-"    --outermost-only  Only instrument accesses in tasks outermost scope\n"
-//"    --record=<name>            Execute and record the task graph into <name> directory\n"
+"    --dump         Dump internal data structures to dot files\n"
+"    --whitelist    Only instrument accesses in functions of the whitelist\n"
+"    --blacklist    Do not instrument accesses in functions of the whitelist\n"
    );
 }
 
@@ -463,9 +481,15 @@ taskgrind_process_cmd_line_option(const HChar * arg)
         return True;
     }
 
-    if (VG_(strcmp)(arg, "--outermost-only") == 0)
+    if (VG_(strcmp)(arg, "--whitelist") == 0)
     {
-        CLOS.outermost_only = 1;
+        CLOS.whitelist = 1;
+        return True;
+    }
+
+    if (VG_(strcmp)(arg, "--blacklist") == 0)
+    {
+        CLOS.blacklist = 1;
         return True;
     }
 
@@ -480,10 +504,11 @@ taskgrind_post_clo_init(void)
     else
         TASKGRIND_INFO("Export to dot files disabled");
 
-    if (CLOS.outermost_only)
-        TASKGRIND_INFO("Instrumenting only tasks outermost scope memory accesses");
-    else
-        TASKGRIND_INFO("Instrumenting every memory accesses");
+    if (CLOS.whitelist)
+        TASKGRIND_INFO("Only instrumenting accesses in functions matching the whitelist");
+
+    if (CLOS.blacklist)
+        TASKGRIND_INFO("Not instrumenting accesses in functions matching the blacklist");
 
     task_init();
 }

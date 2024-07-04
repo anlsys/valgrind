@@ -225,7 +225,7 @@ task_seg_fini(task_t * task, task_seg_t * seg)
                                      dtv[m  ].addr,
             (m == 1) ? seg->tls.tp : dtv[m-1].addr
         };
-        // TASKGRIND_DEBUG("tls [%p, %p]", block[0], block[1]);
+        // TASKGRIND_DEBUG("tls [%p, %p] block n°%d", block[0], block[1], m);
         array_push(&seg->tls.dtv, &block);
     }
 

@@ -14,16 +14,15 @@ main(void)
     {
         # pragma omp single nowait
         {
-            int x;
-
-            # pragma omp task shared(x) depend(out: x)
+            omp_event_handle_t hdl;
+            # pragma omp task shared(x) depend(out: x) detach(hdl)
                 x[0] = 42;
 
-            # pragma omp task depend(in: x) if(0)
+
+            # pragma omp task depend(in: x)
                 {}
 
-            # pragma omp task shared(x)
-                x[0] = 43;
+            omp_fulfill_event(hdl);
         }
     }
 
