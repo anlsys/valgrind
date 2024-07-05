@@ -14,5 +14,12 @@ Task-based version of Cholesky, HPCCG, LULESH, nbody
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Determinacy Race Detection}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
-Against TaskSanitizer
+Against TaskSanitizer and Archer
+
+support							TaskSanitizer		Archer		Taskgrind
+Mutex (data race)				yes					yes			no
+Stack memory accesses			no					?			yes				
+Memory allocator recycling		no					?			yes
+Thread local accesses			no					?			yes
+llvm version supported	    	5.x and 6.x			latest		19.x
 

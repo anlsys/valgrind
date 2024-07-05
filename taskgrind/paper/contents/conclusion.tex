@@ -18,9 +18,11 @@ As opposed to compile-time instrumentation (such as LLVM Sanitizers), heavyweigh
 However, it requires a lot of engineering to filter-out the many false-positive that can arise.
 We have illustrated a few in this paper such as memory recycling, thread-local accesses, and inherent non-determinacy of parallel runtime systems.
 
+Future work
+	- Engineering work
+		- add support for other sync. primitives (mutex)
+		- move analysis out of Valgrind (Algorithm on determinacy race is O(n²) embarassingly parallel)
 
-
-
-
-
-
+	- Research
+		- GPU offloading in presence - in particular with OpenMP, could compile target tasks as 'CPU' tasks
+						
