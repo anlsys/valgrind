@@ -9,7 +9,7 @@ CFLAGS+=-Wno-int-to-pointer-cast -Wno-unused-value
 
 LDFLAGS=
 
-SRC=$(shell find . -name "*.c")
+SRC=$(shell ls omp/*.c)
 EXE=$(SRC:.c=.exe)
 
 all: $(EXE)
