@@ -3,10 +3,8 @@
 # include <stdio.h>
 # include <stdlib.h>
 # include <stdint.h>
-# include <unistd.h>
 
-// should report: 2 siblings tasks are data-dependent but no dependency expressed
-_Thread_local int x[1];
+// should report: no errors
 
 int
 main(void)
@@ -15,19 +13,25 @@ main(void)
 
     # pragma omp parallel
     {
-        while (done < 2 && omp_get_thread_num() != 0);
-
         # pragma omp single nowait
         {
+            while (done < 2 && omp_get_thread_num() != 0);
+
             # pragma omp task
             {
-                x[0] = 0;
+                int * x = (int *) malloc(1 * sizeof(int));
+                printf("x==%p\n",x);
+                x[0] = 42;
+                free(x);
                 ++done;
             }
 
             # pragma omp task
             {
-                x[0] = 1;
+                int * x = (int *) malloc(1 * sizeof(int));
+                printf("x==%p\n",x);
+                x[0] = 42;
+                free(x);
                 ++done;
             }
         }
