@@ -11,3 +11,10 @@ task-dependent.5.c      ndr
 
 parallel-for.1.c        dr
 parallel-for.2.c        ndr
+
+tls.a.c                 ndr
+
+stack.a.c               dr
+stack.b.c               ndr
+stack.c.c               ndr
+stack.d.c               dr

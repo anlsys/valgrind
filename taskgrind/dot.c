@@ -53,6 +53,13 @@ get_task_infos(task_t * task, const char ** type, const char ** shape)
             break ;
         }
 
+        case (TASK_TYPE_IMPLICIT_TASKWAIT):
+        {
+            *type = "taskwait";
+            *shape = "diamond";
+            break ;
+        }
+
         case (TASK_TYPE_IMPLICIT_BARRIER):
         {
             *type = "imp(barrier)";

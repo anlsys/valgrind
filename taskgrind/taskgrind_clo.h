@@ -4,8 +4,8 @@
 typedef struct  taskgrind_clo_s
 {
     int dump;
-    int whitelist;
-    int blacklist;
+    int instrumentlist;
+    int ignorelist;
 }               taskgrind_clo_t;
 
 extern taskgrind_clo_t CLOS;

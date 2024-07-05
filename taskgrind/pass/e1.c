@@ -4,6 +4,7 @@
 # include "location.h"
 # include "task.h"
 # include "taskgrind.h"
+# include "taskgrind_clo.h"
 # include "taskgrind_spmt.h"
 
 # include "pub_tool_errormgr.h"
@@ -198,8 +199,7 @@ compare_segments_independent_accesses(
             };
             static const unsigned SUPPRESS_FN_SIZE = sizeof(SUPPRESS_FN) / sizeof(const HChar *);
 
-            // TODO : if llvm is not compiled with debug symbols, cannot detect
-            if (!record)
+            if (!record || !CLOS.ignorelist)
                 continue ;
 
             ExeContext * ec = record->ctx;

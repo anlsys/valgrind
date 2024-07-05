@@ -1,0 +1,16 @@
+parallel-for
+sequential
+task-1
+task-16
+task-4
+taskloop-1
+taskloop-16
+taskloop-4
+taskwait-1
+taskwait-16
+taskwait-4
+task-async-1
+task-async-4
+task-async-16
+task
+taskloop
