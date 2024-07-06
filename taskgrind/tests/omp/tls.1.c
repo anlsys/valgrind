@@ -18,13 +18,11 @@ main(void)
             # pragma omp task
             {
                 x[0] = 0;
-                printf("x addr is %p\n", x);
             }
 
             # pragma omp task
             {
                 x[0] = 1;
-                printf("x addr is %p\n", x);
             }
         }
     }
