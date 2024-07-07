@@ -1171,3 +1171,58 @@ series = {SPAA '97}
 	numpages = {12},
 	keywords = {Memcheck, Valgrind, dynamic binary analysis, dynamic binary instrumentation, shadow values}
 }
+
+@inproceedings{thread-sanitizer-valgrind,
+	author = {Serebryany, Konstantin and Iskhodzhanov, Timur},
+	title = {ThreadSanitizer: data race detection in practice},
+	year = {2009},
+	isbn = {9781605587936},
+	publisher = {Association for Computing Machinery},
+	address = {New York, NY, USA},
+	url = {https://doi.org/10.1145/1791194.1791203},
+	doi = {10.1145/1791194.1791203},
+	abstract = {Data races are a particularly unpleasant kind of threading bugs. They are hard to find and reproduce -- you may not observe a bug during the entire testing cycle and will only see it in production as rare unexplainable failures. This paper presents ThreadSanitizer -- a dynamic detector of data races. We describe the hybrid algorithm (based on happens-before and locksets) used in the detector. We introduce what we call dynamic annotations -- a sort of race detection API that allows a user to inform the detector about any tricky synchronization in the user program. Various practical aspects of using ThreadSanitizer for testing multithreaded C++ code at Google are also discussed.},
+	booktitle = {Proceedings of the Workshop on Binary Instrumentation and Applications},
+	pages = {62–71},
+	numpages = {10},
+	keywords = {testing, dynamic data race detection, concurrency bugs, Valgrind},
+	location = {New York, New York, USA},
+	series = {WBIA '09}
+}
+
+@InProceedings{thread-sanitizer-llvm,
+	author="Serebryany, Konstantin
+	and Potapenko, Alexander
+	and Iskhodzhanov, Timur
+	and Vyukov, Dmitriy",
+	editor="Khurshid, Sarfraz
+	and Sen, Koushik",
+	title="Dynamic Race Detection with LLVM Compiler",
+	booktitle="Runtime Verification",
+	year="2012",
+	publisher="Springer Berlin Heidelberg",
+	address="Berlin, Heidelberg",
+	pages="110--114",
+	abstract="Data races are among the most difficult to detect and costly bugs. Race detection has been studied widely, but none of the existing tools satisfies the requirements of high speed, detailed reports and wide availability at the same time. We describe our attempt to create a tool that works fast, has detailed and understandable reports and is available on a variety of platforms. The race detector is based on our previous work, ThreadSanitizer [1], and the instrumentation is done using the LLVM compiler. We show that applying compiler instrumentation and sampling reduces the slowdown to less than 1.5x, fast enough to use instrumented programs interactively.",
+	isbn="978-3-642-29860-8"
+}
+
+@INPROCEEDINGS{ROMP,
+	author={Gu, Yizi and Mellor-Crummey, John},
+	booktitle={SC18: International Conference for High Performance Computing, Networking, Storage and Analysis}, 
+	title={Dynamic Data Race Detection for OpenMP Programs}, 
+	year={2018},
+	volume={},
+	number={},
+	pages={767-778},
+	keywords={Task analysis;Detectors;Synchronization;Parallel processing;Concurrent computing;Cognition;Instruction sets;Data race detection;OpenMP;OMPT;DynInst},
+	doi={10.1109/SC.2018.00064}}
+
+@unpublished{EWD303,
+	author = "Edsger W. Dijkstra",
+	title = "On the reliability of programs",
+	year = "n.d.",
+	note = "circulated privately",
+	url = "http://www.cs.utexas.edu/users/EWD/ewd03xx/EWD303.PDF",
+	fileSize = 427 KB
+}
