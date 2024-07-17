@@ -121,6 +121,8 @@ __task_init(task_t * task, UWord id, task_type_t type, UWord undeferred)
         task->sp = state->guest_ESP;
 #elif defined(VGA_amd64)
         task->sp = state->guest_RSP;
+#elif defined(VGA_arm64)
+        task->sp = state->guest_XSP;
 #else
 # error "Arch not supported"
 #endif
