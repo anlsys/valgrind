@@ -10,9 +10,11 @@ Instrumentation      compile-time  compile-time   JIT translation  compile-time 
 OpenMP Support
    for					 yes	        yes          yes             yes                yes
    critical, atomic      no             yes          yes             yes                no
-   task                  no             yes          yes             yes                yes      
-   task depend           no           yes/no ?      yes/no ?        partial             yes      
+   task                  no             yes          yes             yes                yes  
+   task mergeable		 ?               ?            ?               ?                  ?
+   task depend           no              ?            ?             partial             yes      
    task detach           no             no            no             no                 yes      
+
 
 
 support							TaskSanitizer		ROMP		Archer		Taskgrind

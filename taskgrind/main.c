@@ -53,6 +53,30 @@ taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
 {
     switch (arg[0])
     {
+        case VG_USERREQ__TASKGRIND_FORK_POINT_EVENT:
+        {
+            task_fork();
+            break ;
+        }
+
+        case VG_USERREQ__TASKGRIND_JOIN_POINT_EVENT:
+        {
+            task_join();
+            break ;
+        }
+
+        case VG_USERREQ__TASKGRIND_THREAD_BEGIN_EVENT:
+        {
+            task_thread_begin();
+            break ;
+        }
+
+        case VG_USERREQ__TASKGRIND_THREAD_END_EVENT:
+        {
+            task_thread_end();
+            break ;
+        }
+
         case VG_USERREQ__TASKGRIND_CREATE_EVENT:
         {
             task_type_t type;
@@ -114,10 +138,11 @@ taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
             // between June 2023 and June 2024 ?
 
             static int done = 0;
-            if (arg[0] == 0x4d430101 && !done)
-                done = 1;
-            else
-                return False;
+            if (arg[0] == 0x4d430101)
+                if (!done)
+                    done = 1;
+                else
+                    return False;
 
             TASKGRIND_WARN("Unknown client request code %llx", (ULong)arg[0]);
 
@@ -132,7 +157,7 @@ taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
 
 // Only accesses in this instrumentlist are instrumented if passing the '--instrumentlist' CLA
 static const HChar * WHITELIST_FN[] = {
-    "omp_task_entry"
+    "omp_task_entry",
 };
 
 // Accesses in these functions are ignored
@@ -616,7 +641,7 @@ taskgrind_prepare_env(HChar *** envp)
 
     // https://github.com/llvm/llvm-project/issues/89398#issuecomment-2066822457
     VG_(env_setenv)(envp, "KMP_ENABLE_TASK_THROTTLING", "0");
-    VG_(env_setenv)(envp, "OMP_NUM_THREADS", "1");
+    VG_(env_setenv)(envp, "OMP_NUM_THREADS", "2");
 }
 
 VG_DETERMINE_INTERFACE_VERSION_WITH_ENV(taskgrind_pre_clo_init, taskgrind_prepare_env)

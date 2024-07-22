@@ -14,8 +14,6 @@ DRB122-taskundeferred-orig-no.c
 DRB123-taskundeferred-orig-yes.c
 DRB127-tasking-threadprivate1-orig-no.c
 DRB128-tasking-threadprivate2-orig-no.c
-DRB129-mergeable-taskwait-orig-yes.c
-DRB130-mergeable-taskwait-orig-no.c
 DRB131-taskdep4-orig-omp45-yes.c
 DRB132-taskdep4-orig-omp45-no.c
 DRB133-taskdep5-orig-omp45-no.c

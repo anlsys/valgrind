@@ -10,19 +10,63 @@
 # include "pub_tool_execontext.h"
 # include "pub_tool_guest.h"
 
+// Threads
+static thread_t THREADS[TASKGRIND_MAX_THREADS];
+
+static inline thread_t *
+thread_get(void)
+{
+    ThreadId tid = VG_(get_running_tid)();
+    tl_assert(tid >= 0);
+    tl_assert(tid < TASKGRIND_MAX_THREADS);
+    return THREADS + tid;
+}
+
+static inline task_t *
+task_get_root(void)
+{
+    return &THREADS[0].root_task;
+}
+
+static inline task_t *
+task_get_current(void)
+{
+    thread_t * thread = thread_get();
+    tl_assert(thread);
+    return thread->current_task;
+}
+
+static inline task_seg_t *
+task_seg_get_current(void)
+{
+    task_t * task = task_get_current();
+    tl_assert(task);
+    return array_last(&task->segs);
+}
+
 // The tasks hmap
-task_t * TASKS;
+static task_t * TASKS;
 
-// Implicit root task of the entire program
-task_t ROOT_TASK;
+task_t *
+task_get(UWord id)
+{
+    task_t * task;
+    unsigned hashv;
 
-// The current task
-task_t * CURRENT_TASK = NULL;
+    HASH_VALUE(&id, sizeof(UWord), hashv);
+    HASH_FIND_BYHASHVALUE(hh, TASKS, &id, sizeof(UWord), hashv, task);
+
+    return task;
+}
 
 // List of all segments
 array_t SEGS;
 
-// version for dfs
+// segments of the last fork/join point
+static task_seg_t * FORK_SEG;
+static task_seg_t * JOIN_SEG;
+
+// DFS version
 static UInt DFS_VERSION = 0;
 
 static void
@@ -59,7 +103,10 @@ task_seg_dfs_from(UInt (*dfs)(task_seg_t *, void *), void * opaque, task_seg_t *
 void
 task_seg_dfs(UInt (*dfs)(task_seg_t *, void *), void * opaque)
 {
-    task_seg_t * root_seg = (task_seg_t *) array_first(&ROOT_TASK.segs);
+    task_t * root = task_get_root();
+    tl_assert(root);
+
+    task_seg_t * root_seg = (task_seg_t *) array_first(&root->segs);
     tl_assert(root_seg);
 
     task_seg_dfs_from(dfs, opaque, root_seg);
@@ -95,17 +142,20 @@ task_seg_new(task_t * task)
 static inline void
 __task_init(task_t * task, UWord id, task_type_t type, UWord undeferred)
 {
+    task_t * current_task = task_get_current();
+
     // set attributes
     task->type              = type;
-    task->child_id          = CURRENT_TASK ? ++CURRENT_TASK->next_child_id : -1;
+    task->child_id          = current_task ? ++current_task->next_child_id : -1;
     task->next_child_id     = 0;
     task->id                = id;
     array_init(&task->successors, 4, sizeof(task_t *));
     task->depend            = NULL;
-    task->parent            = CURRENT_TASK;
+    task->parent            = current_task;
     array_init(&task->children, 0, sizeof(task_t *));
-    task->last_sync         = NULL;
-    array_init(&task->segs, 0, sizeof(task_seg_t));
+    task->last_taskwait     = NULL;
+    task->last_barrier      = NULL;
+    array_init(&task->segs, 1, sizeof(task_seg_t));
     task->sp                = (Addr) TASKGRIND_BASE_STACK_PTR;
     task->flag              = 0;
     task->undeferred        = undeferred;
@@ -129,8 +179,8 @@ __task_init(task_t * task, UWord id, task_type_t type, UWord undeferred)
     }
 
     // tcfg parent reference
-    if (CURRENT_TASK)
-        array_push(&CURRENT_TASK->children, &task);
+    if (current_task)
+        array_push(&current_task->children, &task);
 }
 
 static inline task_t *
@@ -167,7 +217,7 @@ task_seg_set_edge(task_seg_t * pred, task_t * succ, UInt seg_id)
 
 typedef struct
 {
-    union { 
+    union {
         ULong gen;
         Addr addr;
         Addr counter;
@@ -202,7 +252,7 @@ task_seg_fini(task_t * task, task_seg_t * seg)
     dtv_t * dtv = (dtv_t *) dtv_loc[0];
 
     // assertion for Variant II
-    tl_assert(              seg->tls.tp < (Addr) dtv);
+    // tl_assert(              seg->tls.tp < (Addr) dtv);
     tl_assert(dtv[1].addr < seg->tls.tp             );
 
     // dtv[0]     is gen(t)
@@ -292,27 +342,29 @@ task_create(UWord id, task_type_t type, UWord undeferred)
 //    TASKGRIND_DEBUG("Task create %p (parent %p)", (void *) id, (void *) (task->parent ? task->parent->id : TASKGRIND_CLIENT_ID_PRIVATE));
 
     tl_assert(task);
-    tl_assert(CURRENT_TASK);
+
+    task_t * current_task = task_get_current();
+    tl_assert(current_task);
 
     /////////
     // TDG //
     /////////
-    // add edges with respect to previous synchronizations
-    if (CURRENT_TASK->last_sync)
-        task_set_edge(CURRENT_TASK->last_sync, task);
+    // add edges with respect to previous taskwait and barrier
+    if (current_task->last_taskwait)
+        task_set_edge(current_task->last_taskwait, task);
 
     /////////
     // LPG //
     /////////
 
     // create a new successor seg for the current task
-    task_t * succ = CURRENT_TASK;
+    task_t * succ = current_task;
     task_seg_t * succ_seg = task_seg_new(succ);
     int succ_seg_idx = succ->segs.n - 1;
     tl_assert(succ_seg);
 
     // retrieve the current seg
-    task_t * pred = CURRENT_TASK;
+    task_t * pred = current_task;
     task_seg_t * pred_seg = (task_seg_t *) array_penultimate(&pred->segs);
  // int pred_seg_idx = pred->segs.n - 2;
     tl_assert(pred_seg);
@@ -331,14 +383,11 @@ task_create(UWord id, task_type_t type, UWord undeferred)
     // TODO : barrier and taskwait are 2 different things, fix me
     switch (type)
     {
-        // TODO : implement 'TASK_TYPE_IMPLICIT_BARRIER' - for now fallback to
-        // taskwait (which is semantically wrong, but OK as long as we have no
-        // nested tasks
-        case (TASK_TYPE_IMPLICIT_BARRIER):
+        // wait for all children tasks of the current task
         case (TASK_TYPE_IMPLICIT_TASKWAIT):
         {
             // for each children task of the current task (excluding the new barrier)
-            ARRAY_FOREACH_BEGIN(&CURRENT_TASK->children, task_t **, child)
+            ARRAY_FOREACH_BEGIN(&current_task->children, task_t **, child)
             {
                 if (*child == task)
                     continue ;
@@ -347,13 +396,13 @@ task_create(UWord id, task_type_t type, UWord undeferred)
                 if (array_is_empty(&(*child)->successors))
                     task_set_edge(*child, task);
             }
-            ARRAY_FOREACH_END(&CURRENT_TASK->children, task_t **, child);
+            ARRAY_FOREACH_END(&current_task->children, task_t **, child);
 
             // 'task' -> 'succ'
             task_seg_set_edge(task_seg, succ, succ_seg_idx);
 
             // in the future, link each next children with this barrier
-            CURRENT_TASK->last_sync = task;
+            current_task->last_taskwait = task;
 
             // A barrier has no instructions, retrieve context here
             task_seg->ctx = VG_(record_ExeContext)(VG_(get_running_tid)(), 0);
@@ -362,11 +411,32 @@ task_create(UWord id, task_type_t type, UWord undeferred)
             break ;
         }
 
-//        case (TASK_TYPE_IMPLICIT_BARRIER):
-//        {
-//            tl_assert(0 && "Not implemented");
-//            break ;
-//        }
+        // wait for all tasks and their descendent
+        case (TASK_TYPE_IMPLICIT_BARRIER):
+        {
+            // for each children task of the current task (excluding the new barrier)
+            ARRAY_FOREACH_BEGIN(&current_task->children, task_t **, child)
+            {
+                if (*child == task)
+                    continue ;
+
+                // link leaves with the new task barrier
+                if (array_is_empty(&(*child)->successors))
+                    task_set_edge(*child, task);
+            }
+            ARRAY_FOREACH_END(&current_task->children, task_t **, child);
+
+            // 'task' -> 'succ'
+            task_seg_set_edge(task_seg, succ, succ_seg_idx);
+
+            // in the future, link each next children with this barrier
+            current_task->last_barrier = task;
+
+            // A barrier has no instructions, retrieve context here
+            task_seg->ctx = VG_(record_ExeContext)(VG_(get_running_tid)(), 0);
+
+            break ;
+        }
 
         case (TASK_TYPE_IMPLICIT_TASKGROUP):
         {
@@ -396,30 +466,12 @@ task_create(UWord id, task_type_t type, UWord undeferred)
     return task;
 }
 
-task_t *
-task_get(UWord id)
-{
-    task_t * task;
-    unsigned hashv;
-
-    HASH_VALUE(&id, sizeof(UWord), hashv);
-    HASH_FIND_BYHASHVALUE(hh, TASKS, &id, sizeof(UWord), hashv, task);
-
-    return task;
-}
-
-static inline task_seg_t *
-task_seg_get_current(void)
-{
-    tl_assert(CURRENT_TASK);
-    return array_last(&CURRENT_TASK->segs);
-}
-
 // schedule
 void
 task_schedule(UWord id)
 {
-    task_t * prev = CURRENT_TASK;
+    TASKGRIND_DEBUG("schedule");
+    task_t * prev = task_get_current();
     task_seg_t * prev_seg = task_seg_get_current();
     task_seg_fini(prev, prev_seg);
 
@@ -428,7 +480,8 @@ task_schedule(UWord id)
     tl_assert(next);
     tl_assert(prev != next);
 
-    CURRENT_TASK = next;
+    thread_t * thread = thread_get();
+    thread->current_task = next;
 }
 
 // depend
@@ -654,8 +707,6 @@ task_sync(taskgrind_sync_t mode)
 void
 task_detach_fulfill(UWord id, taskgrind_fulfill_mode_t mode)
 {
-    tl_assert(CURRENT_TASK);
-
     task_t * task = task_get(id);
     tl_assert(task);
 }
@@ -672,9 +723,9 @@ task_seg_mem_access(task_seg_t * seg, Addr addr, SizeT size)
     }
 
     # if 0
-    if (addr == 0x1FFEFFF520)
+    if (addr == 0x1ffefff218)
     {
-        TASKGRIND_DEBUG("Checking address %p", (void *) addr);
+        TASKGRIND_DEBUG("Checking address %p on segment %u", (void *) addr, seg->uid);
         ThreadId tid = VG_(get_running_tid)();
         ExeContext * ec = VG_(record_ExeContext)(tid, 0);
         DiEpoch ep = VG_(get_ExeContext_epoch)(ec);
@@ -682,12 +733,17 @@ task_seg_mem_access(task_seg_t * seg, Addr addr, SizeT size)
         Addr * ips = VG_(get_ExeContext_ips)(ec);
         VG_(pp_StackTrace)(ep, ips, 10);
     }
-    #endif
+    # endif
 }
 
 void
 task_mem_load(Addr addr, SizeT size)
 {
+    // if task is null, the thread has not been initialized (thread_begin) - so ignore this access
+    task_t * task = task_get_current();
+    if (task == NULL)
+        return ;
+
     task_seg_t * seg = task_seg_get_current();
     tl_assert(seg);
 
@@ -709,6 +765,11 @@ task_mem_load(Addr addr, SizeT size)
 void
 task_mem_store(Addr addr, SizeT size)
 {
+    // if task is null, the thread has not been initialized (thread_begin) - so ignore this access
+    task_t * task = task_get_current();
+    if (task == NULL)
+        return ;
+
     task_seg_t * seg = task_seg_get_current();
     tl_assert(seg);
 
@@ -750,29 +811,75 @@ task_mem_store_atomic(Addr addr, SizeT size)
 #endif
 }
 
+
+// register the current segment as a fork point for future threads (begin) or remove it (end)
+void
+task_fork(void)
+{
+    FORK_SEG = task_seg_get_current();
+
+    ThreadId tid = VG_(get_running_tid)();
+    TASKGRIND_DEBUG("set FORK_SEG to %p with %u successors (tid=%d)", FORK_SEG, FORK_SEG->successors.n, tid);
+}
+
+void
+task_join(void)
+{
+    JOIN_SEG = task_seg_get_current();
+}
+
+void
+task_thread_begin(void)
+{
+    ThreadId tid = VG_(get_running_tid)();
+    TASKGRIND_DEBUG("thread begin %d", tid);
+
+    thread_t * thread = thread_get();
+    __task_init(&thread->root_task, TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_ROOT, 1);
+    thread->current_task = &thread->root_task;
+
+    if (FORK_SEG)
+    {
+        TASKGRIND_DEBUG("seg %p has %u successors", FORK_SEG, FORK_SEG->successors.n);
+        task_seg_set_edge(FORK_SEG, thread->current_task, 0);
+        TASKGRIND_DEBUG("seg %p has %u successors", FORK_SEG, FORK_SEG->successors.n);
+    }
+}
+
+void
+task_thread_end(void)
+{
+    // TODO : queue thread and link them on join call
+}
+
 // Initialize execution
 void
 task_init(void)
 {
     array_init(&SEGS, 8192, sizeof(task_seg_ref_t));
-    __task_init(&ROOT_TASK, TASKGRIND_CLIENT_ID_PRIVATE, TASK_TYPE_IMPLICIT_ROOT, 1);
-    CURRENT_TASK = &ROOT_TASK;
+    task_thread_begin();
+    task_fork();
 }
 
 // Execution terminated, perform analysis and report here
 void
 task_fini(void)
 {
+    task_thread_end();
+    task_join();
+
+    task_t * root = task_get_root();
+
     if (CLOS.dump)
     {
-        taskgrind_export_tcfg(&ROOT_TASK);
-        taskgrind_export_tdgx_recursive(&ROOT_TASK);
-        taskgrind_export_lpg(&ROOT_TASK);
+        taskgrind_export_tcfg(root);
+        taskgrind_export_tdgx_recursive(root);
+        taskgrind_export_lpg(root);
     }
 
     TASKGRIND_INFO("Starting analysis on a %u segments graph...", SEGS.n);
-    // taskgrind_pass_w1(&ROOT_TASK);
-    taskgrind_pass_e1(&ROOT_TASK);
+    // taskgrind_pass_w1(root);
+    taskgrind_pass_e1(root);
     TASKGRIND_INFO("Analysis completed.");
 
     array_deinit(&SEGS);

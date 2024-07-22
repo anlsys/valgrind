@@ -10,6 +10,13 @@
 // RESERVED ids that client cannot use for TASKGRIND tasks
 # define TASKGRIND_CLIENT_ID_PRIVATE    ((UWord)-1)
 
+// event type
+typedef enum    taskgrind_event_t
+{
+    TASKGRIND_EVENT_BEGIN,
+    TASKGRIND_EVENT_END,
+}               taskgrind_event_t;
+
 // task types
 typedef enum    taskgrind_task_type_e
 {
@@ -52,8 +59,16 @@ typedef enum    taskgrind_fulfill_mode_t
 // valgrind client requests
 typedef enum    taskgrind_client_request_t
 {
+    // a parallel fork point
+    VG_USERREQ__TASKGRIND_FORK_POINT_EVENT = VG_USERREQ_TOOL_BASE('T', 'G'),
+    VG_USERREQ__TASKGRIND_JOIN_POINT_EVENT,
+
+    // a thread begin / end
+    VG_USERREQ__TASKGRIND_THREAD_BEGIN_EVENT,
+    VG_USERREQ__TASKGRIND_THREAD_END_EVENT,
+
     // a new task has been created
-    VG_USERREQ__TASKGRIND_CREATE_EVENT = VG_USERREQ_TOOL_BASE('T', 'G'),
+    VG_USERREQ__TASKGRIND_CREATE_EVENT,
 
     // a new task start executed on the current thread
     VG_USERREQ__TASKGRIND_SCHEDULE_EVENT,
@@ -70,6 +85,28 @@ typedef enum    taskgrind_client_request_t
     VG_USERREQ__TASKGRIND_DETACH_FULFILL_EVENT,
 
 }               taskgrind_client_request_t;
+
+// Notify taskgrind of a parallel region begin (called on the parent thread)
+// so it save current segment as the root of future thread_begin
+#define TASKGRIND_FORK_POINT_EVENT()    \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_FORK_POINT_EVENT, 0, 0, 0, 0, 0)
+
+// Notify taskgrind of a parallel region end (called on the parent thread)
+// so any forked threads join here
+#define TASKGRIND_JOIN_POINT_EVENT()    \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_JOIN_POINT_EVENT, 0, 0, 0, 0, 0)
+
+// Notify taskgrind that a thread begin (called on the thread)
+// so it forks an empty segment for that thread
+#define TASKGRIND_THREAD_BEGIN_EVENT()    \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_THREAD_BEGIN_EVENT, 0, 0, 0, 0, 0)
+
+// Notify taskgrind that a thread ended (called on the thread)
+// so it join its last segment to the parent join request
+#define TASKGRIND_THREAD_END_EVENT()    \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_THREAD_END_EVENT, 0, 0, 0, 0, 0)
+
+
 
 // Notify taskgring of a create event
 //  - arg[1] is the task unique identifier (> 0) defined by the client

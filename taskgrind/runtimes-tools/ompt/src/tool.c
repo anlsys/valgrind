@@ -69,7 +69,12 @@ on_ompt_callback_task_create(
     // or runtime implementation
     // For now, assume all tasks are deferable, else we may loose expressed parallelism
     if (NTHREADS == 1 && undeferred)
+    {
+        fprintf(stderr, "Undefered task with NTHREADS==1 - cannot tell if undefered by "
+                "the runtime or by the user code... There may be "
+                "false-negative\n");
         undeferred = 0;
+    }
     TASKGRIND_CREATE_EVENT(task_id, TASKGRIND_TASK_TYPE_EXPLICIT, undeferred);
 }
 
@@ -95,7 +100,7 @@ on_ompt_callback_implicit_task(
     unsigned int index,
     int ﬂags
 ) {
-    // INFO("[IMPLICIT] task_data = %p", task_data);
+//    INFO("[IMPLICIT] task_data = %p ; actual_parallelism=%u ", task_data, actual_parallelism);
 
     if (endpoint == ompt_scope_begin)
     {
@@ -103,6 +108,11 @@ on_ompt_callback_implicit_task(
         task_data->value = task_id;
         TASKGRIND_CREATE_EVENT(task_id, TASKGRIND_TASK_TYPE_IMPLICIT, 0);
         TASKGRIND_SCHEDULE_EVENT(task_id);
+    }
+
+    if (endpoint == ompt_scope_end)
+    {
+        // TODO
     }
 }
 
@@ -420,10 +430,8 @@ on_ompt_callback_parallel_begin(
     int flags,
     const void * codeptr_ra
 ) {
-    // NTHREADS = requested_parallelism;
-    
-    // assume taskgrind run with 1 thread
-    NTHREADS = 1;
+    NTHREADS = requested_parallelism;
+    TASKGRIND_FORK_POINT_EVENT();
 }
 
 void
@@ -433,7 +441,20 @@ on_ompt_callback_parallel_end(
     int flags,
     const void * codeptr_ra
 ) {
+    TASKGRIND_JOIN_POINT_EVENT();
     NTHREADS = 1;
+}
+
+void
+on_ompt_callback_thread_begin(ompt_thread_t thread_type, ompt_data_t * thread_data)
+{
+    TASKGRIND_THREAD_BEGIN_EVENT();
+}
+
+void
+on_ompt_callback_thread_end(ompt_data_t *thread_data)
+{
+    TASKGRIND_THREAD_END_EVENT();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -453,6 +474,10 @@ int ompt_initialize(
     (void) initial_device_num;
     (void) tool_data;
     ompt_set_callback_t ompt_set_callback = (ompt_set_callback_t) lookup("ompt_set_callback");
+    register_callback(ompt_callback_parallel_begin);
+    register_callback(ompt_callback_parallel_end);
+    register_callback(ompt_callback_thread_begin);
+    register_callback(ompt_callback_thread_end);
     register_callback(ompt_callback_task_create);
     register_callback(ompt_callback_implicit_task);
     register_callback(ompt_callback_task_schedule);
@@ -460,8 +485,6 @@ int ompt_initialize(
     register_callback(ompt_callback_sync_region);
     register_callback(ompt_callback_work);
     register_callback(ompt_callback_dispatch);
-    register_callback(ompt_callback_parallel_begin);
-    register_callback(ompt_callback_parallel_end);
 
     ompt_get_num_procs_t ompt_get_num_procs = (ompt_get_num_procs_t) lookup("ompt_get_num_procs");
     NPROCS = ompt_get_num_procs ? ompt_get_num_procs() : 1;

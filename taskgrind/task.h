@@ -80,8 +80,11 @@ typedef struct  task_s
     // children
     array_t children;
 
-    // last synchronization node
-    struct task_s * last_sync;
+    // last taskwait node
+    struct task_s * last_taskwait;
+
+    // last barrier node
+    struct task_s * last_barrier;
 
     // segs
     array_t segs;
@@ -165,21 +168,28 @@ typedef enum    task_mem_access_type_e
     TASKGRIND_TASK_MEM_STORE_ATOMIC,
 }               task_mem_access_type_t;
 
+typedef struct  thread_t
+{
+    // the implicit task
+    task_t root_task;
+
+    // the current task
+    task_t * current_task;
+
+}               thread_t;
+
+# define TASKGRIND_MAX_THREADS 256
+
 // GLOBAL VARIABLE MAPPING EXECUTION AS TASKS
-
-// The tasks hmap
-extern task_t * TASKS;
-
-// The current task
-extern task_t * CURRENT_TASK;
-
-// The root task
-extern task_t ROOT_TASK;
 
 // Number of segments
 extern array_t SEGS;
 
 // FUNCTIONS TO BUILD THE MAPPING
+void task_fork(void);
+void task_join(void);
+void task_thread_begin(void);
+void task_thread_end(void);
 task_t * task_create(UWord id, task_type_t type, UWord undeferred);
 void task_schedule(UWord id);
 void task_depend(UWord id, UWord addr, UWord type);

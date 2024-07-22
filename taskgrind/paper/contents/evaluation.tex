@@ -15,6 +15,18 @@ One benefit of Taskgrind over existing tool is its compact representation of den
 \subsection{Determinacy Race Detection}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 
+
+Dataracebenchmark
+
+129 - mergeable - the llvm implementation we had was not merging data environment, so no determinacy race detected: two distincts data environment are being accessed. - if we wanted to detect this, we should add the data environement and mergeable clause semantic to taskgrind.
+TODO : can OMPT tell us the mapping between two data environement to detect such issue ?
+
+131, 134, 165 - if(0) undefered clause, not supported when num-threads == 0 by LLVM
+
+
+
+
+
 								KNOWN								DETECTED
 												TaskSanitizer		Archer		Taskgrind
 Taskgrind Benchmarks							yes					yes			no
