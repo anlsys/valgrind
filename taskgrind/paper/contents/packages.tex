@@ -16,6 +16,13 @@
 \usepackage{multicol}% http://ctan.org/pkg/multicols
 
 
+\newcommand{\fig}[1]{Fig.~\ref{#1}}
+\newcommand{\listing}[1]{Listing~\ref{#1}}
+\newcommand{\alg}[1]{Algorithm~\ref{#1}}
+\newcommand{\tbl}[1]{Table~\ref{#1}}
+\newcommand{\annex}[1]{Annex~\ref{#1}}
+\newcommand{\sect}[1]{Section~\ref{#1}}
+
 
 %%%%% AVOID PAGE BREAKS %%%%%
 \newenvironment{absolutelynopagebreak}
@@ -26,7 +33,7 @@
 
 %%%%%% COMMENTAIRES %%%%%%
 \usepackage[]{ifthen}
-\newcommand\showComments{0} % 0 = False, 1 = True
+\newcommand\showComments{1} % 0 = False, 1 = True
 \newcommand{\romain}[1]{\ifthenelse{\equal{\showComments}{0}}{}{\textcolor{blue}{Romain: #1}}}
 \newcommand{\clement}[1]{\ifthenelse{\equal{\showComments}{0}}{}{\textcolor{purple}{Clément: #1}}}
 \newcommand{\adrien}[1]{\ifthenelse{\equal{\showComments}{0}}{}{\textcolor{red}{Adrien: #1}}}

@@ -6,7 +6,7 @@
 # include <unistd.h>
 
 // should report: 2 siblings tasks are data-dependent but no dependency expressed
-_Thread_local int x[1];
+_Thread_local int x[2];
 
 int
 main(void)
@@ -16,10 +16,14 @@ main(void)
         # pragma omp single nowait
         {
             # pragma omp task
+            {
                 x[0] = 0;
+            }
 
             # pragma omp task
+            {
                 x[0] = 1;
+            }
         }
     }
 

@@ -3,19 +3,33 @@
 \section{Introduction}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-CONTEXT
-With the ever growing intra-node parallelism in supercomputers, porting simulation codes while ensuring parallel execution correctness is challenging.
-\emph{Determinacy races} are concurrent programming hazards, when two accesses on the memory address are not ordered and at least one is writing~\cite{determinator}.
-The presence of determinacy races often hints correctness issues, as its output becomes non-deterministic given the same input.
+% CONTEXT
+
+\emph{Determinacy races} are concurrent programming hazards occuring when two accesses on the same memory address are not ordered, and at least one is writing~\cite{determinator}.
+The presence of determinacy races in a program makes its output given the same input nondeterministic, which may be the source of correctness errors.
+With ever growing intra-node parallelism of supercomputers, porting simulation codes while ensuring parallel execution correctness is challenging.
+It is particularly true with asynchronous task-based programming models ordered with dependences.
 
 MOTIVATIONS
-- [...]
-- Lightweight can produce false-negative on non-instrumented parts
--> Heavyweight~\cite{valgrind}
+
+Existing determinacy race detectors~\cite{archer,Matar18} relies on LLVM' ThreadSanitizer~\cite{thread-sanitizer-llvm}.
+
+Existing determinacy race detectors~\cite{archer,ROMP} -
+In the specific case of Archer~\cite{archer}, 
+
+Motivations and results of Archer~\cite{archer} showed the effectiveness (even at large scale) of such approach for debugging applications.
+However, as suggested by E. Dijkstra~\cite{EWD303}, \emph{"debugging is an inadequate means for ensuring programs correctness and that we must prove the correctness of programs"}.
+ 
+
+It requires the entire swith instrumentation enabled, otherwise, analysis may miss races occuring in uninstrumented code.
 
 OBJECTIVES
-- Explore heavyweight dynamic binary instrumentation towards a no-false-negative determinacy-race detector.
 
- CONTRIBUTIONS
-- Taskgrind: a Valgrind tool for heavyweight parallel program determinacy race detection.
-- A survey on issues related to "heavy instrumentations"
+This paper explores the use of heavyweight dynamic binary instrumentation for determinacy race detection, towards no false-negative analysis.
+
+-> Heavyweight~\cite{valgrind}
+
+CONTRIBUTIONS
+
+We introduce Taskgrind: a Valgrind tool for parallel programming model determinacy race detections.
+We survey issues related to heavyweight instrumentation.

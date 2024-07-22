@@ -7,9 +7,17 @@ Task-based version of Cholesky, HPCCG, LULESH, nbody
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Footprint on Memory and Execution Time}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+One benefit of Taskgrind over existing tool is its compact representation of dense memory accesses through an interval tree.
+- against uninstrumented versions, valgrind (no tool), valgrind (memcheck)
 
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Determinacy Race Detection}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 
+								KNOWN								DETECTED
+												TaskSanitizer		Archer		Taskgrind
+Taskgrind Benchmarks							yes					yes			no
+DataRaceBench									no					?			yes				
+Task-based LULESH (correct)		0				yes					?			0
+Task-based LULESH (racy)		1				yes					?			1

@@ -121,6 +121,8 @@ __task_init(task_t * task, UWord id, task_type_t type, UWord undeferred)
         task->sp = state->guest_ESP;
 #elif defined(VGA_amd64)
         task->sp = state->guest_RSP;
+#elif defined(VGA_arm64)
+        task->sp = state->guest_XSP;
 #else
 # error "Arch not supported"
 #endif
@@ -225,7 +227,7 @@ task_seg_fini(task_t * task, task_seg_t * seg)
                                      dtv[m  ].addr,
             (m == 1) ? seg->tls.tp : dtv[m-1].addr
         };
-        // TASKGRIND_DEBUG("tls [%p, %p]", block[0], block[1]);
+        // TASKGRIND_DEBUG("tls [%p, %p] block n°%d", block[0], block[1], m);
         array_push(&seg->tls.dtv, &block);
     }
 
@@ -656,22 +658,31 @@ task_detach_fulfill(UWord id, taskgrind_fulfill_mode_t mode)
 
     task_t * task = task_get(id);
     tl_assert(task);
-
-
 }
 
 // memory accesses
 static inline void
 task_seg_mem_access(task_seg_t * seg, Addr addr, SizeT size)
 {
-    // TASKGRIND_DEBUG("Checking address %p", (void *) addr);
-
     if (seg->ctx == NULL)
     {
         ThreadId tid = VG_(get_running_tid)();
         if (tid != VG_INVALID_THREADID)
             seg->ctx = VG_(record_ExeContext)(tid, 0);
     }
+
+    # if 0
+    if (addr == 0x1FFEFFF520)
+    {
+        TASKGRIND_DEBUG("Checking address %p", (void *) addr);
+        ThreadId tid = VG_(get_running_tid)();
+        ExeContext * ec = VG_(record_ExeContext)(tid, 0);
+        DiEpoch ep = VG_(get_ExeContext_epoch)(ec);
+        Int n_ips = VG_(get_ExeContext_n_ips)(ec);
+        Addr * ips = VG_(get_ExeContext_ips)(ec);
+        VG_(pp_StackTrace)(ep, ips, 10);
+    }
+    #endif
 }
 
 void
