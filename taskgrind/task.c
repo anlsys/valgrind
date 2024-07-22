@@ -658,8 +658,6 @@ task_detach_fulfill(UWord id, taskgrind_fulfill_mode_t mode)
 
     task_t * task = task_get(id);
     tl_assert(task);
-
-
 }
 
 // memory accesses

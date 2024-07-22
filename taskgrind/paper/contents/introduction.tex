@@ -17,23 +17,19 @@ Existing determinacy race detectors~\cite{archer,Matar18} relies on LLVM' Thread
 Existing determinacy race detectors~\cite{archer,ROMP} -
 In the specific case of Archer~\cite{archer}, 
 
-Motivations and results of Archer~\cite{archer} showed the effectiveness (even at large scale) of such approach for \emph{debugging} applications.
-However, as suggested by E. Dijkstra~\cite{EWD303}, debugging is an inadequate means for ensuring programs correctness.
- 
+Motivations and results of Archer~\cite{archer} showed the effectiveness (even at large scale) of such approach for debugging applications.
+However, as suggested by E. Dijkstra~\cite{EWD303}, \emph{"debugging is an inadequate means for ensuring programs correctness and that we must prove the correctness of programs"}.
  
 
-Existing determinacy race detectors~\cite{archer,Matar18} relies on LLVM' ThreadSanitizer~\cite{thread-sanitizer-llvm}.
 It requires the entire swith instrumentation enabled, otherwise, analysis may miss races occuring in uninstrumented code.
-Such approach showed its effectiveness for \emph{debugging} - identifying a determinacy races knowing apriori there exists one.
-However, they cannot 
 
 OBJECTIVES
 
--> Heavyweight~\cite{valgrind}
+This paper explores the use of heavyweight dynamic binary instrumentation for determinacy race detection, towards no false-negative analysis.
 
-In this paper, we explore the use of heavyweight dynamic binary instrumentation towards determinacy race detections with no false-positive.
+-> Heavyweight~\cite{valgrind}
 
 CONTRIBUTIONS
 
 We introduce Taskgrind: a Valgrind tool for parallel programming model determinacy race detections.
-We survey issues related to heavy instrumentations.
+We survey issues related to heavyweight instrumentation.

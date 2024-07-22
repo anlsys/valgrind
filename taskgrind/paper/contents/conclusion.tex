@@ -4,13 +4,17 @@
 
 % https://www.cs.utexas.edu/~EWD/transcriptions/EWD03xx/EWD303.html
 
-This paper introduced Taskgrind: a determinacy race detector relying on heavyweight dynamic binary instrumentation (DBI).
+This paper introduced Taskgrind: a Valgrind tool for parallel program memory accesses analysis.
+We implemented a determinacy race analysis.
 It targets application codes relying on a well-defined parallel programming model semantic, that needs to be bridged with its segment graph interfaces.
 Taskgrind currently embeds an OMPT tool with support for most OpenMP parallel constructs (for loops, tasks, dependences, targets, detach, ...).
 
+In the future, we would like to add more analysis.
+%For instance, to reduce tasking overhead by suggesting needless dependences removal.
 
 Many work-arounds for memory (free to NOOP, suppress errors on memory allocated by the LLVM allocator)
-We could replace the LLVM allocator similarly to the system allocator, actually release the memory, and add a concept of "memory liveness"
+We could replace the LLVM allocator similarly to the system allocator.
+We would also like to actually release the memory, and add a concept of "memory liveness" 
 
 TODO: Cilk/QThreads
 

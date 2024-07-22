@@ -131,7 +131,7 @@ An hybrid of two popular methods to reduce false-positives:
 - Valgrind 'big lock' model currently
 
 [29] Dynamic data race detection for OpenMP programs (2018) (ROMP)
-- TODO
+- DynInst - shadow memory with history
 
 ## An history
 
