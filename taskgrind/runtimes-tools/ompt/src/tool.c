@@ -115,7 +115,7 @@ on_ompt_callback_implicit_task(
     if (endpoint == ompt_scope_end)
     {
         uint64_t task_id = task_data->value;
-        TASKGRIND_IMPLICIT_TASK_END_EVENT(fork_id, task_id);
+        TASKGRIND_IMPLICIT_TASK_END_EVENT(task_id);
     }
 }
 
@@ -434,9 +434,9 @@ on_ompt_callback_parallel_begin(
     const void * codeptr_ra
 ) {
     NTHREADS = requested_parallelism;
-    uint64_t fork_id = NEXT_FORK_ID++;
-    TASKGRIND_FORK_POINT_EVENT(fork_id, NTHREADS);
+    uint64_t fork_id = ++NEXT_FORK_ID;
     parallel_data->value = fork_id;
+    TASKGRIND_FORK_POINT_EVENT(fork_id);
 }
 
 void

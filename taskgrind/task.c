@@ -43,7 +43,7 @@ task_seg_get_current(void)
 {
     task_t * task = task_get_current();
     tl_assert(task);
-    return array_last(&task->segs);
+    return array_get(&task->segs, task->current_seg_idx);
 }
 
 // The tasks hmap
@@ -153,6 +153,7 @@ __task_init(task_t * task, UWord id, task_type_t type, UWord undeferred)
 
     // set attributes
     task->type              = type;
+    task->fork_id           = 0;
     task->child_id          = current_task ? ++current_task->next_child_id : -1;
     task->next_child_id     = 0;
     task->id                = id;
@@ -163,12 +164,12 @@ __task_init(task_t * task, UWord id, task_type_t type, UWord undeferred)
     task->last_taskwait     = NULL;
     task->last_barrier      = NULL;
     array_init(&task->segs, 4, sizeof(task_seg_t));
+    task_seg_new(task); // add an initial seg
+    task->current_seg_idx   = 0;
     task->sp                = (Addr) TASKGRIND_BASE_STACK_PTR;
     task->flag              = 0;
     task->undeferred        = undeferred;
 
-    // add an initial seg
-    task_seg_new(task);
 
     // retrieve stack pointer
     if (VG_(get_running_tid)() != VG_INVALID_THREADID)
@@ -310,11 +311,34 @@ task_set_edge(task_t * pred, task_t * succ)
     task_seg_set_edge(pred_seg, succ, 0);
 }
 
+static inline void
+__task_register(task_t * task)
+{
+    tl_assert(task);
+
+    if (task->id == TASKGRIND_CLIENT_ID_PRIVATE)
+        return ;
+
+    // ensure this id has not already been used
+    unsigned hashv;
+    HASH_VALUE(&task->id, sizeof(UWord), hashv);
+
+    {
+        task_t * search = NULL;
+        HASH_FIND_BYHASHVALUE(hh, TASKS, &task->id, sizeof(UWord), hashv, search);
+        if (search)
+        {
+            TASKGRIND_ERR("Client sent the same task id for two 'task_create'");
+            VG_(exit)(1);
+        }
+    }
+
+    HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASKS, &(task->id), sizeof(UWord), hashv, task);
+}
+
 task_t *
 task_create(UWord id, task_type_t type, UWord undeferred)
 {
-    thread_t * thread = thread_get();
-
     //
     //  [...]                   // pred
     //
@@ -323,153 +347,127 @@ task_create(UWord id, task_type_t type, UWord undeferred)
     //  [...]                   // succ
     //
 
-    // ensure this id has not already been used
-    task_t * task;
-    unsigned hashv;
-
-    HASH_VALUE(&id, sizeof(UWord), hashv);
-
-    if (id != TASKGRIND_CLIENT_ID_PRIVATE)
-    {
-        HASH_FIND_BYHASHVALUE(hh, TASKS, &id, sizeof(UWord), hashv, task);
-        tl_assert(task == NULL);
-        if (task)
-        {
-            TASKGRIND_ERR("Client sent the same task id for two 'task_create'");
-            VG_(exit)(1);
-        }
-    }
-
     // create the task
-    task = task_new(id, type, undeferred);
-    tl_assert(task);
-
-    if (id != TASKGRIND_CLIENT_ID_PRIVATE)
-        HASH_ADD_KEYPTR_BYHASHVALUE(hh, TASKS, &(task->id), sizeof(UWord), hashv, task);
+    task_t * task = task_new(id, type, undeferred);
+    __task_register(task);
 
 //    TASKGRIND_DEBUG("Task create %p (parent %p)", (void *) id, (void *) (task->parent ? task->parent->id : TASKGRIND_CLIENT_ID_PRIVATE));
 
     // retrieve the new task seg
     task_seg_t * task_seg = (task_seg_t *) array_first(&task->segs);
-    int task_seg_idx = task->segs.n - 1;
+    int task_seg_idx = 0;
     tl_assert(task_seg);
-    tl_assert(task_seg_idx == 0);
 
     task_t * current_task = task_get_current();
+    tl_assert(current_task);
 
-    // if there creating an initial task, nothing to do
-    if (current_task == NULL)
+    // add edges with respect to previous taskwait
+    if (current_task->last_taskwait)
+        task_set_edge(current_task->last_taskwait, task);
+
+    // create a new successor seg for the current task
+    task_t * succ = current_task;
+    task_seg_t * succ_seg = task_seg_new(succ);
+    int succ_seg_idx = succ->segs.n - 1;
+    tl_assert(succ_seg);
+
+    current_task->current_seg_idx = succ_seg_idx;
+
+    // retrieve the current seg
+    task_t * pred = current_task;
+    task_seg_t * pred_seg = (task_seg_t *) array_penultimate(&pred->segs);
+    // int pred_seg_idx = pred->segs.n - 2;
+    tl_assert(pred_seg);
+
+    // callback : the previous segment terminated
+    task_seg_fini(pred, pred_seg);
+
+    // 'pred' -> 'task'
+    task_seg_set_edge(pred_seg, task, task_seg_idx);
+
+    // TODO : barrier and taskwait are 2 different things, fix me
+    switch (type)
     {
-        thread->root_task = task;
-    }
-    // else, link it in the segment tree
-    else
-    {
-        // add edges with respect to previous taskwait and barrier
-        if (current_task->last_taskwait)
-            task_set_edge(current_task->last_taskwait, task);
-
-        // create a new successor seg for the current task
-        task_t * succ = current_task;
-        task_seg_t * succ_seg = task_seg_new(succ);
-        int succ_seg_idx = succ->segs.n - 1;
-        tl_assert(succ_seg);
-
-        // retrieve the current seg
-        task_t * pred = current_task;
-        task_seg_t * pred_seg = (task_seg_t *) array_penultimate(&pred->segs);
-        // int pred_seg_idx = pred->segs.n - 2;
-        tl_assert(pred_seg);
-
-        // callback : the previous segment terminated
-        task_seg_fini(pred, pred_seg);
-
-        // 'pred' -> 'task'
-        task_seg_set_edge(pred_seg, task, task_seg_idx);
-
-        // TODO : barrier and taskwait are 2 different things, fix me
-        switch (type)
+        // wait for all children tasks of the current task
+        case (TASK_TYPE_IMPLICIT_TASKWAIT):
         {
-            // wait for all children tasks of the current task
-            case (TASK_TYPE_IMPLICIT_TASKWAIT):
+            // for each children task of the current task (excluding the new barrier)
+            ARRAY_FOREACH_BEGIN(&current_task->children, task_t **, child)
             {
-                // for each children task of the current task (excluding the new barrier)
-                ARRAY_FOREACH_BEGIN(&current_task->children, task_t **, child)
-                {
-                    if (*child == task)
-                        continue ;
+                if (*child == task)
+                    continue ;
 
-                    // link leaves with the new task barrier
-                    if (array_is_empty(&(*child)->successors))
-                        task_set_edge(*child, task);
-                }
-                ARRAY_FOREACH_END(&current_task->children, task_t **, child);
+                // link leaves with the new task barrier
+                if (array_is_empty(&(*child)->successors))
+                    task_set_edge(*child, task);
+            }
+            ARRAY_FOREACH_END(&current_task->children, task_t **, child);
 
-                // 'task' -> 'succ'
+            // 'task' -> 'succ'
+            task_seg_set_edge(task_seg, succ, succ_seg_idx);
+
+            // in the future, link each next children with this barrier
+            current_task->last_taskwait = task;
+
+            // A barrier has no instructions, retrieve context here
+            task_seg->ctx = VG_(record_ExeContext)(VG_(get_running_tid)(), 0);
+
+            // no need to set 'pred' -> 'succ' as we already have 'pred' -> 'task' -> 'succ'
+            break ;
+        }
+
+        // wait for all tasks and their descendent
+        case (TASK_TYPE_IMPLICIT_BARRIER):
+        {
+            // for each children task of the current task (excluding the new barrier)
+            ARRAY_FOREACH_BEGIN(&current_task->children, task_t **, child)
+            {
+                if (*child == task)
+                    continue ;
+
+                // link leaves with the new task barrier
+                if (array_is_empty(&(*child)->successors))
+                    task_set_edge(*child, task);
+            }
+            ARRAY_FOREACH_END(&current_task->children, task_t **, child);
+
+            // 'task' -> 'succ'
+            task_seg_set_edge(task_seg, succ, succ_seg_idx);
+
+            // in the future, link each next children with this barrier
+            current_task->last_barrier = task;
+
+            // A barrier has no instructions, retrieve context here
+            task_seg->ctx = VG_(record_ExeContext)(VG_(get_running_tid)(), 0);
+
+            break ;
+        }
+
+        case (TASK_TYPE_IMPLICIT_TASKGROUP):
+        {
+            tl_assert(0 && "Not implemented");
+            break ;
+        }
+
+        case (TASK_TYPE_UNKNOWN):
+        case (TASK_TYPE_EXPLICIT):
+        case (TASK_TYPE_IMPLICIT):
+        case (TASK_TYPE_IMPLICIT_ROOT):
+        case (TASK_TYPE_IMPLICIT_OUTSET):
+        case (TASK_TYPE_IMPLICIT_UNKNOWN):
+        default:
+        {
+            // 'task' -> 'succ'
+            if (undeferred)
                 task_seg_set_edge(task_seg, succ, succ_seg_idx);
+            // 'pred' -> 'succ'
+            else
+                task_seg_set_edge(pred_seg, succ, succ_seg_idx);
 
-                // in the future, link each next children with this barrier
-                current_task->last_taskwait = task;
-
-                // A barrier has no instructions, retrieve context here
-                task_seg->ctx = VG_(record_ExeContext)(VG_(get_running_tid)(), 0);
-
-                // no need to set 'pred' -> 'succ' as we already have 'pred' -> 'task' -> 'succ'
-                break ;
-            }
-
-            // wait for all tasks and their descendent
-            case (TASK_TYPE_IMPLICIT_BARRIER):
-            {
-                // for each children task of the current task (excluding the new barrier)
-                ARRAY_FOREACH_BEGIN(&current_task->children, task_t **, child)
-                {
-                    if (*child == task)
-                        continue ;
-
-                    // link leaves with the new task barrier
-                    if (array_is_empty(&(*child)->successors))
-                        task_set_edge(*child, task);
-                }
-                ARRAY_FOREACH_END(&current_task->children, task_t **, child);
-
-                // 'task' -> 'succ'
-                task_seg_set_edge(task_seg, succ, succ_seg_idx);
-
-                // in the future, link each next children with this barrier
-                current_task->last_barrier = task;
-
-                // A barrier has no instructions, retrieve context here
-                task_seg->ctx = VG_(record_ExeContext)(VG_(get_running_tid)(), 0);
-
-                break ;
-            }
-
-            case (TASK_TYPE_IMPLICIT_TASKGROUP):
-            {
-                tl_assert(0 && "Not implemented");
-                break ;
-            }
-
-            case (TASK_TYPE_UNKNOWN):
-            case (TASK_TYPE_EXPLICIT):
-            case (TASK_TYPE_IMPLICIT):
-            case (TASK_TYPE_IMPLICIT_ROOT):
-            case (TASK_TYPE_IMPLICIT_OUTSET):
-            case (TASK_TYPE_IMPLICIT_UNKNOWN):
-            default:
-            {
-                // 'task' -> 'succ'
-                if (undeferred)
-                    task_seg_set_edge(task_seg, succ, succ_seg_idx);
-                // 'pred' -> 'succ'
-                else
-                    task_seg_set_edge(pred_seg, succ, succ_seg_idx);
-
-                break ;
-            }
+            break ;
         }
     }
+
 
     return task;
 }
@@ -490,7 +488,6 @@ __task_schedule(task_t * next)
 
     thread_t * thread = thread_get();
     thread->current_task = next;
-
 }
 
 void
@@ -827,98 +824,92 @@ task_mem_store_atomic(Addr addr, SizeT size)
 }
 
 
-// register the current segment as a fork point for the 'nthreads' future
-// implicit task running on different threads
+// register the current segment as a fork point for the future implicit task
 void
-task_fork(UWord fork_id, UWord nthreads)
+task_fork(UWord fork_id)
 {
-    // create fork infos
-    task_seg_t * seg = task_seg_get_current();
-    tl_assert(seg);
+    //           o       <- source
+    //          / \
+    // sink->  o         <- future thread' implicit task (including the current hread)
 
-    fork_t * fork = fork_get(fork_id);
-    fork->nthreads = nthreads;
-    fork->source = seg;
-    fork->sink_task = NULL;
-    fork->sink_task_seg_idx = -1;
-    array_init(&fork->early_threads, TASKGRIND_MAX_THREADS, sizeof(ThreadId));
-}
-
-static inline void
-__task_join(fork_t * fork, ThreadId tid)
-{
-    tl_assert(fork->sink_task);
-
-    thread_t * thread = THREADS + tid;
-    task_seg_t * thread_seg = (task_seg_t *) array_last(&thread->root_task->segs);
-    tl_assert(thread_seg);
-
-    task_seg_set_edge(thread_seg, fork->sink_task, fork->sink_task_seg_idx); 
-}
-
-void
-task_join(UWord fork_id)
-{
-    // join current thread
     task_t * task = task_get_current();
     tl_assert(task);
 
-    task_seg_t * seg = task_seg_get_current();
-    tl_assert(seg);
+    task_seg_t * source = task_seg_get_current();
+    tl_assert(source);
 
-    task_seg_t * sink = task_seg_new(task); (void) sink;
-    int sink_seg_idx = task->segs.n - 1;
+    task_seg_t * sink = task_seg_new(task);
+    tl_assert(sink);
 
-    task_seg_set_edge(seg, task, sink_seg_idx);
+    // not necessary, as an implicit task begin+end must come on the same thread
+    // task_seg_set_edge(source, task, task->segs.n - 1);
 
+    // init fork
     fork_t * fork = fork_get(fork_id);
+    tl_assert(fork);
+    fork->source = source;
     fork->sink_task = task;
     fork->sink_task_seg_idx = task->segs.n - 1;
-
-    // for each (early) completed thread, link them to sink
-    ARRAY_FOREACH_BEGIN(&fork->early_threads, ThreadId *, tid_ptr)
-    {
-        __task_join(fork, *tid_ptr);
-    }
-    ARRAY_FOREACH_END(&fork->early_threads, ThreadId *, tid_ptr);
 }
 
 void
 task_implicit_begin(UWord fork_id, UWord task_id)
 {
-    task_t * task = task_create(task_id, TASK_TYPE_IMPLICIT_ROOT, 1);
-    __task_schedule(task);
+    const int undefered = 1;
+    task_t * task = task_new(task_id, TASK_TYPE_IMPLICIT, undefered);
+    __task_register(task);
 
-    task_seg_t * seg = task_seg_get_current();
-    tl_assert(seg);
+    // initial task
+    thread_t * thread = thread_get();
+    tl_assert(thread);
+    if (thread->root_task == NULL)
+        thread->root_task = task;
 
+    // retrieve fork infos
     fork_t * fork = fork_get(fork_id);
-    if (fork && fork->source && fork->source->tid != seg->tid)
+    if (fork && fork->source)
     {
         int task_seg_idx = 0;
         task_seg_set_edge(fork->source, task, task_seg_idx);
     }
+    task->fork_id = fork_id;
+
+    __task_schedule(task);
 }
 
 void
-task_implicit_end(UWord fork_id, UWord task_id)
+task_implicit_end(UWord task_id)
+{
+    task_t * task = task_get(task_id);
+
+    if (task->fork_id)
+    {
+        fork_t * fork = fork_get(task->fork_id);
+        tl_assert(fork);
+        tl_assert(fork->sink_task);
+
+        thread_t * thread = thread_get();
+        tl_assert(thread);
+
+        task_seg_t * seg = task_seg_get_current();
+        tl_assert(seg);
+
+        task_seg_set_edge(seg, fork->sink_task, fork->sink_task_seg_idx);
+    }
+
+    // TODO : what next ? do we have to schedule another task ?
+}
+
+void
+task_join(UWord fork_id)
 {
     fork_t * fork = fork_get(fork_id);
     tl_assert(fork);
-    
-    ThreadId tid = VG_(get_running_tid)();
+    tl_assert(fork->source);
+    tl_assert(fork->sink_task);
 
-    // link (late) completed thread to the sink
-    if (fork->sink_task)
-    {
-        if (tid != fork->source->tid)
-            __task_join(fork, tid);
-    }
-    // link (early completed)
-    else
-    {
-        array_push(&fork->early_threads, &tid);
-    }
+    fork->sink_task->current_seg_idx = fork->sink_task_seg_idx;
+    __task_schedule(fork->sink_task);
 }
 
 // Initialize execution

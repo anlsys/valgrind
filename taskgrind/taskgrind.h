@@ -87,8 +87,8 @@ typedef enum    taskgrind_client_request_t
 }               taskgrind_client_request_t;
 
 // Notify taskgrind of a parallel region begin (called on the parent thread)
-#define TASKGRIND_FORK_POINT_EVENT(_qzz_fork_id, _qzz_nthreads)    \
-    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_FORK_POINT_EVENT, (_qzz_fork_id), (_qzz_nthreads), 0, 0, 0)
+#define TASKGRIND_FORK_POINT_EVENT(_qzz_fork_id)    \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_FORK_POINT_EVENT, (_qzz_fork_id), 0, 0, 0, 0)
 
 // Notify taskgrind of a parallel region end (called on the parent thread)
 #define TASKGRIND_JOIN_POINT_EVENT(_qzz_fork_id)    \
@@ -99,8 +99,8 @@ typedef enum    taskgrind_client_request_t
     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_IMPLICIT_TASK_BEGIN_EVENT, (_qzz_fork_id), (_qzz_key), 0, 0, 0)
 
 // Notify taskgrind of a thread implicit task end (call on that thread)
-#define TASKGRIND_IMPLICIT_TASK_END_EVENT(_qzz_fork_id, _qzz_key) \
-    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_IMPLICIT_TASK_END_EVENT, (_qzz_fork_id), (_qzz_key), 0, 0, 0)
+#define TASKGRIND_IMPLICIT_TASK_END_EVENT(_qzz_key) \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_IMPLICIT_TASK_END_EVENT, (_qzz_key), 0, 0, 0, 0)
 
 // Notify taskgrind of a create event
 //  - arg[1] is the task unique identifier (> 0) defined by the client

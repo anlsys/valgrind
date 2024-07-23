@@ -59,6 +59,9 @@ typedef struct  task_s
     // the task type
     task_type_t type;
 
+    // fork id
+    UWord fork_id;
+
     // unique identifier relative to its parent (independant from schedule)
     UWord child_id;
 
@@ -88,6 +91,9 @@ typedef struct  task_s
 
     // segs
     array_t segs;
+
+    // current segment
+    int current_seg_idx;
 
     // hmap handle
     UT_hash_handle hh;
@@ -182,18 +188,12 @@ typedef struct  thread_t
 
 typedef struct  fork_t
 {
-    // number of threads
-    UWord nthreads;
-
     // the source segment
     task_seg_t * source;
 
     // sink segment
     task_t * sink_task;
     int sink_task_seg_idx;
-
-    // threads that completed before the join point
-    array_t early_threads;
 
 }               fork_t;
 
@@ -205,10 +205,10 @@ typedef struct  fork_t
 extern array_t SEGS;
 
 // FUNCTIONS TO BUILD THE MAPPING
-void task_fork(UWord fork_id, UWord nthreads);
+void task_fork(UWord fork_id);
 void task_join(UWord fork_id);
 void task_implicit_begin(UWord fork_id, UWord task_id);
-void task_implicit_end(UWord fork_id, UWord task_id);
+void task_implicit_end(UWord task_id);
 task_t * task_create(UWord id, task_type_t type, UWord undeferred);
 void task_schedule(UWord id);
 void task_depend(UWord id, UWord addr, UWord type);

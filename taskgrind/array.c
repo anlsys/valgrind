@@ -40,27 +40,29 @@ array_push(array_t * array, void * src)
 }
 
 void *
+array_get(array_t * array, int n)
+{
+    if (n < 0 || n >= array->n)
+        return NULL;
+    return (void *) (array->objs + n * array->objsize);
+}
+
+void *
 array_last(array_t * array)
 {
-    if (array->n == 0)
-        return NULL;
-    return (void *) (array->objs + (array->n - 1) * array->objsize);
+    return array_get(array, array->n - 1);
 }
 
 void *
 array_penultimate(array_t * array)
 {
-    if (array->n <= 1)
-        return NULL;
-    return (void *) (array->objs + (array->n - 2) * array->objsize);
+    return array_get(array, array->n - 2);
 }
 
 void *
 array_first(array_t * array)
 {
-    if (array->n == 0)
-        return NULL;
-    return (void *) (array->objs);
+    return array_get(array, 0);
 }
 
 int

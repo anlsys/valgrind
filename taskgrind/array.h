@@ -33,6 +33,7 @@ void * array_push(array_t * array, void * obj);
 void * array_last(array_t * array);
 void * array_penultimate(array_t * array);
 void * array_first(array_t * array);
+void * array_get(array_t * array, int n);
 int array_is_empty(array_t * array);
 void array_clear(array_t * array);
 void array_deinit(array_t * array);

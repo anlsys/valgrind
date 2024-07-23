@@ -56,8 +56,7 @@ taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
         case VG_USERREQ__TASKGRIND_FORK_POINT_EVENT:
         {
             UWord fork_id = (UWord) arg[1];
-            UWord nthreads = (UWord) arg[2];
-            task_fork(fork_id, nthreads);
+            task_fork(fork_id);
             break ;
         }
 
@@ -78,9 +77,8 @@ taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
 
         case VG_USERREQ__TASKGRIND_IMPLICIT_TASK_END_EVENT:
         {
-            UWord fork_id = (UWord) arg[1];
-            UWord task_id = (UWord) arg[2];
-            task_implicit_end(fork_id, task_id);
+            UWord task_id = (UWord) arg[1];
+            task_implicit_end(task_id);
             break ;
         }
 
