@@ -459,7 +459,7 @@ for tool in "${TOOLS[@]}"; do
                 $PYTHON $LOGPARSER --tool archer tmp.log > $LOG_DIR/$jsonlogname
                 cat tmp.log >> "$LOG_DIR/$logname" || >tmp.log ;;
               taskgrind)
-                $TIMEOUTCMD $TIMEOUTMIN"m" $MEMCHECK -f "%M" -o "$MEMLOG" $TASKGRIND  --tool=taskgrind --instrumentlist --ignorelist "./$exname" $size &> tmp.log;
+                $TIMEOUTCMD $TIMEOUTMIN"m" $MEMCHECK -f "%M" -o "$MEMLOG" $TASKGRIND  --tool=taskgrind --ignorelist "./$exname" $size &> tmp.log;
                 check_return_code $?;
 		echo "$testname return $testreturn"
                 races=$(grep -ce 'possible determinacy races' tmp.log)

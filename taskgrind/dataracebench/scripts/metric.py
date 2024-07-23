@@ -38,15 +38,18 @@ def classify(truth, races):
     if truth.upper() == 'TRUE':
         positive += 1
         if races == 0:
-            print(app)
+            print("{} - false negative".format(app))
             falseNegative += 1
         else:
+            print("{} - true positive".format(app))
             truePositive += 1
     else:
         negative += 1
         if races == 0:
+            print("{} - true negative".format(app))
             trueNegative += 1
         else:
+            print("{} - false positive".format(app))
             falsePositive += 1
 
 
