@@ -27,7 +27,7 @@ array_push(array_t * array, void * src)
 {
     if (array->n == array->capacity)
     {
-        UInt capacity = (UInt)((array->n + 1) * 3 / 2);
+        UInt capacity = (UInt)((array->capacity < 4) ? 4 : (array->capacity * 2));
         array->objs = VG_(realloc)("array_t", array->objs, array->objsize * capacity);
         array->capacity = capacity;
     }

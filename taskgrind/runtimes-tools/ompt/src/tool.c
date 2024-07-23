@@ -39,8 +39,9 @@
     } while (0)
 
 // TODO : use 'get_unique_id' or generate one 'per thread' to avoid memory
-// contention on this global atomic
+// contention on these global atomic when supporting actual multithreading in valgrind
 static atomic_int NEXT_TASK_ID = 0;
+static atomic_int NEXT_FORK_ID = 0;
 
 // number of running openmp threads
 static int NTHREADS = 1;
@@ -102,17 +103,19 @@ on_ompt_callback_implicit_task(
 ) {
 //    INFO("[IMPLICIT] task_data = %p ; actual_parallelism=%u ", task_data, actual_parallelism);
 
+    uint64_t fork_id = parallel_data ? parallel_data->value : 0;
+
     if (endpoint == ompt_scope_begin)
     {
         uint64_t task_id = ++NEXT_TASK_ID;
         task_data->value = task_id;
-        TASKGRIND_CREATE_EVENT(task_id, TASKGRIND_TASK_TYPE_IMPLICIT, 0);
-        TASKGRIND_SCHEDULE_EVENT(task_id);
+        TASKGRIND_IMPLICIT_TASK_BEGIN_EVENT(fork_id, task_id);
     }
 
     if (endpoint == ompt_scope_end)
     {
-        // TODO
+        uint64_t task_id = task_data->value;
+        TASKGRIND_IMPLICIT_TASK_END_EVENT(fork_id, task_id);
     }
 }
 
@@ -431,7 +434,9 @@ on_ompt_callback_parallel_begin(
     const void * codeptr_ra
 ) {
     NTHREADS = requested_parallelism;
-    TASKGRIND_FORK_POINT_EVENT();
+    uint64_t fork_id = NEXT_FORK_ID++;
+    TASKGRIND_FORK_POINT_EVENT(fork_id, NTHREADS);
+    parallel_data->value = fork_id;
 }
 
 void
@@ -441,20 +446,9 @@ on_ompt_callback_parallel_end(
     int flags,
     const void * codeptr_ra
 ) {
-    TASKGRIND_JOIN_POINT_EVENT();
+    uint64_t fork_id = parallel_data->value;
+    TASKGRIND_JOIN_POINT_EVENT(fork_id);
     NTHREADS = 1;
-}
-
-void
-on_ompt_callback_thread_begin(ompt_thread_t thread_type, ompt_data_t * thread_data)
-{
-    TASKGRIND_THREAD_BEGIN_EVENT();
-}
-
-void
-on_ompt_callback_thread_end(ompt_data_t *thread_data)
-{
-    TASKGRIND_THREAD_END_EVENT();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -476,8 +470,6 @@ int ompt_initialize(
     ompt_set_callback_t ompt_set_callback = (ompt_set_callback_t) lookup("ompt_set_callback");
     register_callback(ompt_callback_parallel_begin);
     register_callback(ompt_callback_parallel_end);
-    register_callback(ompt_callback_thread_begin);
-    register_callback(ompt_callback_thread_end);
     register_callback(ompt_callback_task_create);
     register_callback(ompt_callback_implicit_task);
     register_callback(ompt_callback_task_schedule);

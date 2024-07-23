@@ -55,25 +55,32 @@ taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
     {
         case VG_USERREQ__TASKGRIND_FORK_POINT_EVENT:
         {
-            task_fork();
+            UWord fork_id = (UWord) arg[1];
+            UWord nthreads = (UWord) arg[2];
+            task_fork(fork_id, nthreads);
             break ;
         }
 
         case VG_USERREQ__TASKGRIND_JOIN_POINT_EVENT:
         {
-            task_join();
+            UWord fork_id = (UWord) arg[1];
+            task_join(fork_id);
             break ;
         }
 
-        case VG_USERREQ__TASKGRIND_THREAD_BEGIN_EVENT:
+        case VG_USERREQ__TASKGRIND_IMPLICIT_TASK_BEGIN_EVENT:
         {
-            task_thread_begin();
+            UWord fork_id = (UWord) arg[1];
+            UWord task_id = (UWord) arg[2];
+            task_implicit_begin(fork_id, task_id);
             break ;
         }
 
-        case VG_USERREQ__TASKGRIND_THREAD_END_EVENT:
+        case VG_USERREQ__TASKGRIND_IMPLICIT_TASK_END_EVENT:
         {
-            task_thread_end();
+            UWord fork_id = (UWord) arg[1];
+            UWord task_id = (UWord) arg[2];
+            task_implicit_end(fork_id, task_id);
             break ;
         }
 
@@ -641,7 +648,7 @@ taskgrind_prepare_env(HChar *** envp)
 
     // https://github.com/llvm/llvm-project/issues/89398#issuecomment-2066822457
     VG_(env_setenv)(envp, "KMP_ENABLE_TASK_THROTTLING", "0");
-    VG_(env_setenv)(envp, "OMP_NUM_THREADS", "2");
+//    VG_(env_setenv)(envp, "OMP_NUM_THREADS", "4");
 }
 
 VG_DETERMINE_INTERFACE_VERSION_WITH_ENV(taskgrind_pre_clo_init, taskgrind_prepare_env)

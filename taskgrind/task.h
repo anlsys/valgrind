@@ -170,8 +170,8 @@ typedef enum    task_mem_access_type_e
 
 typedef struct  thread_t
 {
-    // the implicit task
-    task_t root_task;
+    // the root task of that thread
+    task_t * root_task;
 
     // the current task
     task_t * current_task;
@@ -180,16 +180,35 @@ typedef struct  thread_t
 
 # define TASKGRIND_MAX_THREADS 256
 
+typedef struct  fork_t
+{
+    // number of threads
+    UWord nthreads;
+
+    // the source segment
+    task_seg_t * source;
+
+    // sink segment
+    task_t * sink_task;
+    int sink_task_seg_idx;
+
+    // threads that completed before the join point
+    array_t early_threads;
+
+}               fork_t;
+
+# define TASKGRIND_MAX_FORK 512
+
 // GLOBAL VARIABLE MAPPING EXECUTION AS TASKS
 
 // Number of segments
 extern array_t SEGS;
 
 // FUNCTIONS TO BUILD THE MAPPING
-void task_fork(void);
-void task_join(void);
-void task_thread_begin(void);
-void task_thread_end(void);
+void task_fork(UWord fork_id, UWord nthreads);
+void task_join(UWord fork_id);
+void task_implicit_begin(UWord fork_id, UWord task_id);
+void task_implicit_end(UWord fork_id, UWord task_id);
 task_t * task_create(UWord id, task_type_t type, UWord undeferred);
 void task_schedule(UWord id);
 void task_depend(UWord id, UWord addr, UWord type);

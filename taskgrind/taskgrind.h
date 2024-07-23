@@ -64,8 +64,8 @@ typedef enum    taskgrind_client_request_t
     VG_USERREQ__TASKGRIND_JOIN_POINT_EVENT,
 
     // a thread begin / end
-    VG_USERREQ__TASKGRIND_THREAD_BEGIN_EVENT,
-    VG_USERREQ__TASKGRIND_THREAD_END_EVENT,
+    VG_USERREQ__TASKGRIND_IMPLICIT_TASK_BEGIN_EVENT,
+    VG_USERREQ__TASKGRIND_IMPLICIT_TASK_END_EVENT,
 
     // a new task has been created
     VG_USERREQ__TASKGRIND_CREATE_EVENT,
@@ -87,28 +87,22 @@ typedef enum    taskgrind_client_request_t
 }               taskgrind_client_request_t;
 
 // Notify taskgrind of a parallel region begin (called on the parent thread)
-// so it save current segment as the root of future thread_begin
-#define TASKGRIND_FORK_POINT_EVENT()    \
-    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_FORK_POINT_EVENT, 0, 0, 0, 0, 0)
+#define TASKGRIND_FORK_POINT_EVENT(_qzz_fork_id, _qzz_nthreads)    \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_FORK_POINT_EVENT, (_qzz_fork_id), (_qzz_nthreads), 0, 0, 0)
 
 // Notify taskgrind of a parallel region end (called on the parent thread)
-// so any forked threads join here
-#define TASKGRIND_JOIN_POINT_EVENT()    \
-    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_JOIN_POINT_EVENT, 0, 0, 0, 0, 0)
+#define TASKGRIND_JOIN_POINT_EVENT(_qzz_fork_id)    \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_JOIN_POINT_EVENT, (_qzz_fork_id), 0, 0, 0, 0)
 
-// Notify taskgrind that a thread begin (called on the thread)
-// so it forks an empty segment for that thread
-#define TASKGRIND_THREAD_BEGIN_EVENT()    \
-    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_THREAD_BEGIN_EVENT, 0, 0, 0, 0, 0)
+// Notify taskgrind of a thread implicit task begin (call on that thread)
+#define TASKGRIND_IMPLICIT_TASK_BEGIN_EVENT(_qzz_fork_id, _qzz_key) \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_IMPLICIT_TASK_BEGIN_EVENT, (_qzz_fork_id), (_qzz_key), 0, 0, 0)
 
-// Notify taskgrind that a thread ended (called on the thread)
-// so it join its last segment to the parent join request
-#define TASKGRIND_THREAD_END_EVENT()    \
-    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_THREAD_END_EVENT, 0, 0, 0, 0, 0)
+// Notify taskgrind of a thread implicit task end (call on that thread)
+#define TASKGRIND_IMPLICIT_TASK_END_EVENT(_qzz_fork_id, _qzz_key) \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TASKGRIND_IMPLICIT_TASK_END_EVENT, (_qzz_fork_id), (_qzz_key), 0, 0, 0)
 
-
-
-// Notify taskgring of a create event
+// Notify taskgrind of a create event
 //  - arg[1] is the task unique identifier (> 0) defined by the client
 //  - arg[2] is the task type (taskgrind_task_type_t)
 //  - arg[3] boolean whether the task is undeferred or not
