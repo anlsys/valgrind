@@ -91,6 +91,8 @@ ARCHER_COMPILE_FLAGS="${OPTIMIZATION} -larcher"
 TASKGRIND=${TASKGRIND:-"../../vg-in-place"}
 TASKGRIND_COMPILE_FLAGS="-g -fopenmp"
 
+TASKSANITIZER_COMPILE_FLAGS="-g -fopenmp"
+
 INSPECTOR=${INSPECTOR:-"inspxe-cl"}
 ICC_COMPILE_FLAGS="${OPTIMIZATION} -fopenmp -std=c99 -qopenmp-offload=host -g"
 ICPC_COMPILE_FLAGS="${OPTIMIZATION} -fopenmp -qopenmp-offload=host -g"
@@ -119,7 +121,7 @@ usage () {
   echo
   echo "OPTIONS:"
   echo "  -x tool       : Add the specified tool to test set."
-  echo "                  Value can be one of: gnu, clang, intel, helgrind, tsan-clang, tsan-gcc, archer, taskgrind, inspector, inspector-max-resources, romp."
+  echo "                  Value can be one of: gnu, clang, intel, helgrind, tsan-clang, tsan-gcc, archer, taskgrind, task-sanitizer, inspector, inspector-max-resources, romp."
   echo "  -n iterations : Run each setting the specified number of iterations."
   echo "  -t threads    : Add the specified number of threads as a testcase."
   echo "  -d size       : Add a specific dataset size to the varlen test suite."
@@ -137,6 +139,7 @@ valid_tool_name () {
     helgrind) return 0 ;;
     archer) return 0 ;;
     taskgrind) return 0 ;;
+    task-sanitizer) return 0 ;;
     coderrect) return 0 ;;
     openrace) return 0 ;;
     tsan-clang) return 0 ;;
@@ -232,8 +235,8 @@ done
 
 # Set default values
 if [[ ! ${#TOOLS[@]} -gt 0 ]]; then
-  echo "Default tool set will be used: gnu, clang, intel helgrind, tsan-clang, tsan-gcc, archer, taskgrind, inspector-max-resources."
-  TOOLS=( 'gnu' 'clang' 'intel' 'helgrind' 'tsan-clang' 'tsan-gcc' 'archer' 'taskgrind' 'inspector-max-resources' )
+  echo "Default tool set will be used: gnu, clang, intel helgrind, tsan-clang, tsan-gcc, archer, taskgrind, task-sanitizer, inspector-max-resources."
+  TOOLS=( 'gnu' 'clang' 'intel' 'helgrind' 'tsan-clang' 'tsan-gcc' 'archer' 'taskgrind' 'task-sanitizer' 'inspector-max-resources' )
 else
   echo "Tools: ${TOOLS[*]}";
 fi
@@ -367,6 +370,7 @@ for tool in "${TOOLS[@]}"; do
         helgrind)   g++ $VALGRIND_COMPILE_CPP_FLAGS $additional_compile_flags $test -o $exname -lm ;;
         archer)     clang-archer++ $ARCHER_COMPILE_FLAGS $additional_compile_flags $test -o $exname -lm ;;
         taskgrind)  clang++ $TASKGRIND_COMPILE_FLAGS $additional_compile_flags $test -o $exname -lm ;;
+        task-sanitizer) tasksan $TASKSANITIZER_COMPILE_FLAGS $additional_compile_flags $test -o $exname -lm ;; 
         coderrect)  coderrect -XbcOnly clang++ -fopenmp -fopenmp-version=45 -g ${OPTIMIZATION} $additional_compile_flags $test -o $exname -lm > /dev/null 2>&1 ;;
         openrace)   ${CLANGXX} -fopenmp -fopenmp-version=45 -Dmasked=master -g -S -emit-llvm $test -o $exname ;;
         tsan-clang) ${CLANGXX} $TSAN_COMPILE_FLAGS $additional_compile_flags $test -o $exname -lm ;;
@@ -385,6 +389,7 @@ for tool in "${TOOLS[@]}"; do
         helgrind)   gcc $VALGRIND_COMPILE_C_FLAGS $additional_compile_flags $test -o $exname -lm ;;
         archer)     clang-archer $ARCHER_COMPILE_FLAGS $additional_compile_flags $test -o $exname -lm ;;
         taskgrind)  ${CLANG} $TASKGRIND_COMPILE_FLAGS $additional_compile_flags $test -o $exname -lm ;;
+        task-sanitizer) tasksan $TASKSANITIZER_COMPILE_FLAGS $additional_compile_flags $test -o $exname -lm ;;
         coderrect)  coderrect -XbcOnly clang -fopenmp -fopenmp-version=45 -g ${OPTIMIZATION} $additional_compile_flags $test -o $exname -lm  > /dev/null 2>&1 ;;
         openrace)   ${CLANG} -fopenmp -fopenmp-version=45 -Dmasked=master -g -S -emit-llvm $test -o $exname ;;
         tsan-clang) ${CLANG} $TSAN_COMPILE_FLAGS $additional_compile_flags $test -o $exname -lm ;;
@@ -448,21 +453,27 @@ for tool in "${TOOLS[@]}"; do
 #                races=$($MEMCHECK -f "%M" -o "$MEMLOG" $VALGRIND  --tool=helgrind "./$exname" $size 2>&1 | tee -a "$LOG_DIR/$logname" | grep -ce 'Possible data race') ;;
                 $TIMEOUTCMD $TIMEOUTMIN"m" $MEMCHECK -f "%M" -o "$MEMLOG" $VALGRIND  --tool=helgrind "./$exname" $size &> tmp.log;
                 check_return_code $?;
-		echo "$testname return $testreturn"
+		        echo "$testname return $testreturn"
                 races=$(grep -ce 'Possible data race' tmp.log) 
                 cat tmp.log >> "$LOG_DIR/$logname" || >tmp.log ;;
               archer)
                 $TIMEOUTCMD $TIMEOUTMIN"m" $MEMCHECK -f "%M" -o "$MEMLOG" "./$exname" $size &> tmp.log;
                 check_return_code $?;
-		echo "$testname return $testreturn"
+		        echo "$testname return $testreturn"
                 races=$(grep -ce 'WARNING: ThreadSanitizer: data race' tmp.log) 
                 $PYTHON $LOGPARSER --tool archer tmp.log > $LOG_DIR/$jsonlogname
                 cat tmp.log >> "$LOG_DIR/$logname" || >tmp.log ;;
               taskgrind)
                 $TIMEOUTCMD $TIMEOUTMIN"m" $MEMCHECK -f "%M" -o "$MEMLOG" $TASKGRIND  --tool=taskgrind --ignorelist "./$exname" $size &> tmp.log;
                 check_return_code $?;
-		echo "$testname return $testreturn"
+		        echo "$testname return $testreturn"
                 races=$(grep -ce 'possible determinacy races' tmp.log)
+                cat tmp.log >> "$LOG_DIR/$logname" || >tmp.log ;;
+              task-sanitizer)
+                $TIMEOUTCMD $TIMEOUTMIN"m" $MEMCHECK -f "%M" -o "$MEMLOG" "./$exname" $size &> tmp.log;
+                check_return_code $?;
+         		echo "$testname return $testreturn"
+                races=$(grep -ce 'have conflicts' tmp.log)
                 cat tmp.log >> "$LOG_DIR/$logname" || >tmp.log ;;
               coderrect)
                 ccc="clang"
@@ -471,7 +482,7 @@ for tool in "${TOOLS[@]}"; do
                 fi
                 $TIMEOUTCMD $TIMEOUTMIN"m" $MEMCHECK -f "%M" -o "$MEMLOG" coderrect -XenableProgress=false -t $ccc -fopenmp -fopenmp-version=45 $additional_compile_flags $test -o $exname -lm &> tmp.log;
                 check_return_code $?;
-		echo "$testname return $testreturn"
+		    echo "$testname return $testreturn"
                 races=$(grep -ce 'Found a data race' tmp.log)
                 cat tmp.log >> "$LOG_DIR/$logname" || >tmp.log ;;
               openrace)
