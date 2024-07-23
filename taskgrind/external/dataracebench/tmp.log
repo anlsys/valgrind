@@ -1,26 +1,45 @@
-==16299== [[1;32mINFO[0m] Loading OMPT Plugin from /home/rpereira/repo/valgrind/taskgrind/dataracebench/../../.in_place/../taskgrind/runtimes-tools/ompt/build/libtaskgrind_omp.so
-==16299== [[1;36mDEBUG[0m] Replacing malloc
-==16299== Taskgrind, a debugger for dependent tasks order of execution
-==16299== Copyright (C) 2023, and GNU GPL'd, by Romain Pereira et al.
-==16299== Using Valgrind-3.24.0.GIT and LibVEX; rerun with -h for copyright info
-==16299== Command: ./results/exec/DRB027-taskdependmissing-orig-yes.c.taskgrind.out
-==16299== 
-==16299== [[1;32mINFO[0m] Export to dot files disabled
-==16299== [[1;32mINFO[0m] Instrumenting every memory accesses
+==114848== [[1;32mINFO[0m] Loading OMPT Plugin from /home/pereirar/repos/valgrind/taskgrind/runtimes-tools/ompt/build/libtaskgrind_omp.so
+==114848== [[1;32mINFO[0m] Replacing malloc
+==114848== Taskgrind, a debugger for dependent tasks order of execution
+==114848== Copyright (C) 2023, and GNU GPL'd, by Romain Pereira et al.
+==114848== Using Valgrind-3.24.0.GIT and LibVEX; rerun with -h for copyright info
+==114848== Command: ./results/exec/DRB175-non-sibling-taskdep2-yes.c.taskgrind.out
+==114848== 
+==114848== [[1;32mINFO[0m] Export to dot files disabled
+==114848== [[1;32mINFO[0m] You can modify the lists in the file `main.c`
+==114848== [[1;32mINFO[0m] Not instrumenting accesses in functions matching the ignorelist:
+==114848== [[1;32mINFO[0m]    `on_ompt`
+==114848== [[1;32mINFO[0m]    `__kmp`
+==114848== [[1;32mINFO[0m]    `outlined_debug`
 [OMPT] [INFO] Taskgrind: OpenMP 201611 and runtime LLVM OMP version: 5.0.20140926
-i=2
-==16299== 
-==16299== [[1;32mINFO[0m] Starting analysis on a 11 segments graph...
-==16299== [[1;32mINFO[0m] Running E1 pass
-==16299== [[1;32mINFO[0m] 55 comparison to perform
-==16299== [[1;32mINFO[0m] 9% comparisons performed
-==16299== [[1;32mINFO[0m] 20% comparisons performed
-==16299== [[1;32mINFO[0m] 30% comparisons performed
-==16299== [[1;32mINFO[0m] 41% comparisons performed
-==16299== [[1;32mINFO[0m] 52% comparisons performed
-==16299== [[1;32mINFO[0m] 63% comparisons performed
-==16299== [[1;32mINFO[0m] 74% comparisons performed
-==16299== [[1;32mINFO[0m] 85% comparisons performed
-==16299== [[1;32mINFO[0m] 96% comparisons performed
-==16299== [[1;32mINFO[0m] -> E1 found no determinacy race :-)
-==16299== [[1;32mINFO[0m] Analysis completed.
+a=4
+==114848== 
+==114848== [[1;32mINFO[0m] Starting analysis on a 22 segments graph...
+==114848== [[1;32mINFO[0m] Running E1 pass
+==114848== [[1;32mINFO[0m] 231 comparison to perform
+==114848== [[1;32mINFO[0m] 9% comparisons performed
+==114848== [[1;32mINFO[0m] 20% comparisons performed
+==114848== [[1;31mERROR[0m] Segments micro-benchmarks/DRB175-non-sibling-taskdep2-yes.c:27 and micro-benchmarks/DRB175-non-sibling-taskdep2-yes.c:27 were declared independent while accessing the same memory address
+==114848== [[1;31mERROR[0m]     4 bytes from 0x1FFEFFF5CC (stack access)
+==114848== [[1;31mERROR[0m] Segments micro-benchmarks/DRB175-non-sibling-taskdep2-yes.c:27 and micro-benchmarks/DRB175-non-sibling-taskdep2-yes.c:27 were declared independent while accessing the same memory address
+==114848== [[1;31mERROR[0m]     4 bytes from 0x1FFEFFF5CC (stack access)
+==114848== [[1;32mINFO[0m] 30% comparisons performed
+==114848== [[1;31mERROR[0m] Segments micro-benchmarks/DRB175-non-sibling-taskdep2-yes.c:27 and micro-benchmarks/DRB175-non-sibling-taskdep2-yes.c:27 were declared independent while accessing the same memory address
+==114848== [[1;31mERROR[0m]     4 bytes from 0x1FFEFFF5CC (stack access)
+==114848== [[1;32mINFO[0m] 41% comparisons performed
+==114848== [[1;32mINFO[0m] 51% comparisons performed
+==114848== [[1;31mERROR[0m] Segments micro-benchmarks/DRB175-non-sibling-taskdep2-yes.c:27 and micro-benchmarks/DRB175-non-sibling-taskdep2-yes.c:27 were declared independent while accessing the same memory address
+==114848== [[1;31mERROR[0m]     36 bytes from 0x148D1C1C (unknown allocation)
+==114848== [[1;31mERROR[0m]     8 bytes from 0x148D1C10 (unknown allocation)
+==114848== [[1;32mINFO[0m] 61% comparisons performed
+==114848== [[1;31mERROR[0m] Segments micro-benchmarks/DRB175-non-sibling-taskdep2-yes.c:27 and micro-benchmarks/DRB175-non-sibling-taskdep2-yes.c:27 were declared independent while accessing the same memory address
+==114848== [[1;31mERROR[0m]     4 bytes from 0x1FFEFFF5CC (stack access)
+==114848== [[1;31mERROR[0m] Segments micro-benchmarks/DRB175-non-sibling-taskdep2-yes.c:27 and micro-benchmarks/DRB175-non-sibling-taskdep2-yes.c:27 were declared independent while accessing the same memory address
+==114848== [[1;31mERROR[0m]     4 bytes from 0x1FFEFFF5CC (stack access)
+==114848== [[1;32mINFO[0m] 72% comparisons performed
+==114848== [[1;32mINFO[0m] 82% comparisons performed
+==114848== [[1;31mERROR[0m] Segments micro-benchmarks/DRB175-non-sibling-taskdep2-yes.c:27 and micro-benchmarks/DRB175-non-sibling-taskdep2-yes.c:27 were declared independent while accessing the same memory address
+==114848== [[1;31mERROR[0m]     4 bytes from 0x1FFEFFF5CC (stack access)
+==114848== [[1;32mINFO[0m] 93% comparisons performed
+==114848== [[1;31mERROR[0m] -> E1 reported 7 possible determinacy races
+==114848== [[1;32mINFO[0m] Analysis completed.

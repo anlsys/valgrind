@@ -1,16 +1,10 @@
-# include <assert.h>
-# include <omp.h>
-# include <stdio.h>
-# include <stdlib.h>
-# include <stdint.h>
-
-// should report: 2 siblings tasks are data-dependent but no dependency expressed
+// run with OMP_NUM_THREADS=1
+// should report determinacy race on x[0]
 
 int
 main(void)
 {
     int x[1];
-    printf("x addr is %p\n", (void *) x);
 
     # pragma omp parallel
     {
