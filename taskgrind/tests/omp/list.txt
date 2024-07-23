@@ -1,0 +1,21 @@
+# dr  =    determinacy race
+# ndr = no determinacy race
+
+task-independent.1.c    dr
+
+task-dependent.1.c      dr
+task-dependent.2.c      ndr
+task-dependent.3.c      dr
+task-dependent.4.c      ndr
+task-dependent.5.c      ndr
+
+parallel-for.1.c        dr
+parallel-for.2.c        ndr
+
+tls.1.c                 ndr
+
+stack.1.c               dr
+stack.2.c               ndr
+stack.3.c               ndr
+stack.4.c               dr
+stack.5.c               ndr

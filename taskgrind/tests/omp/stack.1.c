@@ -1,5 +1,4 @@
-// run with OMP_NUM_THREADS=1
-// should report determinacy race on x[0]
+// racy: yes
 
 int
 main(void)
@@ -10,10 +9,10 @@ main(void)
     {
         # pragma omp single nowait
         {
-            # pragma omp task shared(x)
+            # pragma omp task
                 x[0] = 42;
 
-            # pragma omp task shared(x)
+            # pragma omp task
                 x[0] = 43;
         }
     }

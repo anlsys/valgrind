@@ -1,3 +1,5 @@
+// racy: no
+
 int
 main(void)
 {

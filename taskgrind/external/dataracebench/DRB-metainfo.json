@@ -1,4 +1,11 @@
 {
+  "TG001-stack.parent.c": {
+      "basicInfo": {
+        "id": 1000,
+        "language": "C",
+        Plabel
+      },
+  },
   "DRB001-antidep1-orig-yes.c": {
     "basicInfo": {
       "id": 1,

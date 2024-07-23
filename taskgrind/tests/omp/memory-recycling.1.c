@@ -1,10 +1,7 @@
-# include <assert.h>
-# include <omp.h>
-# include <stdio.h>
-# include <stdlib.h>
-# include <stdint.h>
+// racy: no
 
-// should report: no errors
+# include <stdlib.h>
+# include <stdio.h>
 
 int
 main(void)

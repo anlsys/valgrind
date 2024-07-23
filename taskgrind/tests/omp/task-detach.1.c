@@ -1,28 +1,28 @@
-# include <assert.h>
+// racy: no
+
 # include <omp.h>
-# include <stdio.h>
-# include <stdlib.h>
-# include <stdint.h>
 
 int
 main(void)
 {
-    int * x = (int *) malloc(1 * sizeof(int));
-    printf("x addr is %llu\n", (long long unsigned int) x);
+    int x[1];
 
     # pragma omp parallel
     {
         # pragma omp single nowait
         {
             omp_event_handle_t hdl;
-            # pragma omp task shared(x) depend(out: x) detach(hdl)
+            # pragma omp task depend(out: x) detach(hdl)
+            {
                 x[0] = 42;
-
-
-            # pragma omp task depend(in: x)
-                {}
+            }
 
             omp_fulfill_event(hdl);
+
+            # pragma omp taskwait depend(in: x)
+
+            x[0] = 42;
+
         }
     }
 

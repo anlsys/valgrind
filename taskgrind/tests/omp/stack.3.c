@@ -1,8 +1,4 @@
-# include <assert.h>
-# include <omp.h>
-# include <stdio.h>
-# include <stdlib.h>
-# include <stdint.h>
+// racy: no
 
 int
 main(void)

@@ -266,7 +266,8 @@ on_ompt_callback_sync_region(
                 case (ompt_sync_region_reduction):
                 default:
                 {
-                    assert(0 && "Not implemented");
+                    fprintf(stderr, "ompt_sync_region_reduction not implemented\n");
+//                    assert(0 && "Not implemented");
                     break ;
                 }
             }
