@@ -735,7 +735,7 @@ task_seg_mem_access(task_seg_t * seg, Addr addr, SizeT size)
     }
 
     # if 0
-    if (addr == 0x1ffefff218)
+    if (addr == 0x1FFEFFF068)
     {
         TASKGRIND_DEBUG("Checking address %p on segment %u", (void *) addr, seg->uid);
         ThreadId tid = VG_(get_running_tid)();
@@ -934,10 +934,13 @@ task_fini(void)
         taskgrind_export_lpg(root);
     }
 
-    TASKGRIND_INFO("Starting analysis on a %u segments graph...", SEGS.n);
-    // taskgrind_pass_w1(root);
-    taskgrind_pass_e1(root);
-    TASKGRIND_INFO("Analysis completed.");
+    if (!CLOS.noanalysis)
+    {
+        TASKGRIND_INFO("Starting analysis on a %u segments graph...", SEGS.n);
+        taskgrind_pass_e1(root);
+        // taskgrind_pass_w1(root);
+        TASKGRIND_INFO("Analysis completed.");
+    }
 
     array_deinit(&SEGS);
 }

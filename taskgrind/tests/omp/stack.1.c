@@ -1,4 +1,4 @@
-// racy: yes
+// racy: yes - both accessing parent stack
 
 int
 main(void)

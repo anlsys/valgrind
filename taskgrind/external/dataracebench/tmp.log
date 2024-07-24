@@ -1,19 +1,27 @@
-No. of critical sections in IIR: 0
-on_ompt_callback_task_dependences 24863984
-on_ompt_callback_task_dependences 17875654939424
-on_ompt_callback_task_dependences 17875520721696
-on_ompt_callback_task_dependences 17875587830560
-a=4
-============================================================
-                                                            
-                    TaskSanitizer Summary  
-                                                            
- Total number of tasks: 12
-                                                            
-                                                            
-                                                            
-              Determinacy race checking report  
-                                                            
-                 No determinacy races found! 
-                                                            
-============================================================
+/home/pereirar/install/llvm/19.x/home/pereirar/install/llvm/bin/llvm-symbolizer: error: '[stack]': No such file or directory
+==================
+WARNING: ThreadSanitizer: data race (pid=256584)
+  Write of size 4 at 0x7ffd2e871e4c by thread T1:
+    #0 .omp_task_entry. DRB175-non-sibling-taskdep2-yes.c (DRB175-non-sibling-taskdep2-yes.c.archer.out+0xe4888)
+    #1 __kmp_invoke_task(int, kmp_task*, kmp_taskdata*) /home/pereirar/repos/llvm-project/openmp/runtime/src/kmp_tasking.cpp:1917:27 (libomp.so+0x7685a) (BuildId: 4a5b36ccc09c29aff42ff58a09656f8ef5c0a562)
+
+  Previous write of size 4 at 0x7ffd2e871e4c by thread T2:
+    #0 .omp_task_entry. DRB175-non-sibling-taskdep2-yes.c (DRB175-non-sibling-taskdep2-yes.c.archer.out+0xe4888)
+    #1 __kmp_invoke_task(int, kmp_task*, kmp_taskdata*) /home/pereirar/repos/llvm-project/openmp/runtime/src/kmp_tasking.cpp:1917:27 (libomp.so+0x7685a) (BuildId: 4a5b36ccc09c29aff42ff58a09656f8ef5c0a562)
+
+  Location is stack of main thread.
+
+  Location is global '??' at 0x7ffd2e852000 ([stack]+0x1fe4c)
+
+  Thread T1 (tid=256586, running) created by main thread at:
+    #0 pthread_create /home/pereirar/repos/llvm-project/compiler-rt/lib/tsan/rtl/tsan_interceptors_posix.cpp:1023:3 (DRB175-non-sibling-taskdep2-yes.c.archer.out+0x36c61)
+    #1 __kmp_create_worker /home/pereirar/repos/llvm-project/openmp/runtime/src/z_Linux_util.cpp:862:21 (libomp.so+0xcad75) (BuildId: 4a5b36ccc09c29aff42ff58a09656f8ef5c0a562)
+
+  Thread T2 (tid=256587, running) created by main thread at:
+    #0 pthread_create /home/pereirar/repos/llvm-project/compiler-rt/lib/tsan/rtl/tsan_interceptors_posix.cpp:1023:3 (DRB175-non-sibling-taskdep2-yes.c.archer.out+0x36c61)
+    #1 __kmp_create_worker /home/pereirar/repos/llvm-project/openmp/runtime/src/z_Linux_util.cpp:862:21 (libomp.so+0xcad75) (BuildId: 4a5b36ccc09c29aff42ff58a09656f8ef5c0a562)
+
+SUMMARY: ThreadSanitizer: data race DRB175-non-sibling-taskdep2-yes.c in .omp_task_entry.
+==================
+a=2
+ThreadSanitizer: reported 1 warnings

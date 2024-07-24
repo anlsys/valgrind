@@ -44,6 +44,8 @@
 # IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 # THE POSSIBILITY OF SUCH DAMAGE.
 
+export TSAN_OPTIONS="ignore_noninstrumented_modules=1"
+
 CSV_HEADER="tool,id,filename,haverace,threads,dataset,races,elapsed-time(seconds),used-mem(KBs),compile-return,runtime-return"
 TESTS=($(grep -l main micro-benchmarks/*.c micro-benchmarks/*.cpp))
 FORTRANTESTS=($(find micro-benchmarks-fortran -iregex ".*\.F[0-9]*" -o -iregex ".*\.for"))
@@ -57,7 +59,7 @@ LANGUAGE="default"
 PYTHON=${PYTHON:-"python3"}
 LOGPARSER="scripts/log-parser/logParser.py"
 
-OPTIMIZATION=${OPTIMIZATION:-"-O3 -march=native"}
+OPTIMIZATION=${OPTIMIZATION:-"-O0 -march=native"}
 
 MEMCHECK=${MEMCHECK:-"/usr/bin/time"}
 TIMEOUTCMD=${TIMEOUTCMD:-"timeout"}
@@ -85,10 +87,10 @@ LLOV_COMPILE_FLAGS+=" ${OPTIMIZATION} -g"
 # Path to LLOV is fixed due to it's only available in container
 FLANG_PATH=/home/llvm/installs/flang-2020-03-16
 
-ARCHER=${ARCHER:-"clang-archer"}
-ARCHER_COMPILE_FLAGS="${OPTIMIZATION} -larcher"
+ARCHER=${ARCHER:-"clang"}
+ARCHER_COMPILE_FLAGS="${OPTIMIZATION} -fopenmp -fsanitize=thread"
 
-TASKGRIND=${TASKGRIND:-"../../vg-in-place"}
+TASKGRIND=${TASKGRIND:-"../../../vg-in-place"}
 TASKGRIND_COMPILE_FLAGS="-g -fopenmp"
 
 TASKSANITIZER_COMPILE_FLAGS="-g -fopenmp"
@@ -368,7 +370,7 @@ for tool in "${TOOLS[@]}"; do
         clang)      ${CLANGXX} -fopenmp -g $additional_compile_flags $test -o $exname -lm ;;
         intel)      icpc $ICPC_COMPILE_FLAGS $additional_compile_flags $test -o $exname -lm ;;
         helgrind)   g++ $VALGRIND_COMPILE_CPP_FLAGS $additional_compile_flags $test -o $exname -lm ;;
-        archer)     clang-archer++ $ARCHER_COMPILE_FLAGS $additional_compile_flags $test -o $exname -lm ;;
+        archer)     clang $ARCHER_COMPILE_FLAGS $additional_compile_flags $test -o $exname -lm ;;
         taskgrind)  clang++ $TASKGRIND_COMPILE_FLAGS $additional_compile_flags $test -o $exname -lm ;;
         task-sanitizer) tasksan $TASKSANITIZER_COMPILE_FLAGS $additional_compile_flags $test -o $exname -lm ;; 
         coderrect)  coderrect -XbcOnly clang++ -fopenmp -fopenmp-version=45 -g ${OPTIMIZATION} $additional_compile_flags $test -o $exname -lm > /dev/null 2>&1 ;;
@@ -387,7 +389,7 @@ for tool in "${TOOLS[@]}"; do
         clang)      ${CLANG} -fopenmp -g $additional_compile_flags $test -o $exname -lm ;;
         intel)      icc $ICC_COMPILE_FLAGS $additional_compile_flags $test -o $exname -lm ;;
         helgrind)   gcc $VALGRIND_COMPILE_C_FLAGS $additional_compile_flags $test -o $exname -lm ;;
-        archer)     clang-archer $ARCHER_COMPILE_FLAGS $additional_compile_flags $test -o $exname -lm ;;
+        archer)     clang $ARCHER_COMPILE_FLAGS $additional_compile_flags $test -o $exname -lm && echo "clang $ARCHER_COMPILE_FLAGS $additional_compile_flags $test -o $exname -lm" ;;
         taskgrind)  ${CLANG} $TASKGRIND_COMPILE_FLAGS $additional_compile_flags $test -o $exname -lm ;;
         task-sanitizer) tasksan $TASKSANITIZER_COMPILE_FLAGS $additional_compile_flags $test -o $exname -lm ;;
         coderrect)  coderrect -XbcOnly clang -fopenmp -fopenmp-version=45 -g ${OPTIMIZATION} $additional_compile_flags $test -o $exname -lm  > /dev/null 2>&1 ;;
@@ -457,10 +459,11 @@ for tool in "${TOOLS[@]}"; do
                 races=$(grep -ce 'Possible data race' tmp.log) 
                 cat tmp.log >> "$LOG_DIR/$logname" || >tmp.log ;;
               archer)
+                echo "$TIMEOUTCMD $TIMEOUTMIN"m" $MEMCHECK -f "%M" -o "$MEMLOG" "./$exname" $size &> tmp.log;"
                 $TIMEOUTCMD $TIMEOUTMIN"m" $MEMCHECK -f "%M" -o "$MEMLOG" "./$exname" $size &> tmp.log;
                 check_return_code $?;
 		        echo "$testname return $testreturn"
-                races=$(grep -ce 'WARNING: ThreadSanitizer: data race' tmp.log) 
+                races=$(grep -ce 'WARNING: ThreadSanitizer: data race' tmp.log)
                 $PYTHON $LOGPARSER --tool archer tmp.log > $LOG_DIR/$jsonlogname
                 cat tmp.log >> "$LOG_DIR/$logname" || >tmp.log ;;
               taskgrind)
@@ -589,7 +592,7 @@ for tool in "${TOOLS[@]}"; do
 		    clang $FORTRAN_COMPILE_FLAGS $linkname $linklib -o $exname -lm;;
         tsan-gcc)   gfortran -fopenmp -fsanitize=thread $additional_compile_flags  $test -o $exname -lm  ;;
         archer)     gfortran $FORTRAN_LINK_FLAGS $additional_compile_flags $test -o $linkname;
-	            clang-archer $FORTRAN_COMPILE_FLAGS $linkname $linklib -o $exname $ARCHER_COMPILE_FLAGS -lm;;
+	            clang $FORTRAN_COMPILE_FLAGS $linkname $linklib -o $exname $ARCHER_COMPILE_FLAGS -lm;;
         coderrect)  coderrect -XbcOnly gfortran ${OPTIMIZATION} -g -fopenmp $additional_compile_flags $test -o $exname -lm > /dev/null 2>&1;
                     ls .coderrect/build/$exname.bc ;; # make $? to be 1 if coderrect could not compile the fortran case
         inspector)  ifort $IFORT_FORTRAN_FLAGS  $test -o $exname -lm ;;

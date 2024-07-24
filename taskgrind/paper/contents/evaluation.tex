@@ -1,50 +1,81 @@
 \begin{table*}[]
 	\label{tbl:results-race-detection}
-	\caption{DataRaceBenchmarks results}
 	\centering
-	\normalsize
-	\begin{tabular}{llc|cclc}
-		\multicolumn{3}{c|}{Micro-benchmarks suite}                                      & \multicolumn{4}{c}{Tool}                                                                  \\ \hline
-		\multicolumn{2}{l}{DRB (with OMP\_NUM\_THREADS=4)}       & Racy                  & TaskSanitizer        & Archer               & ROMP                 & Taskgrind            \\\hline
-		& 027-taskdependmissing-orig                  & yes                   & TP                   &                      &                      & TP                   \\
-		& 072-taskdep1-orig                           & no                    & TN                   &                      &                      & TN                   \\
-		& 078-taskdep2-orig                           & no                    & TN                   &                      &                      & FP                   \\
-		& 079-taskdep3-orig                           & no                    & N/A                  &                      &                      & FP                   \\
-		& 095-doall2-taskloop-orig                    & yes                   & N/A                  &                      &                      & TP                   \\
-		& 096-doall2-taskloop-collapse-orig           & no                    & N/A                  &                      &                      & FP                   \\
-		& 100-task-reference-orig                     & no                    & N/A                  &                      &                      & FP                   \\
-		& 101-task-value-orig                         & no                    & FP                   &                      &                      & FP                   \\
-		& 106-taskwaitmissing-orig                    & yes                   & TP                   &                      &                      & TP                   \\
-		& 107-taskgroup-orig                          & no                    & FP                   &                      &                      & FP                   \\
-		& 122-taskundeferred-orig                     & no                    & FP                   &                      &                      & TN                   \\
-		& 123-taskundeferred-orig                     & yes                   & TP                   &                      &                      & TP                   \\
-		& 127-tasking-threadprivate1-orig             & no                    & N/A                  &                      &                      & FP                   \\
-		& 128-tasking-threadprivate2-orig             & no                    & N/A                  &                      &                      & FP                   \\
-		& 129-mergeable-taskwait-orig                 & yes                   & N/A                  &                      &                      & FN                   \\
-		& 130-mergeable-taskwait-orig                 & no                    & N/A                  &                      &                      & TN                   \\
-		& 131-taskdep4-orig-omp45                     & yes                   & N/A                  &                      &                      & TP                   \\
-		& 132-taskdep4-orig-omp45                     & no                    & N/A                  &                      &                      & TN                   \\
-		& 133-taskdep5-orig-omp45                     & no                    & N/A                  &                      &                      & TN                   \\
-		& 134-taskdep5-orig-omp45                     & yes                   & N/A                  &                      &                      & TP                   \\
-		& 135-taskdep-mutexinoutset-orig              & no                    & N/A                  &                      &                      & TN                   \\
-		& 136-taskdep-mutexinoutset-orig              & yes                   & TP                   &                      &                      & TP                   \\
-		& 165-taskdep4-orig-omp50                     & yes                   & N/A                  &                      &                      & TP                   \\
-		& 166-taskdep4-orig-omp50                     & no                    & N/A                  &                      &                      & TN                   \\
-		& 167-taskdep4-orig-omp50                     & no                    & N/A                  &                      &                      & TN                   \\
-		& 168-taskdep5-orig-omp50                     & yes                   & N/A                  &                      &                      & TP                   \\
-		& 173-non-sibling-taskdep                     & yes                   & FN                   &                      &                      & TP                   \\
-		& 174-non-sibling-taskdep                     & no                    & TP                   &                      &                      & FP                   \\
-		& 175-non-sibling-taskdep2                    & yes                   & FN                   &                      &                      & TP                   \\ \hline
-		\multicolumn{2}{l}{Taskgrind (OMP\_NUM\_THREADS=1)} & \multicolumn{1}{l|}{} & \multicolumn{1}{l}{} & \multicolumn{1}{l}{} &                      & \multicolumn{1}{l}{} \\ \hline
-		& memory-recycling-1                          & no                    & TN                   &                      & \multicolumn{1}{c}{} & TN                   \\
-		& stack-1                                     & yes                   & TP                   &                      & \multicolumn{1}{c}{} & TP                   \\
-		& stack-2                                     & no                    & TN                   &                      & \multicolumn{1}{c}{} & TN                   \\
-		& stack-3                                     & no                    & FP                   &                      & \multicolumn{1}{c}{} & TN                   \\
-		& stack-4                                     & yes                   & TP                   &                      & \multicolumn{1}{c}{} & TP                   \\
-		& stack-5                                     & no                    & FP                   &                      & \multicolumn{1}{c}{} & TN                   \\
-		& tls-1                                       & no                    & FP                   &                      & \multicolumn{1}{c}{} & TN                  
+	\small
+	\begin{tabular}{llc|cclc}                                                                                                                                                     
+		\multicolumn{3}{c|}{Micro-benchmarks suite}                                      & \multicolumn{4}{c}{Tool}                                                                    \\ \hline
+		\multicolumn{2}{l}{DRB (with OMP\_NUM\_THREADS=4)}       & Determinacy Race      & TaskSanitizer        & Archer               & ROMP                 & Taskgrind              \\ \hline
+		& 027-taskdependmissing-orig                             & yes                   & TP                   & FN                   & TP                   & TP                     \\
+		& 072-taskdep1-orig                                      & no                    & TN                   & TN                   & TN                   & TN                     \\
+		& 078-taskdep2-orig                                      & no                    & TN                   & TN                   & TN                   & FP                     \\
+		& 079-taskdep3-orig                                      & no                    & ncs                  & TN                   & TN                   & FP                     \\
+		& 095-doall2-taskloop-orig                               & yes                   & ncs                  & TP                   & TP                   & TP                     \\
+		& 096-doall2-taskloop-collapse-orig                      & no                    & ncs                  & TN                   & TN                   & FP                     \\
+		& 100-task-reference-orig                                & no                    & ncs                  & FP                   & TN                   & FP                     \\
+		& 101-task-value-orig                                    & no                    & FP                   & FP                   & TN                   & FP                     \\
+		& 106-taskwaitmissing-orig                               & yes                   & TP                   & TP                   & TP                   & TP                     \\
+		& 107-taskgroup-orig                                     & no                    & FP                   & TN                   & TN                   & FP                     \\
+		& 122-taskundeferred-orig                                & no                    & FP                   & TN                   & FP                   & TN                     \\
+		& 123-taskundeferred-orig                                & yes                   & TP                   & TP                   & TP                   & TP                     \\
+		& 127-tasking-threadprivate1-orig                        & no                    & ncs                  & TN                   & segv                 & FP                     \\
+		& 128-tasking-threadprivate2-orig                        & no                    & ncs                  & TN                   & TN                   & FP                     \\
+		& 129-mergeable-taskwait-orig                            & yes                   & ncs                  & FN                   & FN                   & FN                     \\
+		& 130-mergeable-taskwait-orig                            & no                    & ncs                  & TN                   & TN                   & TN                     \\
+		& 131-taskdep4-orig-omp45                                & yes                   & ncs                  & TP                   & TP                   & TP                     \\
+		& 132-taskdep4-orig-omp45                                & no                    & ncs                  & TN                   & TN                   & TN                     \\
+		& 133-taskdep5-orig-omp45                                & no                    & ncs                  & TN                   & TN                   & TN                     \\
+		& 134-taskdep5-orig-omp45                                & yes                   & ncs                  & TP                   & TP                   & TP                     \\
+		& 135-taskdep-mutexinoutset-orig                         & no                    & ncs                  & TN                   & FP                   & TN                     \\
+		& 136-taskdep-mutexinoutset-orig                         & yes                   & TP                   & TP                   & TP                   & TP                     \\
+		& 165-taskdep4-orig-omp50                                & yes                   & ncs                  & FN                   & TP                   & TP                     \\
+		& 166-taskdep4-orig-omp50                                & no                    & ncs                  & TN                   & TN                   & TN                     \\
+		& 167-taskdep4-orig-omp50                                & no                    & ncs                  & TN                   & TN                   & TN                     \\
+		& 168-taskdep5-orig-omp50                                & yes                   & ncs                  & TP                   & TP                   & TP                     \\
+		& 173-non-sibling-taskdep                                & yes                   & FN                   & FN                   & FN                   & TP                     \\
+		& 174-non-sibling-taskdep                                & no                    & TP                   & TN                   & TN                   & FP                     \\
+		& 175-non-sibling-taskdep2                               & yes                   & FN                   & TP                   & TP                   & TP                     \\ \hline
+		\multicolumn{2}{l}{Taskgrind (OMP\_NUM\_THREADS=1)}      & \multicolumn{1}{l|}{} & \multicolumn{1}{l}{} & \multicolumn{1}{l}{} & \multicolumn{1}{c}{} & \multicolumn{1}{l}{}   \\ \hline
+		& 1000-memory-recycling.1                                & no                    & TN                   & TN                   & TN                   & TN                     \\
+		& 1001-stack.1                                           & yes                   & TP                   & FN                   & FN                   & TP                     \\
+		& 1002-stack.2                                           & no                    & TN                   & TN                   & TN                   & TN                     \\
+		& 1003-stack.3                                           & no                    & FP                   & TN                   & TN                   & TN                     \\
+		& 1004-stack.4                                           & yes                   & TP                   & FN                   & TP                   & TP                     \\
+		& 1005-stack.5                                           & no                    & FP                   & TN                   & TN                   & TN                     \\
+		& 1006-tls.1                                             & no                    & FP                   & TN                   & TN                   & TN                     \\ \hline
+		\multicolumn{2}{l}{Taskgrind (OMP\_NUM\_THREADS=4)}      & \multicolumn{1}{l|}{} & \multicolumn{1}{l}{} & \multicolumn{1}{l}{} & \multicolumn{1}{c}{} & \multicolumn{1}{l}{}   \\ \hline
+		& 1000-memory-recycling.1                                & no                    & TN                   & TN                   & TN                   & FP                     \\
+		& 1001-stack.1                                           & yes                   & TP                   & FN/TP                & TP                   & TP                     \\
+		& 1002-stack.2                                           & no                    & TN                   & TN                   & TN                   & FP                     \\
+		& 1003-stack.3                                           & no                    & TN                   & TN                   & TN                   & TN                     \\
+		& 1004-stack.4                                           & yes                   & TP                   & TP                   & TP                   & TP                     \\
+		& 1005-stack.5                                           & no                    & TN                   & TN                   & TN                   & TN                     \\
+		& 1006-tls.1                                             & no                    & FP                   & TN                   & TN                   & FP                  
+	\end{tabular}
+	\caption{Micro-benchmark suites results}
+\end{table*}
+
+
+% Lulesh parameters were :  -s 16 -tel 4 -tnl 4 -p -i 4
+\begin{table*}[]
+	\label{tbl:results-lulesh}
+	\centering
+	\small
+	\begin{tabular}{cc|ccc|ccc|cc}
+		\multicolumn{1}{l}{}     & \multicolumn{1}{l|}{}              & \multicolumn{3}{c|}{Execution time (s.)}                                                   & \multicolumn{3}{c|}{Memory usage (MB.)}                                                    & \multicolumn{2}{c}{N° of reports} \\ \hline
+		\multicolumn{1}{l}{Racy} & \multicolumn{1}{l|}{N° of threads} & \multicolumn{1}{l}{No tools} & \multicolumn{1}{l}{Archer} & \multicolumn{1}{l|}{Taskgrind} & \multicolumn{1}{l}{No tools} & \multicolumn{1}{l}{Archer} & \multicolumn{1}{l|}{Taskgrind} & Archer           & Taskgrind      \\
+		\multirow{2}{*}{no}      & 1                                  & 0.01                         & 0.12                       & 1.23                           & 10                           & 41                         & 64                             & 0                & 0              \\
+		& 4                                  & 0.01                         & 0.43                       & deadlock                       & 15                           & 83                         & deadlock                       & 149 to 273       & deadlock       \\
+		\multirow{2}{*}{yes}     & 1                                  & 0.01                         & 0.12                       & 1.23                           & 10                           & 41                         & 64                             & 0                & 458            \\
+		& 4                                  & 0.01                         & 0.46                       & deadlock                       & 15                           & 84                         & deadlock                       & 140 to 221       & deadlock      
 	\end{tabular}
 \end{table*}
+
+\begin{figure*}[h]
+	\centering
+	\includegraphics[width=\linewidth]{figures/lulesh.pdf}
+	\caption{Memory and Execution time overheads on LULESH with parameters `-s \$s -tel 4 -tnl 4 -p -i 4`}
+	\label{fig:lulesh}
+\end{figure*}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Evaluation}
@@ -55,17 +86,30 @@ Task-based version of Cholesky, HPCCG, LULESH, nbody
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Footprint on Memory and Execution Time}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
-One benefit of Taskgrind over existing tool is its compact representation of dense memory accesses through an interval tree.
-- against uninstrumented versions, valgrind (no tool), valgrind (memcheck)
 
+On 12th Gen Intel(R) Core(TM) i5-12450H
+
+Execution time x100 - analysis time is x1000 - could be parallelized by exporting the segment graph / accesses and parallelizing analysis
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Determinacy Race Detection}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
-We evaluate Taskgrind determinacy race detection analysis through the DataRaceBenchmarks~\cite{drb} (commit e1bffc5), comparing with state of the art tools: TaskSanitizer~\cite{Matar18}, Archer~\cite{archer} and ROMP~\cite{ROMP}.
+We evaluate Taskgrind determinacy race detection analysis through the DataRaceBenchmarks~\cite{drb} (commit e1bffc5), comparing with state of the art tools: TaskSanitizer~\cite{Matar18} (commit a3d3b44, LLVM 8.x), Archer~\cite{archer} (LLVM 17.x) and ROMP~\cite{ROMP} (commit 4ea4ad5b, LLVM 14.x) comparing it with Taskgrind (commit XXXX, LLVM 17.x)
 We selected a subset of benchmarks that focuses on OpenMP task-based constructs, supported by Taskgrind.
 The results are depicted on \tbl{tbl:results-race-detection}.
 The first column is the benchmark name, the second is whether a data race is present, others columns depicts reports obtained by the tools understudy. Letter $(T, F, P, N)$ respectively stands for (true, false, positive, negative).
+
+We run Taskgrind benchmarks with a single-thread to force scenarios ... \romain{TODO}
+
+"ncs" stands for "no compiler support" on TaskSanitizer indicates that the test does not compile with Clang 8.x 
+"segv" on romp segv during instrumented execution
+
+
+With Archer, executing the same program sometimes yields different results (FN/TP)
+
+Romp/Archer/TaskSanitizer different results depending on the number of threads 
+
+)
 
 %129 - mergeable - the llvm implementation we had was not merging data environment, so no determinacy race detected: two distincts data environment are being accessed. - if we wanted to detect this, we should add the data environement and mergeable clause semantic to taskgrind.
 %TODO : can OMPT tell us the mapping between two data environement to detect such issue ?

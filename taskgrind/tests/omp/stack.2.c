@@ -1,4 +1,5 @@
 // racy: no
+// Could cause false-positive if the same thread schedule both tasks
 
 int
 main(void)

@@ -6,6 +6,7 @@ typedef struct  taskgrind_clo_s
     int dump;
     int instrumentlist;
     int ignorelist;
+    int noanalysis;
 }               taskgrind_clo_t;
 
 extern taskgrind_clo_t CLOS;

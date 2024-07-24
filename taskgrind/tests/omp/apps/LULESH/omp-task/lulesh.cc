@@ -3118,9 +3118,14 @@ void CalcTimeConstraintsForElems(Domain * domain)
     // Initialize conditions to a very large value
     TASK_SET_COLOR(iter);
     TASK_SET_LABEL("CalcTimeConstraintsForElems_init");
+# ifdef MAKE_IT_RACY
+    # pragma omp task default(none)                             \
+        firstprivate(domain)
+# else
     # pragma omp task default(none)                             \
         firstprivate(domain)                                    \
         depend(out: domain->m_dtcourant, domain->m_dthydro)
+# endif
     {
         domain->dtcourant() = 1.0e+20;
         domain->dthydro()   = 1.0e+20;

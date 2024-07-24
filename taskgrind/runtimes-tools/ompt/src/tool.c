@@ -71,9 +71,14 @@ on_ompt_callback_task_create(
     // For now, assume all tasks are deferable, else we may loose expressed parallelism
     if (NTHREADS == 1 && undeferred)
     {
-        fprintf(stderr, "Undefered task with NTHREADS==1 - cannot tell if undefered by "
-                "the runtime or by the user code... There may be "
-                "false-negative\n");
+        static int reported = 0;
+        if (!reported)
+        {
+            reported = 1;
+            fprintf(stderr, "Undefered task with NTHREADS==1 - cannot tell if undefered by "
+                    "the runtime or by the user code... There may be "
+                    "false-negative\n");
+        }
         undeferred = 0;
     }
     TASKGRIND_CREATE_EVENT(task_id, TASKGRIND_TASK_TYPE_EXPLICIT, undeferred);

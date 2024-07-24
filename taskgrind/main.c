@@ -486,15 +486,17 @@ taskgrind_clo_t CLOS = {
     .dump=0,
     .instrumentlist=0,
     .ignorelist=0,
+    .noanalysis=0,
 };
 
 static void
 taskgrind_print_usage(void)
 {
     VG_(printf)(
-"    --dump         Dump internal data structures to dot files\n"
-"    --instrumentlist    Only instrument accesses in functions of the instrumentlist\n"
-"    --ignorelist    Do not instrument accesses in functions of the instrumentlist\n"
+"    --dump            Dump internal data structures to dot files\n"
+"    --instrumentlist  Only instrument accesses in functions of the instrumentlist\n"
+"    --ignorelist      Do not instrument accesses in functions of the instrumentlist\n"
+"    --noanalysis      Only record the execution but perform no analysis\n"
    );
 }
 
@@ -524,6 +526,12 @@ taskgrind_process_cmd_line_option(const HChar * arg)
     if (VG_(strcmp)(arg, "--ignorelist") == 0)
     {
         CLOS.ignorelist = 1;
+        return True;
+    }
+
+    if (VG_(strcmp)(arg, "--noanalysis") == 0)
+    {
+        CLOS.noanalysis = 1;
         return True;
     }
 
@@ -643,10 +651,7 @@ taskgrind_prepare_env(HChar *** envp)
     TASKGRIND_INFO("Loading OMPT Plugin from %s", absolute_so);
     VG_(env_setenv)(envp, "OMP_TOOL_LIBRARIES", absolute_so);
     VG_(env_setenv)(envp, "LIBOMP_USE_HIDDEN_HELPER_TASK", "0");
-
-    // https://github.com/llvm/llvm-project/issues/89398#issuecomment-2066822457
     VG_(env_setenv)(envp, "KMP_ENABLE_TASK_THROTTLING", "0");
-//    VG_(env_setenv)(envp, "OMP_NUM_THREADS", "4");
 }
 
 VG_DETERMINE_INTERFACE_VERSION_WITH_ENV(taskgrind_pre_clo_init, taskgrind_prepare_env)

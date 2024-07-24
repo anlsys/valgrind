@@ -16,6 +16,8 @@ Many work-arounds for memory (free to NOOP, suppress errors on memory allocated 
 We could replace the LLVM allocator similarly to the system allocator.
 We would also like to actually release the memory, and add a concept of "memory liveness" 
 
+TOOD : figure out deadlock on lulesh for num-threads > 1
+
 TODO: Cilk/QThreads
 
 As opposed to compile-time instrumentation (such as LLVM Sanitizers), heavyweight DBA ensures no determinacy-race may be missed due to non-instrumented code.
