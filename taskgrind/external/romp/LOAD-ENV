@@ -1,0 +1,15 @@
+module purge
+. /home/rpereira/install/spack/share/spack/setup-env.sh
+spack load gcc@11.2.0
+spack load glog
+spack load dyninst@13.0.0~openmp
+spack load hwloc
+spack load gflags
+spack load boost
+spack load intel-tbb
+spack load cmake@3.29.6
+export DYNINSTAPI_RT_LIB=/home/rpereira/install/spack/opt/spack/linux-debian11-skylake_avx512/gcc-11.2.0/dyninst-13.0.0-jfobsxq22xz3gp7oquy27yrbgzz5wb4d/lib/libdyninstAPI_RT.so
+export ROMP_PATH=/home/rpereira/repo/romp/install/lib/libromp.so
+export PATH=/home/rpereira/repo/romp/install/bin:$PATH
+export LD_LIBRARY_PATH=/home/rpereira/install/spack/opt/spack/linux-debian11-skylake_avx512/gcc-11.2.0/dyninst-13.0.0-jfobsxq22xz3gp7oquy27yrbgzz5wb4d/lib/:$LD_LIBRARY_PATH
+export ROMP_REPORT=on
