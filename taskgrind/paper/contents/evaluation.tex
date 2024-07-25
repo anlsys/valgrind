@@ -80,7 +80,7 @@
 \end{table*}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Evaluation}
+\section{Evaluation} \label{sec:eval}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 Task-based version of Cholesky, HPCCG, LULESH, nbody
@@ -92,6 +92,9 @@ Task-based version of Cholesky, HPCCG, LULESH, nbody
 On 12th Gen Intel(R) Core(TM) i5-12450H
 
 Execution time x100 - analysis time is x1000 - could be parallelized by exporting the segment graph / accesses and parallelizing analysis
+
+We also evaluated LULESH using ROMP but omitted results from the figure, as the instrumented program crashes early during the first iteration of the application.
+Measurement on this first iteration shows that memory use and execution time follows a similar quadratic shape with \code{s}, but with much larger overheads: for \code{-s=64}, the execution time and memory use before the application crashes were respectively $79 s$ and $75GB$.
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Determinacy Race Detection}

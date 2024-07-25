@@ -4,10 +4,13 @@
 
 % https://www.cs.utexas.edu/~EWD/transcriptions/EWD03xx/EWD303.html
 
-This paper introduced Taskgrind: a Valgrind tool for parallel program memory accesses analysis.
-We implemented a determinacy race analysis.
-It targets application codes relying on a well-defined parallel programming model semantic, that needs to be bridged with its segment graph interfaces.
-Taskgrind currently embeds an OMPT tool with support for most OpenMP parallel constructs (for loops, tasks, dependences, targets, detach, ...).
+This paper introduced Taskgrind\footnote{\url{https://gitlab.inria.fr/ropereir/valgrind}}: a Valgrind tool for parallel program memory accesses analysis.
+It targets parallel programs that can be abstracted to a segment graph.
+As opposed to compile-time instrumentation (such as LLVM Sanitizers), heavyweight DBI ensures the instrumentation of every instructions of the program (even close-source) - aiming at no false-negative report due to non-instrumented segments.
+
+Taskgrind currently supports most of OpenMP programming model constructs.
+We implemented a determinacy race analysis and addressed some pitfalls bound to heavyweight dynamic binary instrumentation (DBI).
+As opposed to compile-time instrumentation (such as LLVM Sanitizers), heavyweight DBI ensures the instrumentation of every instructions of the program (even close-source) - aiming at no false-negative report due to non-instrumented segments.
 
 In the future, we would like to add more analysis.
 %For instance, to reduce tasking overhead by suggesting needless dependences removal.
@@ -20,7 +23,7 @@ TOOD : figure out deadlock on lulesh for num-threads > 1
 
 TODO: Cilk/QThreads
 
-As opposed to compile-time instrumentation (such as LLVM Sanitizers), heavyweight DBA ensures no determinacy-race may be missed due to non-instrumented code.
+As opposed to compile-time instrumentation (such as LLVM Sanitizers), heavyweight DBI ensures no determinacy-race may be missed due to non-instrumented code.
 However, it requires a lot of engineering to filter-out the many false-positive that can arise.
 We have illustrated a few in this paper such as memory recycling, thread-local accesses, and inherent non-determinacy of parallel runtime systems.
 

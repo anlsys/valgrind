@@ -5,16 +5,17 @@
 
 % CONTEXT
 
-\emph{Determinacy races} are concurrent programming hazards occuring when two accesses on the same memory address are not ordered, and at least one is writing~\cite{determinator}.
-The presence of determinacy races in a program makes its output given the same input nondeterministic, which may be the source of correctness errors.
+\emph{Determinacy races} are concurrent programming hazards occurring when two accesses on the same memory address are not ordered, and at least one is writing~\cite{determinator}.
+The presence of determinacy races in a program makes its output varying given the same input, which may be hint the presence of correctness errors.
 With ever growing intra-node parallelism of supercomputers, porting simulation codes while ensuring parallel execution correctness is challenging.
-It is particularly true with asynchronous task-based programming models ordered with dependences.
+It is particularly true with asynchronous and dependent task-based programming models, where a missing synchronization can lead to an incorrect order of execution.
 
 MOTIVATIONS
 
+\romain{Motivations here !! ROMP also uses DBI ... so gotta motivates differently !! probably around false-negative}
+
 Existing determinacy race detectors~\cite{archer,Matar18} relies on LLVM' ThreadSanitizer~\cite{thread-sanitizer-llvm}.
 
-Existing determinacy race detectors~\cite{archer,ROMP} -
 In the specific case of Archer~\cite{archer}, 
 
 Motivations and results of Archer~\cite{archer} showed the effectiveness (even at large scale) of such approach for debugging applications.
@@ -25,11 +26,16 @@ It requires the entire swith instrumentation enabled, otherwise, analysis may mi
 
 OBJECTIVES
 
-This paper explores the use of heavyweight dynamic binary instrumentation for determinacy race detection, towards no false-negative analysis.
+This paper explores the use of heavyweight dynamic binary instrumentation towards no false-negative determinacy race analysis. Our contribution are:
+\begin{itemize}
+	\item	the introduction of Taskgrind: a Valgrind tool for parallel programming model memory accesses analysis.
+	\item 	a survey on pitfalls related to heavyweight DBI in parallel programs,
+	\item 	the evaluation of a determinacy race analysis implemented into Taskgrind, comparing it to state of the art tools.
+\end{itemize}
 
--> Heavyweight~\cite{valgrind}
-
-CONTRIBUTIONS
-
-We introduce Taskgrind: a Valgrind tool for parallel programming model determinacy race detections.
-We survey issues related to heavyweight instrumentation.
+The paper is organized as follows.
+\sect{sec:background} provides background on races analysis and Valgrind.
+\sect{sec:taskgrind} introduces the design of Taskgrind and the determinacy race detector implementation.
+\sect{sec:pitfalls} presents a few pitfalls on parallel programs heavyweight DBI, and how Taskgrind workarounds them.
+\sect{sec:eval} evaluates Taskgrind overheads and its determinacy race detection analysis.
+Finally, \sect{sec:relworks} review the literature and we conclude in \sect{sec:conclusion}.

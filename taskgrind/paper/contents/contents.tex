@@ -1,5 +1,5 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Background}
+\section{Background} \label{sec:background}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
@@ -26,7 +26,7 @@ In addition, Valgrind provide utilities such as \emph{client requests} - so the 
 Valgrind also makes read/write instruction instrumentation rather simple through the VEX IR.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Taskgrind: a Tool for Parallel Program Memory Accesses Analysis}
+\section{Taskgrind: a Tool for Parallel Program Memory Accesses Analysis} \label{sec:taskgrind}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \begin{figure}[h]
@@ -103,20 +103,30 @@ Currently done after instrumenting in Valgrind
 \paragraph{Determinacy Race}
 Finding determinacy race given this graph becomes trivial - O(n²) with 'n' the number of segments
 
-foreach segment s1
-	foreach segment s2 != s1
-		if no path exists between s1 and s2
-			foreach address of s1.W n (s2.read u s2.write)
-				report determinacy race on X from segments s1 and s2
+\begin{algorithm}[h!t]
+	\caption{Determinacy Race Analysis Pass}
+	\label{alg:cg}
+	\begin{algorithmic}[1]
+		\Require{Segment graph $G$}
+		\ForEach {segment $s_1 \in G $}
+			\ForEach {segment $s_2 \in G \backslash \{s_1\}$}
+				\If {no path exists between $s_1$ and $s_2$}
+					\If {$s_1.w \cap (s_2.r \cup s_2.w)$ is not empty}
+						\State {Possible determinacy races on $s_1$ and $s_2$}
+					\EndIf
+				\EndIf
+			\EndFor
+		\EndFor
+	\end{algorithmic}
+\end{algorithm}
 
 No false-negative, hence detecting semantical errors even if the execution was correct.
 
-\paragraph{???}
-
+TRANSITION: line 7 - may report many false-positive
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Pitfalls with Heavyweight Instrumentation}
+\section{Pitfalls with Heavyweight Instrumentation} \label{sec:pitfalls}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 The original motivations of Taskgrind were to avoid false-negative detection by instrumenting every instructions of the program understudy.
@@ -180,7 +190,7 @@ Extending the support of memory allocators is kept as future work.
 %\end{minipage}
 
 Thread-local accesses are also a source of false-positive.
-For instance, it includes memory allocated via the \code{pthread_key_create} interface, C11 \code{_Thread_local} specifier, or OpenMP \code'threadprivate} directive.
+For instance, it includes memory allocated via the \code{pthread_key_create} interface, C11 specifier \code{_Thread_local}, or OpenMP \code{threadprivate} directive.
 We focus on the support of the \code{_Thread_local} specifier, but concepts could be extended to other thread-local storage.
 
 On the \listing{lst:thread-local-false-positive}, both $T(0)$ and $T(1)$ may be scheduled on the same thread, and Taskgrind would record two independent tasks writing the same memory location.

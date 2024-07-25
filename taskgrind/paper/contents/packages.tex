@@ -105,6 +105,7 @@
     morekeywords={_Thread_local}
 }
 
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %               PSEUDO-CODE REQUIRED PACKAGES                                     %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -116,6 +117,9 @@
 \usepackage[noend]{algpseudocode}
 \usepackage{etoolbox}
 \makeatletter
+
+\algnewcommand\algorithmicforeach{\textbf{for each}}
+\algdef{S}[FOR]{ForEach}[1]{\algorithmicforeach\ #1\ \algorithmicdo}
 
 % Defines custom \On ... \EndOn block
 \algblockdefx[LOCK]{Lock}{Unlock}[1]{\textbf{lock}~#1~\textbf{then}}

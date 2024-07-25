@@ -8,8 +8,8 @@ Talk about commutativity of accesses - currently not supported by Taskgrind (exe
 
 Extended from - LLOV: A Fast Static Data-Race Checker for OpenMP Programs
 
-                         LLOV         Archer          ROMP          TaskSanitizer        Taskgrind
-Instrumentation      compile-time  compile-time   JIT translation  compile-time       JIT translation
+                         LLOV         Archer          ROMP           TaskSanitizer        Taskgrind
+Instrumentation      compile-time  compile-time   binary rewritting  compile-time    binary JIT translation
 OpenMP Support
    for					 yes	        yes          yes             yes                yes
    critical, atomic      no             yes          yes             yes                no
