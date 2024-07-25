@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg
    width="292.50903mm"
-   height="79.442261mm"
-   viewBox="0 0 29250.903 7944.2261"
+   height="73.718674mm"
+   viewBox="0 0 29250.903 7371.8674"
    version="1.1"
    stroke-width="28.222"
    stroke-linejoin="round"
    xml:space="preserve"
    id="svg2006"
-   sodipodi:docname="execution-time.svg"
+   sodipodi:docname="lulesh.svg"
    inkscape:version="1.1.2 (0a00cf5339, 2022-02-04)"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
@@ -26,7 +26,7 @@
    showgrid="false"
    inkscape:zoom="0.99880208"
    inkscape:cx="496.59488"
-   inkscape:cy="58.069562"
+   inkscape:cy="36.043177"
    inkscape:window-width="1920"
    inkscape:window-height="1043"
    inkscape:window-x="0"
@@ -160,7 +160,8 @@
  
  
 <g
-   id="g14260"><g
+   id="g14260"
+   transform="translate(-1.0588646e-6,-572.35878)"><g
      id="g13688"
      transform="translate(-495.74345,-461.70652)"><path
        fill="none"
@@ -852,26 +853,6 @@
              stroke="none"
              style="white-space:pre"
              id="tspan2388">1200</tspan></tspan></tspan></text><text
-       class="SVGTextShape"
-       id="text2402"
-       x="-821.12604"
-       y="-250.32597"
-       style="font-size:16.3933px;stroke-width:38.5542"><tspan
-         class="TextParagraph"
-         id="tspan2400"
-         style="stroke-width:38.5542"><tspan
-           class="TextPosition"
-           x="5151.4854"
-           y="893.10406"
-           id="tspan2398"
-           style="stroke-width:38.5542"><tspan
-             font-family="'Liberation Sans', sans-serif"
-             font-size="627.042px"
-             font-weight="400"
-             fill="#000000"
-             stroke="none"
-             style="white-space:pre;stroke-width:52.6691"
-             id="tspan2396">Memory usage</tspan></tspan></tspan></text><text
        class="SVGTextShape"
        id="text2452"
        x="-3577.925"
@@ -1772,24 +1753,4 @@
            fill="#000000"
            stroke="none"
            style="white-space:pre;stroke-width:63.9007"
-           id="tspan1998">Time (in s.)</tspan></tspan></tspan></text><text
-     class="SVGTextShape"
-     id="text5048"
-     x="11943.914"
-     y="-571.7063"
-     style="font-size:16.3933px;stroke-width:38.5542"><tspan
-       class="TextParagraph"
-       id="tspan5046"
-       style="stroke-width:38.5542"><tspan
-         class="TextPosition"
-         x="17916.525"
-         y="571.72369"
-         id="tspan5044"
-         style="stroke-width:38.5542"><tspan
-           font-family="'Liberation Sans', sans-serif"
-           font-size="627.042px"
-           font-weight="400"
-           fill="#000000"
-           stroke="none"
-           style="white-space:pre;stroke-width:52.6691"
-           id="tspan5042">Execution time</tspan></tspan></tspan></text></g></svg>
+           id="tspan1998">Time (in s.)</tspan></tspan></tspan></text></g></svg>

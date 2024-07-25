@@ -37,7 +37,7 @@ Valgrind also makes read/write instruction instrumentation rather simple through
 	\label{fig:taskgrind}
 \end{figure}
 
-Taskgrind is a Valgrind tool designed analysis of parallel program memory accesses.
+Taskgrind is a Valgrind tool designed for the analysis of parallel program memory accesses.
 Its design is described on \fig{fig:taskgrind}.
 The application to be analyzed may be any programs supported by Valgrind.
 It must rely on a parallel programming model that implements Taskgrind client requests.
@@ -84,7 +84,7 @@ Remark:
 	\centering
 	\includegraphics[width=
 	\linewidth]{figures/interval-tree.pdf}
-	\caption{Write memory accesses interval tree for the right-side segment}
+	\caption{Write interval tree for the right-side segment}
 	\label{fig:interval-tree}
 \end{figure}
 
@@ -119,12 +119,28 @@ No false-negative, hence detecting semantical errors even if the execution was c
 \section{Pitfalls with Heavyweight Instrumentation}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-But, way too many false-positive error reports.
-We identified at least the three following.
+The original motivations of Taskgrind were to avoid false-negative detection by instrumenting every instructions of the program understudy.
+However, naively running Taskgrind and its determinacy race analysis leads to an immeasurable number of false-positives.
+Instrumenting an OpenMP dependent task-based version of LULESH~\footnote{\url{https://github.com/rpereira-dev/LULESH}} reports about 400,000 determinacy races with a low problem size \code{-s~4} (the mesh size) and low parallelism \code{-tel~2} (the number of tasks per loop).
+This section presents a few source of false-positives, illustrated with OpenMP, and how Taskgrind suppresses them.
+
+% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+\subsection{Parallel Runtimes Non-Determinacy}
+% - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+Reporting every determinacy races is not always relevant for correctness analysis.
+In facts, correct parallel runtime system (in the sense that they respect their specifications) can be non-deterministic themselves.
+For instance, OpenMP and Cilk implementations relies on work-stealing task scheduling: given the same tasks, different execution may lead to different scheduling.
+
+In order to disable the report of such unharmful determinacy races, we added two lists of symbol: the \emph{ignore-list} and the \emph{instrument-list}.
+The former one tells Taskgrind to disables instrumentation for accesses occuring in a symbol matching any.
+The latter one tells Taskgrind to only instrument accesses occuring in a symbol matching any.
+For instance, the \emph{ignore-list} contains prefixed with \code{__kmp} corresponding to LLVM' OpenMP runtime.
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Memory Recycling}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+
+%\begin{minipage}{\linewidth}
 \begin{lstlisting}[style=CStyle, captionpos=b, caption={Memory Recycling false-positives}, label={lst:memory-recycling-false-positive}]
 for (int i = 0 ; i < 2 ; i++)
 {
@@ -136,33 +152,65 @@ for (int i = 0 ; i < 2 ; i++)
 	}
 }
 \end{lstlisting}
+%\end{minipage}
 
-Memory allocator recycling may leads to false-positive reports as shown on \listing{lst:memory-recycling-false-positive}.
-Segments associated to OpenMP tasks $T(0)$ and $T(1)$ are declared independent, but run-time scheduling may lead to the system allocator to allocate/deallocate the same memory location $x$ by recycling memory.
-Taskgrind currently bypasses the issue by overloading the system allocator and removing memory deallocation calls such as \code{free} or \code{delete}.
-\romain{one more sentence to explain why it fixes the issue}
+Another source of false-positive stems in memory allocators.
+\listing{lst:memory-recycling-false-positive} shows a minimal example, where two tasks allocates memory, writes on it, and deallocate it.
+While segments associated to OpenMP tasks $T(0)$ and $T(1)$ are declared independent, but run-time scheduling may lead the system allocator to allocate/deallocate the same memory location $x$ by recycling memory.
+Taskgrind currently bypasses this issue by overloading the system allocator, using Valgrind existing interfaces.
+It transforms memory deallocation calls such as \code{free} or \code{delete} to a \code{no-op}.
+This workaround ensures that two allocations will always point to distinct memory addresses, removing false-positive coming from recycling.
+
+It must be noted that Valgrind memory allocator overriding does not support custom memory allocators.
+For instance, the LLVM OpenMP runtime 19.x has its own memory allocator that can also perform memory recycling (\code{___kmp_fast_allocate}).
+Extending the support of memory allocators is kept as future work.
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Thread-Local Accesses}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
-- Stack accesses
-	- we register the frame pointer
-- Thread Local Storage (TLS)~\cite{elf-tls}
-	- standard with `-Thread-local` : OK, Valgrind already has some routines to help parsing TCB/DTV
-	- non-standard
-		- `array[omp-get-thread-num()]` or same with pthreads... can hardly be detected
+
+%\begin{minipage}{\linewidth}
+\begin{lstlisting}[style=CStyle, captionpos=b, caption={Memory Recycling false-positives}, label={lst:thread-local-false-positive}]
+	_Thread_local int * x;
+	[...]
+	for (int i = 0 ; i < 2 ; i++)
+	    <@\textcolor{mBlue}{\# pragma omp task}@>	// T(i)
+	        write(x);
+\end{lstlisting}
+%\end{minipage}
+
+Thread-local accesses are also a source of false-positive.
+For instance, it includes memory allocated via the \code{pthread_key_create} interface, C11 \code{_Thread_local} specifier, or OpenMP \code'threadprivate} directive.
+We focus on the support of the \code{_Thread_local} specifier, but concepts could be extended to other thread-local storage.
+
+On the \listing{lst:thread-local-false-positive}, both $T(0)$ and $T(1)$ may be scheduled on the same thread, and Taskgrind would record two independent tasks writing the same memory location.
+In order to suppress such false-positive, Taskgrind records the Thread Local Storage (TLS)~\cite{elf-tls} information of the executing thread.
+The Thread Control Block (TCB) and the Dynamic Thread Vector (DTV) are attached to the segment when it completes.
+In the determinacy race analysis, if both accesses occured on the same thread and in the same DTV, then the report is suppressed.
+
+Though, this approach is limited.
+A segment could allocate a new DTV block, access it, and de-allocate it before the segment completion; which means it would not appear in the recorded DTV.
+Such case scenario would still lead false-positive reports by the determinacy race analysis.
+Using TLS \emph{gen} number, Taskgrind could detect a change of the DTV structure that occured during the segment execution and warn the user, but false-positive would still be reported.
+A better solution kept as future work is to use Valgrind function replacement for TLS allocation/de-allocation, record TCB/DTV while splitting the current segment when it occurs.
+
+Another limitation is \emph{user-based} thread-local accesses.
+A pattern commonly found in OpenMP code is indexing an array with the executing thread - \code{array[omp_get_thread_num()]} - which is not detected currently by Taskgrind.
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
-\subsection{Parallel Runtimes Non-Determinacy}
+\subsection{Segment-Local Accesses}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
-Non-determinacy is not always an issue.
-For instance, most OpenMP implementation task-scheduling is non-deterministic it-self : given a task-based program and its input, tasks may be scheduled in different partial order and on different cores.
-We simply blacklist all the parallel runtime system symbols from instrumentation to avoid reporting such issues.
 
-Talk about Bening Data Races
+%\begin{minipage}{\linewidth}
+\begin{lstlisting}[style=CStyle, captionpos=b, caption={Memory Recycling false-positives}, label={lst:task-local-false-positive}]
+	for (int i = 0 ; i < 2 ; i++)
+		<@\textcolor{mBlue}{\# pragma omp task}@>	// T(i)
+			int x = 0;
+\end{lstlisting}
+%\end{minipage}
 
-Floating point order
-
-
-
-
+The last source of false-positive suppression presented in this paper is depicted on
+\listing{lst:task-local-false-positive}.
+Running with code with LLVM' OpenMP, both segments associated with tasks $T(0)$ and $T(1)$ may be executed on the same thread. With LLVM/GCC implementation, $x$ is pushed onto the executing thread stack, resulting in two independent and conflicting accesses when analyzing.
+In order to suppress such false-positive, Taskgrind registers the stack frame address at the start of a segment.
+Then, during the determinacy analysis, such false-positive may be suppressed by confronting conflicting stack-accesses with registered stack frame addresses.

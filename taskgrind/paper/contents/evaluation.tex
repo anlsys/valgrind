@@ -1,3 +1,11 @@
+
+\begin{figure*}[h]
+	\centering
+	\includegraphics[width=\linewidth]{figures/lulesh.pdf}
+	\caption{Memory and Execution time overheads on LULESH with parameters `-s \$s -tel 4 -tnl 4 -p -i 4`}
+	\label{fig:lulesh}
+\end{figure*}
+
 \begin{table*}[]
 	\label{tbl:results-race-detection}
 	\centering
@@ -5,46 +13,46 @@
 	\begin{tabular}{llc|cclc}                                                                                                                                                     
 		\multicolumn{3}{c|}{Micro-benchmarks suite}                                      & \multicolumn{4}{c}{Tool}                                                                    \\ \hline
 		\multicolumn{2}{l}{DRB (with OMP\_NUM\_THREADS=4)}       & Determinacy Race      & TaskSanitizer        & Archer               & ROMP                 & Taskgrind              \\ \hline
-		& 027-taskdependmissing-orig                             & yes                   & TP                   & FN                   & TP                   & TP                     \\
+		& 027-taskdependmissing-orig                             & yes                   & TP                   & \textbf{FN}          & TP                   & TP                     \\
 		& 072-taskdep1-orig                                      & no                    & TN                   & TN                   & TN                   & TN                     \\
 		& 078-taskdep2-orig                                      & no                    & TN                   & TN                   & TN                   & FP                     \\
-		& 079-taskdep3-orig                                      & no                    & ncs                  & TN                   & TN                   & FP                     \\
-		& 095-doall2-taskloop-orig                               & yes                   & ncs                  & TP                   & TP                   & TP                     \\
-		& 096-doall2-taskloop-collapse-orig                      & no                    & ncs                  & TN                   & TN                   & FP                     \\
-		& 100-task-reference-orig                                & no                    & ncs                  & FP                   & TN                   & FP                     \\
+		& 079-taskdep3-orig                                      & no                    & \emph{ncs}           & TN                   & TN                   & FP                     \\
+		& 095-doall2-taskloop-orig                               & yes                   & \emph{ncs}           & TP                   & TP                   & TP                     \\
+		& 096-doall2-taskloop-collapse-orig                      & no                    & \emph{ncs}           & TN                   & TN                   & FP                     \\
+		& 100-task-reference-orig                                & no                    & \emph{ncs}           & FP                   & TN                   & FP                     \\
 		& 101-task-value-orig                                    & no                    & FP                   & FP                   & TN                   & FP                     \\
 		& 106-taskwaitmissing-orig                               & yes                   & TP                   & TP                   & TP                   & TP                     \\
 		& 107-taskgroup-orig                                     & no                    & FP                   & TN                   & TN                   & FP                     \\
 		& 122-taskundeferred-orig                                & no                    & FP                   & TN                   & FP                   & TN                     \\
 		& 123-taskundeferred-orig                                & yes                   & TP                   & TP                   & TP                   & TP                     \\
-		& 127-tasking-threadprivate1-orig                        & no                    & ncs                  & TN                   & segv                 & FP                     \\
-		& 128-tasking-threadprivate2-orig                        & no                    & ncs                  & TN                   & TN                   & FP                     \\
-		& 129-mergeable-taskwait-orig                            & yes                   & ncs                  & FN                   & FN                   & FN                     \\
-		& 130-mergeable-taskwait-orig                            & no                    & ncs                  & TN                   & TN                   & TN                     \\
-		& 131-taskdep4-orig-omp45                                & yes                   & ncs                  & TP                   & TP                   & TP                     \\
-		& 132-taskdep4-orig-omp45                                & no                    & ncs                  & TN                   & TN                   & TN                     \\
-		& 133-taskdep5-orig-omp45                                & no                    & ncs                  & TN                   & TN                   & TN                     \\
-		& 134-taskdep5-orig-omp45                                & yes                   & ncs                  & TP                   & TP                   & TP                     \\
-		& 135-taskdep-mutexinoutset-orig                         & no                    & ncs                  & TN                   & FP                   & TN                     \\
+		& 127-tasking-threadprivate1-orig                        & no                    & \emph{ncs}           & TN                   & \emph{segv}          & FP                     \\
+		& 128-tasking-threadprivate2-orig                        & no                    & \emph{ncs}           & TN                   & TN                   & FP                     \\
+		& 129-mergeable-taskwait-orig                            & yes                   & \emph{ncs}           & \textbf{FN}          & \textbf{FN}          & \textbf{FN}            \\
+		& 130-mergeable-taskwait-orig                            & no                    & \emph{ncs}           & TN                   & TN                   & TN                     \\
+		& 131-taskdep4-orig-omp45                                & yes                   & \emph{ncs}           & TP                   & TP                   & TP                     \\
+		& 132-taskdep4-orig-omp45                                & no                    & \emph{ncs}           & TN                   & TN                   & TN                     \\
+		& 133-taskdep5-orig-omp45                                & no                    & \emph{ncs}           & TN                   & TN                   & TN                     \\
+		& 134-taskdep5-orig-omp45                                & yes                   & \emph{ncs}           & TP                   & TP                   & TP                     \\
+		& 135-taskdep-mutexinoutset-orig                         & no                    & \emph{ncs}           & TN                   & FP                   & TN                     \\
 		& 136-taskdep-mutexinoutset-orig                         & yes                   & TP                   & TP                   & TP                   & TP                     \\
-		& 165-taskdep4-orig-omp50                                & yes                   & ncs                  & FN                   & TP                   & TP                     \\
-		& 166-taskdep4-orig-omp50                                & no                    & ncs                  & TN                   & TN                   & TN                     \\
-		& 167-taskdep4-orig-omp50                                & no                    & ncs                  & TN                   & TN                   & TN                     \\
-		& 168-taskdep5-orig-omp50                                & yes                   & ncs                  & TP                   & TP                   & TP                     \\
-		& 173-non-sibling-taskdep                                & yes                   & FN                   & FN                   & FN                   & TP                     \\
+		& 165-taskdep4-orig-omp50                                & yes                   & \emph{ncs}           & \textbf{FN}          & TP                   & TP                     \\
+		& 166-taskdep4-orig-omp50                                & no                    & \emph{ncs}           & TN                   & TN                   & TN                     \\
+		& 167-taskdep4-orig-omp50                                & no                    & \emph{ncs}           & TN                   & TN                   & TN                     \\
+		& 168-taskdep5-orig-omp50                                & yes                   & \emph{ncs}           & TP                   & TP                   & TP                     \\
+		& 173-non-sibling-taskdep                                & yes                   & \textbf{FN}          & \textbf{FN}          & \textbf{FN}          & TP                     \\
 		& 174-non-sibling-taskdep                                & no                    & TP                   & TN                   & TN                   & FP                     \\
-		& 175-non-sibling-taskdep2                               & yes                   & FN                   & TP                   & TP                   & TP                     \\ \hline
+		& 175-non-sibling-taskdep2                               & yes                   & \textbf{FN}          & TP                   & TP                   & TP                     \\ \hline
 		\multicolumn{2}{l}{Taskgrind (OMP\_NUM\_THREADS=1)}      & \multicolumn{1}{l|}{} & \multicolumn{1}{l}{} & \multicolumn{1}{l}{} & \multicolumn{1}{c}{} & \multicolumn{1}{l}{}   \\ \hline
 		& 1000-memory-recycling.1                                & no                    & TN                   & TN                   & TN                   & TN                     \\
-		& 1001-stack.1                                           & yes                   & TP                   & FN                   & FN                   & TP                     \\
+		& 1001-stack.1                                           & yes                   & TP                   & \textbf{FN}          & \textbf{FN}          & TP                     \\
 		& 1002-stack.2                                           & no                    & TN                   & TN                   & TN                   & TN                     \\
 		& 1003-stack.3                                           & no                    & FP                   & TN                   & TN                   & TN                     \\
-		& 1004-stack.4                                           & yes                   & TP                   & FN                   & TP                   & TP                     \\
+		& 1004-stack.4                                           & yes                   & TP                   & \textbf{FN}          & TP                   & TP                     \\
 		& 1005-stack.5                                           & no                    & FP                   & TN                   & TN                   & TN                     \\
 		& 1006-tls.1                                             & no                    & FP                   & TN                   & TN                   & TN                     \\ \hline
 		\multicolumn{2}{l}{Taskgrind (OMP\_NUM\_THREADS=4)}      & \multicolumn{1}{l|}{} & \multicolumn{1}{l}{} & \multicolumn{1}{l}{} & \multicolumn{1}{c}{} & \multicolumn{1}{l}{}   \\ \hline
 		& 1000-memory-recycling.1                                & no                    & TN                   & TN                   & TN                   & FP                     \\
-		& 1001-stack.1                                           & yes                   & TP                   & FN/TP                & TP                   & TP                     \\
+		& 1001-stack.1                                           & yes                   & TP                   & \textbf{FN/TP}       & TP                   & TP                     \\
 		& 1002-stack.2                                           & no                    & TN                   & TN                   & TN                   & FP                     \\
 		& 1003-stack.3                                           & no                    & TN                   & TN                   & TN                   & TN                     \\
 		& 1004-stack.4                                           & yes                   & TP                   & TP                   & TP                   & TP                     \\
@@ -68,14 +76,8 @@
 		\multirow{2}{*}{yes}     & 1                                  & 0.01                         & 0.12                       & 1.23                           & 10                           & 41                         & 64                             & 0                & 458            \\
 		& 4                                  & 0.01                         & 0.46                       & deadlock                       & 15                           & 84                         & deadlock                       & 140 to 221       & deadlock      
 	\end{tabular}
+	\caption{Execution time, memory usage overheads and number of reports for Archer and Taskgrind, on a dependent task-based OpenMP implementation of LULESH with -s 16 -tel 4 -tnl 4 -p -i 4}
 \end{table*}
-
-\begin{figure*}[h]
-	\centering
-	\includegraphics[width=\linewidth]{figures/lulesh.pdf}
-	\caption{Memory and Execution time overheads on LULESH with parameters `-s \$s -tel 4 -tnl 4 -p -i 4`}
-	\label{fig:lulesh}
-\end{figure*}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Evaluation}
