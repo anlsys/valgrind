@@ -132,10 +132,16 @@ typedef struct  task_seg_s
     // TLS information when this segment terminated
     struct {
 
-        // Address of the TCB (frontier between TCB and static TLS)
+        // TLS generation number at the start of the segment execution
+        ULong gen0;
+
+        // Address of the TCB at the start of the segment execution
+        Addr tp0;
+
+        // Address of the TCB (frontier between TCB and static TLS) at the end of the segment execution
         Addr tp;
 
-        // Array of couple (a, b) representing a TLS block [a; b[
+        // Array of couple (a, b) representing a TLS block [a; b[ at the end of the segment execution
         array_t dtv;
 
     } tls;

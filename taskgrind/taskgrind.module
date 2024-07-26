@@ -13,3 +13,5 @@ prepend-path PATH  "$prefix/bin"
 prepend-path CPATH "$prefix/include"
 prepend-path LD_LIBRARY_PATH  "$prefix/lib/valgrind"
 prepend-path LD_LIBRARY_PATH  "$prefix/libexec/valgrind"
+
+set-env TASKGRIND_OMPT "[...]"

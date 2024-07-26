@@ -65,6 +65,10 @@ on_ompt_callback_task_create(
 
     taskgrind_task_type_t type = (flags & ompt_task_explicit) ? TASKGRIND_TASK_TYPE_EXPLICIT : TASKGRIND_TASK_TYPE_IMPLICIT;
     unsigned int undeferred = (flags & ompt_task_undeferred) ? 1 : 0;
+
+    if (flags & ompt_task_mergeable)
+        fprintf(stderr, "warning: 'mergeable' clause semantic is not supported by taskgrind, you may have false-negative!!\n");
+
     // TODO : with OMP_NUM_THREADS=1, LLVM sets every tasks as 'undeferred', so we
     // cannot really track whether the task is undeferred because of user code
     // or runtime implementation

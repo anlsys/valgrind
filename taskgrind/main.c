@@ -142,18 +142,21 @@ taskgrind_handle_client_request(ThreadId tid, UWord * arg, UWord * ret)
             // TODO : what is the client request '0x4d430101' that appeared
             // between June 2023 and June 2024 ?
 
-            static int done = 0;
             if (arg[0] == 0x4d430101)
+            {
+                static int done = 0;
                 if (!done)
                     done = 1;
                 else
                     return False;
+            }
 
             TASKGRIND_WARN("Unknown client request code %llx", (ULong)arg[0]);
 
             return False;
         }
     }
+    return False;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -646,12 +649,16 @@ taskgrind_prepare_env(HChar *** envp)
     // VG_(strcpy)(absolute_so, VG_(libdir));
     // VG_(strcat)(absolute_so, relative_so);
 
-    HChar * absolute_so = "/home/pereirar/repos/valgrind/taskgrind/runtimes-tools/ompt/build/libtaskgrind_omp.so";
-
-    TASKGRIND_INFO("Loading OMPT Plugin from %s", absolute_so);
-    VG_(env_setenv)(envp, "OMP_TOOL_LIBRARIES", absolute_so);
-    VG_(env_setenv)(envp, "LIBOMP_USE_HIDDEN_HELPER_TASK", "0");
-    VG_(env_setenv)(envp, "KMP_ENABLE_TASK_THROTTLING", "0");
+    HChar * absolute_so = VG_(getenv)("TASKGRIND_OMPT");
+    if (absolute_so == NULL)
+        TASKGRIND_WARN("OMPT tool not found - please build 'libtaskgrind_omp.so' and set 'TASKGRIND_OMPT'");
+    else
+    {
+        TASKGRIND_INFO("Loading OMPT Plugin from %s", absolute_so);
+        VG_(env_setenv)(envp, "OMP_TOOL_LIBRARIES", absolute_so);
+        VG_(env_setenv)(envp, "LIBOMP_USE_HIDDEN_HELPER_TASK", "0");
+        VG_(env_setenv)(envp, "KMP_ENABLE_TASK_THROTTLING", "0");
+    }
 }
 
 VG_DETERMINE_INTERFACE_VERSION_WITH_ENV(taskgrind_pre_clo_init, taskgrind_prepare_env)

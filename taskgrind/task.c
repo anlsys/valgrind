@@ -235,6 +235,33 @@ typedef struct
 
 #endif
 
+static inline void
+task_seg_begin(task_seg_t * seg)
+{
+    ThreadId tid = VG_(get_running_tid)();
+    tl_assert(tid != VG_INVALID_THREADID);
+
+    seg->ctx = VG_(record_ExeContext)(tid, 0);
+    tl_assert(seg->ctx);
+
+    VexGuestArchState * state = VG_(get_CurrentThreadArchState)();
+# if defined(VGA_amd64) || defined(VGA_x86)
+
+#  if defined(VGA_amd64)
+    seg->tls.tp0 = (Addr) state->guest_FS_CONST;
+#  else /* defined(VGA_x86) */
+    seg->tls.tp0 = (Addr) state->guest_FS;
+# endif
+
+    Addr ** dtv_loc = (Addr **) (seg->tls.tp0 + 0x8);
+    dtv_t * dtv = (dtv_t *) dtv_loc[0];
+    seg->tls.gen0 = dtv[0].gen;
+
+#else
+# pragma message("TLS support not implemented for this architecture")
+# endif
+}
+
 // the given segment terminated
 static inline void
 task_seg_fini(task_t * task, task_seg_t * seg)
@@ -258,6 +285,9 @@ task_seg_fini(task_t * task, task_seg_t * seg)
 
     Addr ** dtv_loc = (Addr **) (seg->tls.tp + 0x8);
     dtv_t * dtv = (dtv_t *) dtv_loc[0];
+
+    if (dtv[0].gen != seg->tls.gen0 && seg->tls.tp0 == seg->tls.tp)
+        TASKGRIND_WARN("TLS changed during a segment (uid=%lu) execution", seg->uid);
 
     // assertion for Variant II
     // tl_assert(              seg->tls.tp < (Addr) dtv);
@@ -728,14 +758,10 @@ static inline void
 task_seg_mem_access(task_seg_t * seg, Addr addr, SizeT size)
 {
     if (seg->ctx == NULL)
-    {
-        ThreadId tid = VG_(get_running_tid)();
-        if (tid != VG_INVALID_THREADID)
-            seg->ctx = VG_(record_ExeContext)(tid, 0);
-    }
+        task_seg_begin(seg);
 
     # if 0
-    if (addr == 0x1FFEFFF068)
+    if (addr == 0x1FFEFFF080)
     {
         TASKGRIND_DEBUG("Checking address %p on segment %u", (void *) addr, seg->uid);
         ThreadId tid = VG_(get_running_tid)();
@@ -828,9 +854,12 @@ task_mem_store_atomic(Addr addr, SizeT size)
 void
 task_fork(UWord fork_id)
 {
-    //           o       <- source
-    //          / \
-    // sink->  o         <- future thread' implicit task (including the current hread)
+    /**
+     *           o       <- source
+     *          / \
+     * sink->  o         <- future thread' implicit task (including the current thread)
+     *
+     */
 
     task_t * task = task_get_current();
     tl_assert(task);
