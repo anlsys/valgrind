@@ -122,8 +122,7 @@ If the intersection is not empty, then a determinacy race may be reported.
 \end{algorithm}
 
 In order to provide meaningful report to the programmer, Taskgrind overloads the memory allocator using Valgrind interfaces, to save a stack trace on each memory block allocation, so conflicting accesses can be matched with source-code location reading debugging information if compiled-in the binary.
-
-
+    
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Pitfalls with Heavyweight Instrumentation} \label{sec:pitfalls}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -173,6 +172,10 @@ This workaround ensures that two allocations will always point to distinct memor
 It must be noted that Valgrind memory allocator overriding does not support custom memory allocators.
 For instance, the LLVM OpenMP runtime 19.x has its own memory allocator that can also perform memory recycling (\code{___kmp_fast_allocate}).
 Extending the support of memory allocators is kept as future work.
+
+
+% TODO : move me if needed
+\input{contents/evaluations-table.tex}
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Thread-Local Accesses}
