@@ -91,7 +91,7 @@ Remark:
 The Taskgrind plugin constructs a segment tree from passed client requests.
 It keeps track of the active segment on each thread, and each segment is attached two interval trees to compactly maintain \emph{read} and \emph{write} accesses location per segment.
 \fig{fig:interval-tree}.
-Such structure allows to compactly accumulate dense memory accesses, and to have a light $O(log \; n)$ complexity on most tree operations used in later analysis - $n$ being the number of irregular accesses, that is $3$ on the minimal example.
+Such structure allows to compactly accumulate dense memory accesses, and to have a light $O(log \; n)$ complexity on most tree operations used in later analysis - $n$ being the number of dense interval accessed.
 
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%

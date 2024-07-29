@@ -84,7 +84,7 @@
 \section{Evaluation} \label{sec:eval}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-We conduct several experiments to assess on Taskgrind determinacy race analysis precision, and on its overhead over execution time and memory use\footnote{Software versions and source code are referenced in the Appendix of this document.}.
+We conducted experiments on Taskgrind determinacy race analysis, and on its overhead over execution time and memory use\footnote{Software versions and source code are referenced in the Appendix of this document.}.
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Microbenchmarks}
@@ -107,7 +107,7 @@ As Taskgrind's main objective is to avoid false negative reports, we have highli
 Amongst all the tool, it reports the least false-negative with only a single one on \emph{DRB129-mergeable-taskwait-orig}.
 It evaluates the support for OpenMP \code{mergeable} clause which semantic is not supported by Taskgrind, nor by TaskSanitizer, Archer, or ROMP.
 Single-thread execution of TMB reports 100\% accuracy while other tools does not.
-\romain{check multi-threaded exeuciton with llvm 14.x, as ROMP is not having them!!}
+%\romain{check multi-threaded exeuciton with llvm 14.x, as ROMP is not having them!!}
 Multi-threaded execution of TMP reports a few false-positive that requires further investigation: Taskgrind is detecting sibling tasks conflicting on a memory location in their parent segment stack frame.
 
 %129 - mergeable - the llvm implementation we had was not merging data environment, so no determinacy race detected: two distincts data environment are being accessed. - if we wanted to detect this, we should add the data environement and mergeable clause semantic to taskgrind.
@@ -118,7 +118,7 @@ Multi-threaded execution of TMP reports a few false-positive that requires furth
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{LULESH}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
-\tbl{tbl:results-lulesh} and \fig{fig:lulesh} reports evaluation on data race detection, and overheads on execution time and memory usage on the LULESH proxy-application on 12th Gen Intel(R) Core(TM) i5-12450H.
+\tbl{tbl:results-lulesh} and \fig{fig:lulesh} reports data race detection, and overheads on execution time and memory usage on the LULESH proxy-application on 12th Gen Intel(R) Core(TM) i5-12450H.
 The execution time reported for Taskgrind only includes the recording phase and not the determinacy race analysis.
 
 On the table, we report two versions of LULESH: a correct one (with \emph{no} in the "racy" column), and an incorrect one (with \emph{yes} in the "racy" column) by removing a task dependence to intentionally introduce data races.

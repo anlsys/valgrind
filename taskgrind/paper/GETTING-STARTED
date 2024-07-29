@@ -315,7 +315,5 @@ for each segment s1  # n
 - Task memory accesses mapping (see Numamma - https://github.com/numamma/numamma)
 
 
-
-
 # TODO
 - Stack and malloc : both issues are related to "memory liveness"
