@@ -1,31 +1,10 @@
 %!TEX root =  ../article.tex
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Related Work} \label{sec:relworks}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-Talk about commutativity of accesses - currently not supported by Taskgrind (exemple: float operations)
+\romain{TODO: write this section}Talk about commutativity of accesses - currently not supported by Taskgrind (exemple: float operations)
 
 
 Extended from - LLOV: A Fast Static Data-Race Checker for OpenMP Programs
-
-                         LLOV         Archer          ROMP           TaskSanitizer        Taskgrind
-Instrumentation      compile-time  compile-time   binary rewritting  compile-time    binary JIT translation
-OpenMP Support
-   for					 yes	        yes          yes             yes                yes
-   critical, atomic      no             yes          yes             yes                no
-   task                  no             yes          yes             yes                yes  
-   task mergeable		 ?               ?            ?               ?                  ?
-   task depend           no              ?            ?             partial             yes      
-   task detach           no             no            no             no                 yes      
-
-
-
-support							TaskSanitizer		ROMP		Archer		Taskgrind
- Mutex (data race)				yes					yes			yes			no
- Stack memory accesses			?					?			?			yes				
- Memory allocator recycling		?					?			?			yes
- Thread local accesses			no					?			?			yes
- llvm version supported	    	5.x and 6.x			14.0.6		19.x		19.x
- 
- 
- 

@@ -15,7 +15,6 @@
 \usepackage{lipsum}
 \usepackage{multicol}% http://ctan.org/pkg/multicols
 
-
 \newcommand{\fig}[1]{Fig.~\ref{#1}}
 \newcommand{\listing}[1]{Listing~\ref{#1}}
 \newcommand{\alg}[1]{Algorithm~\ref{#1}}
@@ -105,6 +104,22 @@
     morekeywords={_Thread_local}
 }
 
+
+\lstdefinestyle{text}{
+	framextopmargin=50pt,
+	frame=bottomline,
+	basicstyle=\footnotesize\ttfamily,
+	breaklines=true,
+	columns=flexible,
+	stepnumber=1,
+	numbers=left,
+	tabsize=4,
+	keywordstyle=\bfseries\color{mGreen},
+	commentstyle=\color{mCyan},
+	numberstyle=\color{mBrown},
+	escapeinside={<@}{@>},
+	morekeywords={ERROR}
+}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %               PSEUDO-CODE REQUIRED PACKAGES                                     %

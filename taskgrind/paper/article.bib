@@ -1248,3 +1248,45 @@ series = {SPAA '97}
 	pages={53-62},
 	keywords={Runtime;Parallel processing;Instruments;Xenon;Benchmark testing;Scalability;Synchronization;data race detection;OpenMP;high performance computing;static analysis;dynamic analysis},
 	doi={10.1109/IPDPS.2016.68}}
+
+@article{LLOV,
+	author = {Bora, Utpal and Das, Santanu and Kukreja, Pankaj and Joshi, Saurabh and Upadrasta, Ramakrishna and Rajopadhye, Sanjay},
+	title = {LLOV: A Fast Static Data-Race Checker for OpenMP Programs},
+	year = {2020},
+	issue_date = {December 2020},
+	publisher = {Association for Computing Machinery},
+	address = {New York, NY, USA},
+	volume = {17},
+	number = {4},
+	issn = {1544-3566},
+	url = {https://doi.org/10.1145/3418597},
+	doi = {10.1145/3418597},
+	abstract = {In the era of Exascale computing, writing efficient parallel programs is indispensable, and, at the same time, writing sound parallel programs is very difficult. Specifying parallelism with frameworks such as OpenMP is relatively easy, but data races in these programs are an important source of bugs. In this article, we propose LLOV, a fast, lightweight, language agnostic, and static data race checker for OpenMP programs based on the LLVM compiler framework. We compare LLOV with other state-of-the-art data race checkers on a variety of well-established benchmarks. We show that the precision, accuracy, and the F1 score of LLOV is comparable to other checkers while being orders of magnitude faster. To the best of our knowledge, LLOV is the only tool among the state-of-the-art data race checkers that can verify a C/C++ or FORTRAN program to be data race free.},
+	journal = {ACM Trans. Archit. Code Optim.},
+	month = {dec},
+	articleno = {35},
+	numpages = {26},
+	keywords = {OpenMP, data race detection, polyhedral compilation, program verification, shared memory programming, static analysis}
+}
+
+@InProceedings{dyninstr,
+	author="Williams, William R.
+	and Meng, Xiaozhu
+	and Welton, Benjamin
+	and Miller, Barton P.",
+	editor="Kn{\"u}pfer, Andreas
+	and Hilbrich, Tobias
+	and Niethammer, Christoph
+	and Gracia, Jos{\'e}
+	and Nagel, Wolfgang E.
+	and Resch, Michael M.",
+	title="Dyninst and MRNet: Foundational Infrastructure for Parallel Tools",
+	booktitle="Tools for High Performance Computing 2015",
+	year="2016",
+	publisher="Springer International Publishing",
+	address="Cham",
+	pages="1--16",
+	abstract="Parallel tools require common pieces of infrastructure: the ability to control, monitor, and instrument programs, and the ability to massively scale these operations as the application program being studied scales. The Paradyn Project has a long history of developing new technologies in these two areas and producing ready-to-use tool kits that embody these technologies: Dyninst, which provides binary program control, instrumentation, and modification, and MRNet, which provides a scalable and extensible infrastructure to simplify the construction of massively parallel tools, middleware and applications. We will discuss new techniques that we have developed in these areas, and present examples of current use of these tool kits in a variety of tool and middleware projects. In addition, we will discuss features in these tool kits that have not yet been fully exploited in parallel tool development, and that could lead to advancements in parallel tools.",
+	isbn="978-3-319-39589-0"
+}
+

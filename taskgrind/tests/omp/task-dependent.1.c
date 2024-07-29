@@ -1,4 +1,3 @@
-# include <omp.h>
 # include <stdlib.h>
 
 int
@@ -8,7 +7,7 @@ main(void)
 
     # pragma omp parallel
     {
-        # pragma omp single nowait
+        # pragma omp single
         {
             # pragma omp task
                 x[0] = 42;

@@ -4,46 +4,49 @@
 
 % https://www.cs.utexas.edu/~EWD/transcriptions/EWD03xx/EWD303.html
 
-<<<<<<< Updated upstream
-This paper introduced Taskgrind\footnote{\url{https://gitlab.inria.fr/ropereir/valgrind}}: a Valgrind tool for parallel program memory accesses analysis.
-It targets parallel programs that can be abstracted to a segment graph.
-We implemented a determinacy race analysis, as it sometimes hint correctness error of asynchronous task-based programs; while also addressing some pitfalls bound to heavyweight dynamic binary instrumentation (DBI).
-As opposed to compile-time instrumentation (such as LLVM Sanitizers), heavyweight DBI ensures the instrumentation of every instructions of the program (even close-source) - aiming at no false-negative report due to non-instrumented segments.
-However, it required a lot of engineering to filter-out the many false-positive that can arise.
-We have illustrated a few in this paper such as the inherent non-determinacy of parallel runtime systems, memory allocators recycling and thread/segment-local accesses.
+This paper introduced Taskgrind\footnote{\url{https://gitlab.inria.fr/ropereir/valgrind}}: a Valgrind tool for parallel program memory access analysis.
+It analyses segment graphs that model parallel programs.
+We implemented a determinacy race analysis, as it sometimes hints at correctness errors of asynchronous task-based programs while also addressing some pitfalls bound to heavyweight dynamic binary instrumentation (DBI).
+As opposed to compile-time instrumentation (such as LLVM Sanitizers), heavyweight DBI ensures the instrumentation of every program instruction (even closed-source) - aiming at no false-negative report due to non-instrumented segments.
+However, it required a lot of engineering to filter out the many false positives that arose and provide meaningful report to programmers.
+In this paper, we have illustrated a few, such as the inherent non-determinacy of parallel runtime systems, memory allocators recycling, and thread/segment-local accesses.
 
-In the future, we would like to extend the support of Taskgrind to parallel programming model interfaces, move-out of Taskgrind and parallelize determinacy-race analysis (which is an embarassingly parallel algorithm) and eventually add more analysis.
-In addition, the current design for memory recycling have some drawbacks: simply removing memory free-operations is not a satisfactory solution; we also need to support programming models built-in memory allocators.
-Finally, we would like to investigate on parallel-correctness of GPU programming models.
+In the future, we would like to extend the support of Taskgrind to a parallel programming model that could include GPUs.
+In addition, the current design has a few drawbacks that could be improved:
+\begin{itemize}
+	\item 	On memory recycling, removing free operations is not a satisfactory solution, and we also need to support programming models with built-in memory allocators.
+	\item 	The determinacy race analysis is an embarrassingly parallel algorithm, but running it within the Valgrind framework makes it hard to parallelize.
+\end{itemize}
+Finally, we would like to add more analysis and improve error reporting, having Taskgrind move toward a more general parallel programming assistant.
 
-=======
-\romain{just vomitting ideas here, needs to be re-ordered}
-- E. Dijkstra~\cite{EWD303} also mentionned that "\emph{I shall argue that we must tailor our programs to the proof requirements}" - which was not the path taken by simulation program over the past decades (one could argue that was for the sake of productivity).
-- Taskgrind is a first step towards parallel program with strong correctness guarantees.
-
-h unreliable for ensuring program correctness
-
-
-This paper introduced Taskgrind: a determinacy race detector relying on heavyweight dynamic binary instrumentation (DBI).
-It targets application codes relying on a well-defined parallel programming model semantic, that needs to be bridged with its segment graph interfaces.
-Taskgrind currently embeds an OMPT tool with support for most OpenMP parallel constructs (for loops, tasks, dependences, targets, detach, ...).
-
-
-Many work-arounds for memory (free to NOOP, suppress errors on memory allocated by the LLVM allocator)
-We could replace the LLVM allocator similarly to the system allocator, actually release the memory, and add a concept of "memory liveness"
-
-TODO: Cilk/QThreads
-
-As opposed to compile-time instrumentation (such as LLVM Sanitizers), heavyweight DBA ensures no determinacy-race may be missed due to non-instrumented code.
-However, it requires a lot of engineering to filter-out the many false-positive that can arise.
-We have illustrated a few in this paper such as memory recycling, thread-local accesses, and inherent non-determinacy of parallel runtime systems.
-
-Future work
-	- Engineering work
-		- add support for other sync. primitives (mutex)
-		- move analysis out of Valgrind (Algorithm on determinacy race is O(n²) embarassingly parallel)
-
-	- Research
-		- GPU offloading in presence - in particular with OpenMP, could compile target tasks as 'CPU' tasks
-						
->>>>>>> Stashed changes
+%=======
+%\romain{just vomitting ideas here, needs to be re-ordered}
+%- E. Dijkstra~\cite{EWD303} also mentionned that "\emph{I shall argue that we must tailor our programs to the proof requirements}" - which was not the path taken by simulation program over the past decades (one could argue that was for the sake of productivity).
+%- Taskgrind is a first step towards parallel program with strong correctness guarantees.
+%
+%h unreliable for ensuring program correctness
+%
+%
+%This paper introduced Taskgrind: a determinacy race detector relying on heavyweight dynamic binary instrumentation (DBI).
+%It targets application codes relying on a well-defined parallel programming model semantic, that needs to be bridged with its segment graph interfaces.
+%Taskgrind currently embeds an OMPT tool with support for most OpenMP parallel constructs (for loops, tasks, dependences, targets, detach, ...).
+%
+%
+%Many work-arounds for memory (free to NOOP, suppress errors on memory allocated by the LLVM allocator)
+%We could replace the LLVM allocator similarly to the system allocator, actually release the memory, and add a concept of "memory liveness"
+%
+%TODO: Cilk/QThreads
+%
+%As opposed to compile-time instrumentation (such as LLVM Sanitizers), heavyweight DBA ensures no determinacy-race may be missed due to non-instrumented code.
+%However, it requires a lot of engineering to filter-out the many false-positive that can arise.
+%We have illustrated a few in this paper such as memory recycling, thread-local accesses, and inherent non-determinacy of parallel runtime systems.
+%
+%Future work
+%	- Engineering work
+%		- add support for other sync. primitives (mutex)
+%		- move analysis out of Valgrind (Algorithm on determinacy race is O(n²) embarassingly parallel)
+%
+%	- Research
+%		- GPU offloading in presence - in particular with OpenMP, could compile target tasks as 'CPU' tasks
+%						
+%>>>>>>> Stashed changes

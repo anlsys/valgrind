@@ -287,7 +287,7 @@ task_seg_fini(task_t * task, task_seg_t * seg)
     dtv_t * dtv = (dtv_t *) dtv_loc[0];
 
     if (dtv[0].gen != seg->tls.gen0 && seg->tls.tp0 == seg->tls.tp)
-        TASKGRIND_WARN("TLS changed during a segment (uid=%lu) execution", seg->uid);
+        TASKGRIND_WARN("TLS changed during a segment (uid=%u) execution", seg->uid);
 
     // assertion for Variant II
     // tl_assert(              seg->tls.tp < (Addr) dtv);
