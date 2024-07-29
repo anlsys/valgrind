@@ -2,7 +2,7 @@
 \begin{figure*}[h]
 	\centering
 	\includegraphics[width=\linewidth]{figures/lulesh.pdf}
-	\caption{Memory and Execution time overheads on LULESH with parameters `-s \$s -tel 4 -tnl 4 -p -i 4`}
+	\caption{Execution Time and Memory overheads on LULESH with parameters `-s \$s -tel 4 -tnl 4 -p -i 4`}
 	\label{fig:lulesh}
 \end{figure*}
 
@@ -133,17 +133,18 @@ On the figure, the x-axis varies the problem size \code{-s} - with the applicati
 The reference and Archer execute with four threads, and Taskgrind with a single thread.
 
 We also evaluated using ROMP but omitted results from the figure, as the instrumented program crashed early during the first iteration of LULESH.
-Still, measurements showed that memory use and execution time follow a similar shape with \code{s}, but with much larger overheads: for \code{-s=64}, before the application crashes in the first iteration, the execution time and memory use were respectively $79 s$ and $75GB$.
+Still, measurements showed that memory use and execution time follow a similar shape with \code{s}, but with much larger overheads: for \code{-s=64}, before the application crashes, the execution time and memory use were respectively $79 s$ and $75GB$.
 
-% TODO : dirty but ensure correct positioning
-\input{contents/related-works-table.tex}
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Error Reporting}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+
+
 \listing{lst:error-report} is a minimal erroneous OpenMP program, where the tasks line 8 and 11 may both concurrently access $x$.
 \listing{lst:error-report-romp} and \listing{lst:error-report-taskgrind} respectively transcribe errors reported by ROMP and Taskgrind, compiling the program with LLVM and debug symbols (option \code{-g}).
 As you can see, Taskgrind provides meaningful information towards fixing the determinacy race thanks to the Valgrind framework.
+
 
 \begin{lstlisting}[style=CStyle, captionpos=b, caption={task.c - an errorneous OpenMP Program}, label={lst:error-report}]
 	int main(void)
@@ -154,28 +155,34 @@ As you can see, Taskgrind provides meaningful information towards fixing the det
 			<@\textcolor{mBlue}{\# pragma omp single}@>
 			{
 				<@\textcolor{mBlue}{\# pragma omp task}@>
-				    x[0] = 42;
+				x[0] = 42;
 				
 				<@\textcolor{mBlue}{\# pragma omp task}@>
-				    x[0] = 43;
+				x[0] = 43;
 			}
 		}
 		return 0;
 	}
 \end{lstlisting}
 
-\begin{lstlisting}[style=text, captionpos=b, caption={An error report from Taskgrind}, label={lst:error-report-romp}]
+\begin{minipage}{\linewidth}
+\begin{lstlisting}[style=text, captionpos=b, caption={An error report from ROMP}, label={lst:error-report-romp}]
 	[...]
 	data race found:
 \end{lstlisting}
+\end{minipage}
 
-\begin{lstlisting}[style=text, captionpos=b, caption={An error report from ROMP}, label={lst:error-report-taskgrind}]
+% TODO : dirty but ensure correct positioning
+\input{contents/related-works-table.tex}
+
+\begin{minipage}{\linewidth}
+\begin{lstlisting}[style=text, captionpos=b, caption={An error report from Taskgrind}, label={lst:error-report-taskgrind}]
 	Segments task.1.c:8 and task.1.c:11 were declared independent while accessing the same memory address
-	    4 bytes from 0xC3EA040 allocated in block 0xC3EA040 of size 8
-	        from task.1.c:3
-	        [...]
+	4 bytes from 0xC3EA040 allocated in block 0xC3EA040 of size 8
+	from task.1.c:3
+	[...]
 \end{lstlisting}
-
+\end{minipage}
 
 
 

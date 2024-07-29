@@ -1,7 +1,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Background} \label{sec:background}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\romain{todo: an header}
+We introduce the segment graph data structure and Valgrind concepts on which rely Taskgrind.
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Segment Graph}
@@ -41,12 +41,14 @@ Valgrind also makes read/write instruction instrumentation relatively simple thr
 Taskgrind is a Valgrind tool designed to analyze parallel program memory accesses.
 \fig{fig:taskgrind} summarizes its design.
 The application may be any program supported by Valgrind.
-It must rely on a parallel programming model that implements Taskgrind client requests.
-\sect{pms} presents the supported parallel programming models, \sect{taskgrind-plugin} the intrinsics of Taskgrind plugin, and finally \sect{taskgrind-analysis}  an analysis for determinacy race detection.
+It must rely on a parallel programming model that provides a segment graph to Taskgrind through client requests.
+\sect{pms} presents the supported parallel programming models, \sect{taskgrind-plugin} the per-segment memory accesses recording, and finally \sect{taskgrind-analysis} an analysis for determinacy race detection.
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Parallel Programming Models Support} \label{pms}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
+
+The Taskgrind plugin constructs a segment tree from passed client requests.
 
 \romain{TODO: write this section}
 
@@ -89,22 +91,18 @@ Remark:
 	\label{fig:interval-tree}
 \end{figure}
 
-The Taskgrind plugin constructs a segment tree from passed client requests.
-It keeps track of the active segment on each thread, and each segment is attached to two interval trees to compactly maintain \emph{read} and \emph{write} access location per segment.
+While building the segment tree, Taskgrind keeps track of the active segment on each thread.
+Two interval trees are attached to each segment to record \emph{read} and \emph{write} access.
 \fig{fig:interval-tree}.
 Such structure allows compactly accumulated dense memory accesses and a light $O(log \; n)$ complexity on most tree operations used in later analysis - $n$ being the number of dense intervals accessed.
-
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Determinacy Race Analysis} \label{taskgrind-analysis}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
-
-\romain{TODO: write this section}
-
-Currently done after instrumenting in Valgrind
-
-\paragraph{Determinacy Race}
-Finding determinacy race given this graph becomes trivial - O(n²) with 'n' the number of segments
+Once the parallel program completed, Taskgrind have a segment tree representation of the execution, with accesses recorded for each segment.
+Using that knowledge, \alg{alg:cg} presents the implementation of a determinacy race analysis.
+It compares each segments independent to one-another, intersecting their accesses location where at least one is writing.
+If the intersection is not empty, then a determinacy race may be reported.
 
 \begin{algorithm}[h!t]
 	\caption{Determinacy Race Analysis Pass}
@@ -123,11 +121,7 @@ Finding determinacy race given this graph becomes trivial - O(n²) with 'n' the 
 	\end{algorithmic}
 \end{algorithm}
 
-No false-negative, hence detecting semantical errors even if the execution was correct.
-
-TRANSITION: line 7 - may report many false-positive
-
-\romain{speak about 'overloading the system allocator, using Valgrind existing interfaces.' - and how to report precisely the access reading DWARF}
+In order to provide meaningful report to the programmer, Taskgrind overloads the memory allocator using Valgrind interfaces, to save a stack trace on each memory block allocation, so conflicting accesses can be matched with source-code location reading debugging information if compiled-in the binary.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

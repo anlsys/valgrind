@@ -25,12 +25,12 @@ This paper explores the use of heavyweight Dynamic Binary Instrumentation (DBI) 
 Our contributions are:
 \begin{itemize}
 	\item	the introduction of Taskgrind: a Valgrind tool for parallel programming model memory accesses analysis.
-	\item 	a survey on pitfalls related to heavyweight DBI in parallel programs,
+	\item 	a brief survey on pitfalls related to heavyweight DBI in parallel programs,
 	\item 	the evaluation of a determinacy race analysis implemented into Taskgrind, comparing it to state-of-the-art tools.
 \end{itemize}
 
 The paper is organized as follows.
-\sect{sec:background} provides background on race analysis and Valgrind.
+\sect{sec:background} provides background.
 \sect{sec:taskgrind} introduces the design of Taskgrind and the determinacy race detector implementation.
 \sect{sec:pitfalls} presents a few pitfalls on parallel programs heavyweight DBI, and how Taskgrind workarounds them.
 \sect{sec:eval} evaluates Taskgrind overheads and its determinacy race detection analysis.
