@@ -17,7 +17,7 @@ In addition, the current design has a few drawbacks that could be improved:
 	\item 	On memory recycling, removing free operations is not a satisfactory solution, and we also need to support programming models with built-in memory allocators.
 	\item 	The determinacy race analysis is an embarrassingly parallel algorithm, but running it within the Valgrind framework makes it hard to parallelize.
 \end{itemize}
-Finally, we would like to add more analysis and improve error reporting, having Taskgrind move toward a more general parallel programming assistant.
+Finally, we would like to add more analysis and improve error reporting, having Taskgrind move toward a more general "trial and error" parallel programming assistant.
 
 %=======
 %\romain{just vomitting ideas here, needs to be re-ordered}
