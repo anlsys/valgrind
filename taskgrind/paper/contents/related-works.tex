@@ -3,8 +3,37 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Related Work} \label{sec:relworks}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+Taskgrind relies on Valgrind to instrument memory accesses and attach them to segments, it eventually implements a determinacy race analysis based on these information.
+We present a brief review of the literature on programs instrumentation framework and determinacy races analysis.
 
-\romain{TODO: write this section}Talk about commutativity of accesses - currently not supported by Taskgrind (exemple: float operations)
+\paragraph{Instrumentation Frameworks}
+Instrumenting programmes to analyse them is a much-studied subject in the literature, and several approaches had been explored.
+Pin~\cite{pin} and Valgrind~\cite{valgrind} rely on Dynamic Binary Translation (DBT)~\cite{dbt}: the binary program is translated to an intermediate representation, instrumented, and its execution is emulated keeping track of a virtual machine state.
+The main drawback is the cost of translating and emulating, that lead to important slowdown when executing.
+It motivates the design of instrumentation frameworks such as DynamoRIO~\cite{dynamorio}, Dyninstr~\cite{dyninstr} or Instrew~\cite{llvm-dbi}, which is capable of instrumenting while executing natively.
+All these frameworks presents different capabilities, in the end, we choose Valgrind for its well-established capabilities (memory allocator overloading, memory accesses instrumentation, debug information reading...) and for its active community.
 
+\paragraph{Determinacy Race Analyzer}
+In 1997, Nondeterminator~\cite{nondeterminator} was designed as an entire toolsuite (including compile-time instrumentation and run-time analysis) to detect accurately and provably determinacy races of Cilk programs.
+The core of its analyzer relies on a low complexity algorithm (SP-Bags) which assumes the program serial execution correct - also known as the \emph{serial elision}.
+Taskgrind has no such assumption.
 
-Extended from - LLOV: A Fast Static Data-Race Checker for OpenMP Programs
+Helgrind$^{+}$ (2007-2009) is a Valgrind tool for data race detection.
+It supports pthread synchronizations primitives, including mutexes and condition variables.
+Taskgrind does not support these primitives but targets task-based synchronizations such as barriers or dependencies.
+Adding full pthread-support is left for future work.
+
+ThreadSanitizer~\cite{thread-sanitizer-valgrind} (2009) was originally designed as a Valgrind tool, support pthread-based synchronizations.
+Its core moved to the LLVM compiler~\cite{tsan-llvm} to reduce execution overheads by instrumenting at compile-time and executing natively.
+
+R. Raghavan et al.~\cite{x10-determinacy-race} (2010) generalized Nondeterminator approach for async/await programming models, and provided a tool for X10 programs, still under the serial elision assumption.
+
+Archer~\cite{archer} was introduced in 2016 as a ThreadSanitizer extension to support OpenMP semantics.
+However, it is a thread-centric analyzer that may be a source of false negatives running under task-related synchronizations which is a source of motivations for TaskSanitizer~\cite{Matar18}, ROMP~\cite{ROMP} and Taskgrind.
+
+OmpSs-2 has a toolchain to verify the parallelization of programs~\cite{ompss2-correctness}.
+It looks for five errors (E1, E2, E3, E4, E5) "\emph{using local task analysis to deal with each task separately}" - as opposed to Taskgrind which looks at the program entirely through its segment graph.
+If OmpSs-2 were to be supported by Taskgrind, errors E3, E4 and E5 would fallback to a generic determinacy-error, while OmpSs-2 toolchain provides more insights, such as synchronizations suggestions.
+Extending Taskgrind to provide per-programming model meaningful reports is left as future work, and could assist programmers in parallelizing their applications.
+
+	   

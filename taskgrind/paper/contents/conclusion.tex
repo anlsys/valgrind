@@ -7,7 +7,7 @@
 This paper introduced Taskgrind\footnote{\url{https://gitlab.inria.fr/ropereir/valgrind}}: a Valgrind tool for parallel program memory access analysis.
 It analyses segment graphs that model parallel programs.
 We implemented a determinacy race analysis, as it sometimes hints at correctness errors of asynchronous task-based programs while also addressing some pitfalls bound to heavyweight dynamic binary instrumentation (DBI).
-As opposed to compile-time instrumentation (such as LLVM Sanitizers), heavyweight DBI ensures the instrumentation of every program instruction (even closed-source) - aiming at no false-negative report due to non-instrumented segments.
+As opposed to source code compile-time instrumentation (such as LLVM Sanitizers), heavyweight DBI ensures the instrumentation of every program instruction (even closed-source) - aiming at no false-negative report due to non-instrumented segments.
 However, it required a lot of engineering to filter out the many false positives that arose and provide meaningful report to programmers.
 In this paper, we have illustrated a few, such as the inherent non-determinacy of parallel runtime systems, memory allocators recycling, and thread/segment-local accesses.
 

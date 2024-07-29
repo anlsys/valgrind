@@ -1,9 +1,7 @@
 \begin{table*}[]
 	\begin{tabular}{ll|ccccc}
 		&                          & LLOV                 & Archer      & TaskSanitizer & ROMP        & Taskgrind \\ \hline
-		\multicolumn{2}{l|}{Instrumentation} &                      &             &               &             &           \\
-		& When                     & compilation          & compilation & compilation   & compilation & execution \\
-		& How                      & LLVM                 & LLVM Tsan   & LLVM Tsan     & Dyninstr    & Valgrind  \\ \hline
+		\multicolumn{2}{l|}{Instrumentation} & LLVM                 & LLVM Tsan   & LLVM Tsan     & Dyninstr    & Valgrind  \\ \hline
 		\multicolumn{2}{l|}{Analysis}        & static               & dynamic     & dynamic       & dynamic     & dynamic   \\ \hline
 		\multicolumn{2}{l|}{OpenMP Support}  &                      &             &               &             &           \\
 		& for                      & yes                  & yes         & yes           & yes         & yes       \\

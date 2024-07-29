@@ -1269,6 +1269,24 @@ series = {SPAA '97}
 	keywords = {OpenMP, data race detection, polyhedral compilation, program verification, shared memory programming, static analysis}
 }
 
+@inproceedings{llvm-dbi,
+	author = {Engelke, Alexis and Okwieka, Dominik and Schulz, Martin},
+	title = {Efficient LLVM-based dynamic binary translation},
+	year = {2021},
+	isbn = {9781450383943},
+	publisher = {Association for Computing Machinery},
+	address = {New York, NY, USA},
+	url = {https://doi.org/10.1145/3453933.3454022},
+	doi = {10.1145/3453933.3454022},
+	abstract = {Emulation of other or newer processor architectures is necessary for a wide variety of use cases, from ensuring compatibility to offering a vehicle for computer architecture research. This problem is usually approached using dynamic binary translation, where machine code is translated, on the fly, to the host architecture during program execution. Existing systems, like QEMU, usually focus on translation performance rather than the overall program execution, and extensions, like HQEMU, are limited by their underlying implementation. Conversely, performance-focused systems are typically used for binary instrumentation. E.g., DynamoRIO reuses original instructions where possible, while Instrew utilizes the LLVM compiler infrastructure, but only supports same-architecture code generation. In this short paper, we generalize Instrew to support different guest and host architectures by refactoring the lifter and by implementing target-independent optimizations to re-use host hardware features for emulated code. We demonstrate this flexibility by adding support for RISC-V as guest architecture and AArch64 as host architecture. Our performance results on SPEC CPU2017 show significant improvements compared to QEMU, HQEMU as well as the original Instrew.},
+	booktitle = {Proceedings of the 17th ACM SIGPLAN/SIGOPS International Conference on Virtual Execution Environments},
+	pages = {165–171},
+	numpages = {7},
+	keywords = {Architecture Simulation, Dynamic Binary Translation, LLVM, Optimization, RISC-V},
+	location = {Virtual, USA},
+	series = {VEE 2021}
+}
+
 @InProceedings{dyninstr,
 	author="Williams, William R.
 	and Meng, Xiaozhu
@@ -1290,3 +1308,113 @@ series = {SPAA '97}
 	isbn="978-3-319-39589-0"
 }
 
+
+@inproceedings{dynamorio,
+	author = {Bruening, Derek and Zhao, Qin and Amarasinghe, Saman},
+	title = {Transparent dynamic instrumentation},
+	year = {2012},
+	isbn = {9781450311762},
+	publisher = {Association for Computing Machinery},
+	address = {New York, NY, USA},
+	url = {https://doi.org/10.1145/2151024.2151043},
+	doi = {10.1145/2151024.2151043},
+	abstract = {Process virtualization provides a virtual execution environment within which an unmodified application can be monitored and controlled while it executes. The provided layer of control can be used for purposes ranging from sandboxing to compatibility to profiling. The additional operations required for this layer are performed clandestinely alongside regular program execution. Software dynamic instrumentation is one method for implementing process virtualization which dynamically instruments an application such that the application's code and the inserted code are interleaved together. DynamoRIO is a process virtualization system implemented using software code cache techniques that allows users to build customized dynamic instrumentation tools. There are many challenges to building such a runtime system. One major obstacle is transparency. In order to support executing arbitrary applications, DynamoRIO must be fully transparent so that an application cannot distinguish between running inside the virtual environment and native execution. In addition, any desired extra operations for a particular tool must avoid interfering with the behavior of the application.Transparency has historically been provided on an ad-hoc basis, as a reaction to observed problems in target applications. This paper identifies a necessary set of transparency requirements for running mainstream Windows and Linux applications. We discuss possible solutions to each transparency issue, evaluate tradeoffs between different choices, and identify cases where maintaining transparency is not practically solvable. We believe this will provide a guideline for better design and implementation of transparent dynamic instrumentation, as well as other similar process virtualization systems using software code caches.},
+	booktitle = {Proceedings of the 8th ACM SIGPLAN/SIGOPS Conference on Virtual Execution Environments},
+	pages = {133–144},
+	numpages = {12},
+	keywords = {dynamic instrumentation, process virtualization, runtime system, transparency},
+	location = {London, England, UK},
+	series = {VEE '12}
+}
+
+@inproceedings{pin,
+	title={Pin: building customized program analysis tools with dynamic instrumentation},
+	author={Chi-Keung Luk and Robert S. Cohn and Robert Muth and Harish Patil and Artur Klauser and Geoff Lowney and Steven Wallace and Vijay Janapa Reddi and Kim M. Hazelwood},
+	booktitle={ACM-SIGPLAN Symposium on Programming Language Design and Implementation},
+	year={2005},
+	url={https://api.semanticscholar.org/CorpusID:6719639}
+}
+
+@InProceedings{tsan-llvm,
+	author="Serebryany, Konstantin
+	and Potapenko, Alexander
+	and Iskhodzhanov, Timur
+	and Vyukov, Dmitriy",
+	editor="Khurshid, Sarfraz
+	and Sen, Koushik",
+	title="Dynamic Race Detection with LLVM Compiler",
+	booktitle="Runtime Verification",
+	year="2012",
+	publisher="Springer Berlin Heidelberg",
+	address="Berlin, Heidelberg",
+	pages="110--114",
+	abstract="Data races are among the most difficult to detect and costly bugs. Race detection has been studied widely, but none of the existing tools satisfies the requirements of high speed, detailed reports and wide availability at the same time. We describe our attempt to create a tool that works fast, has detailed and understandable reports and is available on a variety of platforms. The race detector is based on our previous work, ThreadSanitizer [1], and the instrumentation is done using the LLVM compiler. We show that applying compiler instrumentation and sampling reduces the slowdown to less than 1.5x, fast enough to use instrumented programs interactively.",
+	isbn="978-3-642-29860-8"
+}
+
+@inproceedings{dbt,
+	title={Dynamic Binary Translation},
+	author={Mark Probst},
+	year={2003},
+	url={https://api.semanticscholar.org/CorpusID:16335388}
+}
+
+@inproceedings{nondeterminator,
+	author = {Mingdong Feng and Charles E. Leiserson},
+	title = {Efficient detection of determinacy races in Cilk programs},
+	year = {1997},
+	abstract = {A parallel multithreaded program that is ostensibly deterministic may nevertheless behave nondeterministically due to bugs in the code. These bugs are called determinacy races, and they result when one thread updates a location in shared memory while another thread is concurrently accessing the location. We have implemented a provably efficient determinacy-race detector for Cilk, an algorithmic multithreaded programming language. If a Cilk program run on a given input data set has a determinacy race, our debugging tool, which we call the `Nondeterminator,' guarantees to detect and localize the race. The core of the Nondeterminator is an asymptotically efficient serial algorithm (inspired by Tarjan's nearly linear-time least-common-ancestors algorithm) for detecting determinacy races in series-parallel directed acyclic graphs. For a Cilk program that runs in T time on one processor and uses ν shared-memory locations, the Nondeterminator runs in O(Tα(ν,ν)) time, where α is Tarjan's functional inverse of Ackermann's function, a very slowly growing function which, for all practical purposes, is bounded above by 4. The Nondeterminator uses at most a constant factor more space than does the original program. On a variety of Cilk program benchmarks, the Nondeterminator exhibits a slowdown of less than 12 compared with the serial execution time of the original optimized code, which we contend is an acceptable slowdown for debugging purposes.},
+}
+
+@INPROCEEDINGS{helgrind,
+	author={Jannesari, Ali and Kaibin Bao and Pankratius, Victor and Tichy, Walter F.},
+	booktitle={2009 IEEE International Symposium on Parallel & Distributed Processing}, 
+	title={Helgrind+: An efficient dynamic race detector}, 
+	year={2009},
+	volume={},
+	number={},
+	pages={1-13},
+	keywords={Yarn;Detectors;Dynamic programming;Switches;Testing;Debugging;Parallel programming;Parallel processing;System recovery;Event detection},
+	doi={10.1109/IPDPS.2009.5160998}}
+
+@InProceedings{x10-determinacy-race,
+	author="Raman, Raghavan
+	and Zhao, Jisheng
+	and Sarkar, Vivek
+	and Vechev, Martin
+	and Yahav, Eran",
+	editor="Barringer, Howard
+	and Falcone, Ylies
+	and Finkbeiner, Bernd
+	and Havelund, Klaus
+	and Lee, Insup
+	and Pace, Gordon
+	and Ro{\c{s}}u, Grigore
+	and Sokolsky, Oleg
+	and Tillmann, Nikolai",
+	title="Efficient Data Race Detection for Async-Finish Parallelism",
+	booktitle="Runtime Verification",
+	year="2010",
+	publisher="Springer Berlin Heidelberg",
+	address="Berlin, Heidelberg",
+	pages="368--383",
+	abstract="A major productivity hurdle for parallel programming is the presence of data races. Data races can lead to all kinds of harmful program behaviors, including determinism violations and corrupted memory. However, runtime overheads of current dynamic data race detectors are still prohibitively large (often incurring slowdowns of 10{\texttimes} or larger) for use in mainstream software development.",
+	isbn="978-3-642-16612-9"
+}
+
+@InProceedings{ompss2-correctness,
+	author="Economo, Simone
+	and Royuela, Sara
+	and Ayguad{\'e}, Eduard
+	and Beltran, Vicen{\c{c}}",
+	editor="Malawski, Maciej
+	and Rzadca, Krzysztof",
+	title="A Toolchain to Verify the Parallelization of OmpSs-2 Applications",
+	booktitle="Euro-Par 2020: Parallel Processing",
+	year="2020",
+	publisher="Springer International Publishing",
+	address="Cham",
+	pages="18--33",
+	abstract="Programming models for task-based parallelization based on compile-time directives are very effective at uncovering the parallelism available in HPC applications. Despite that, the process of correctly annotating complex applications is error-prone and may hinder the general adoption of these models. In this paper, we target the OmpSs-2 programming model and present a novel toolchain able to detect parallelization errors coming from non-compliant OmpSs-2 applications. Our toolchain verifies the compliance with the OmpSs-2 programming model using local task analysis to deal with each task separately, and structural induction to extend the analysis to the whole program. To improve the effectiveness of our tools, we also introduce some ad-hoc verification annotations, which can be used manually or automatically to disable the analysis of specific code regions. Experiments run on a sample of representative kernels and applications show that our toolchain can be successfully used to verify the parallelization of complex real-world applications.",
+	isbn="978-3-030-57675-2"
+}
