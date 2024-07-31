@@ -16,7 +16,7 @@ In this paper, we have illustrated a few, such as the inherent non-determinacy o
 Qthreads is a userspace threading runtime that implements tasks and other synchronization primitives~\cite{qthreads}. It provides a wide range of primitives for organizing dependencies between tasks, which presents unique challenges for taskgrind. As a result, instrumenting qthreads with Taskgrind will require substantial changes to Taskgrind semantics to allow handling of constructs such as the full/empty-bits (FEBs). 
 
 \paragraph{OpenCilk}
-Cilk is a programming model that uses tasks as its fundamental building block~\cite{cilk}. While closer in semantics to OpenMP Tasks than Qthreads, the implementation of the runtime, named Cheetah, takes a drastically different approach from OpenMP, making a Taskgrind instrumentation difficult. As a result, we have a work-in-progress implementation available at \url{https://github.com/stelleg/cheetah/tree/taskgrind/wip}. 
+Cilk is a programming model that uses tasks as its fundamental building block~\cite{cilk}. While closer in semantics to OpenMP Tasks than Qthreads, the implementation of the runtime, named Cheetah, takes a drastically different approach from OpenMP, making a Taskgrind instrumentation difficult. As a result, we have a work-in-progress implementation available at \url{https://github.com/stelleg/cheetah/tree/taskgrind}. 
 
 In the future, we would like to extend the support of Taskgrind to a parallel programming model that could include GPUs.
 In addition, the current design has a few drawbacks that could be improved:
