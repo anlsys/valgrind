@@ -16,6 +16,12 @@ Parallel programs can be represented as a \emph{segment graph} where nodes are n
 	\label{fig:segment-graph}
 \end{figure}
 
+To reason effectively about concurrency, we build on the formal definitions of~\cite{Matar18}. In particular, we refine the definition of a happens-before (HB, $\prec$) relation to include reasoning about parallel regions. Precisely, if one parallel region happens before another, than all task segments in the first happen before all test segments in the second. Formally: 
+
+\begin{equation}
+\infer{\forall t1 \in p1, \forall t2 \in p2, t1 \prec t2}{p1 \prec p2}
+\end{equation}
+
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Valgrind}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
@@ -73,10 +79,6 @@ Taskgrind
 Remark:
 - a parallel-for loop chunk could be interpreted as a single-segment ttask - cannot map a chunk creation (work callback) with its schedule (dispatch callback)
 - a target is semantically an OpenMP task - so targeting CPU, should work seamlessly
-
-\paragraph{QThreads}
-
-\paragraph{Cilk}
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Memory Accesses Recording} \label{taskgrind-plugin}
