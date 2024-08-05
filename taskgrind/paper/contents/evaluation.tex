@@ -28,7 +28,7 @@
 \section{Evaluation} \label{sec:eval}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-The original motivations of Taskgrind were the will to have no false negative reports (against Archer and TaskSanitizer) - while improving error reports (against ROMP).
+The original motivations of Taskgrind were to have no false negative reports (as compared to Archer and TaskSanitizer) - while improving error reports (as compared to ROMP).
 This section evaluates Taskgrind determinacy race analysis, its overhead over execution time, and memory use, and illustrates its error reporting capabilities\footnote{Software versions and source code are referenced in the Appendix of this document.}.
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
@@ -43,7 +43,7 @@ We run TMBs with 1 and 4 threads to
 	For instance, LLVM implementation makes every task \emph{included} when executing on a single-thread~\footnote{\url{https://github.com/llvm/llvm-project/issues/89398}}.
 \end{itemize}
 Results are depicted on \tbl{tbl:results-race-detection} and confront state-of-the-art analysis tools: TaskSanitizer~\cite{Matar18}, Archer~\cite{archer} and ROMP~\cite{ROMP}.
-The first column is the benchmark name, the second is whether a data race is present, and the other columns depict reports obtained by the tools understudy.
+The first column is the benchmark name, the second is whether a data race is present, and the other columns depict reports obtained by the specified tools.
 Letter $(T, F, P, N)$ respectively stands for ($true$, $false$, $positive$, $negative$).
 \emph{ncs} on TaskSanitizer stands for "no compiler support" and indicates that the test does not compile with Clang 8.x.
 \emph{segv} on ROMP indicates that the instrumented execution was incomplete due to a run-time error.
@@ -87,7 +87,8 @@ Still, measurements showed that memory use and execution time follow a similar s
 
 \listing{lst:error-report} is a minimal erroneous OpenMP program, where the tasks line 8 and 11 may both concurrently access $x$.
 \listing{lst:error-report-romp} and \listing{lst:error-report-taskgrind} respectively transcribe errors reported by ROMP and Taskgrind, compiling the program with LLVM and debug symbols (option \code{-g}).
-As you can see, Taskgrind provides meaningful information towards fixing the determinacy race thanks to the Valgrind framework.
+As you can see, Taskgrind provides meaningful information towards fixing the determinacy race thanks to the Valgrind framework. 
+\george{So this example makes me think it might be worth mentioning compiler optimizations somewhere. I think a bunch of the race detection tools technically require turning off optimizations to ensure correct race detection, though in practice openmp compilers are dumb enough that it doesn't matter. I \emph{think technically} the compiler could in theory optimize away all the code here and just return 0.}
 
 
 \begin{lstlisting}[style=CStyle, captionpos=b, caption={task.c - an errorneous OpenMP Program}, label={lst:error-report}]

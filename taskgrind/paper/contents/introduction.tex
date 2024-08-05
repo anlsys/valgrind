@@ -6,19 +6,21 @@
 % CONTEXT
 
 \emph{Determinacy races} are concurrent programming hazards occurring when two accesses on the same memory address are not ordered, and at least one is writing~\cite{determinator}.
-The presence of determinacy races in a program makes its output vary given the same input, which may hint at the presence of correctness errors.
+The presence of determinacy races in a program can make its output vary given the same input, which may hint at the presence of correctness errors.
 With the ever-growing intra-node parallelism of supercomputers, porting simulation codes while ensuring parallel execution correctness is challenging.
-It is particularly true with asynchronous and dependent task-based programming models, where a missing synchronization can lead to an incorrect order of execution - and, in the end, to an erroneous simulation.
+This is particularly true with asynchronous and dependent task-based programming models, where a missing synchronization can lead to an incorrect order of execution - and, in the end, to an erroneous simulation. \george{Maybe explain briefly why it's easier to be missing a synchronization in tasking systems? I think it is true, but maybe not obvious to the reader, and I think this is important for the strength of the paper.}
 
-Many data race tools have already been proposed but present drawbacks.
+\george{We switch between determinacy race and data race. Should probably clarify if you mean something differentor subtly different by data race, but I think they can be used synonymously.}
+To help prevent unintended determinacy races, a popular approach is to develop tools to detect and avoid data races. 
+While many such tools have already been developed, each has drawbacks, which we summarize briefly here.
 LLOV~\cite{LLOV} is a static data-race checker, meaning it detects the presence or absence of errors at compile-time, hence with a limited vision of the program.
 Archer~\cite{archer} and TaskSanitizer~\cite{Matar18} instruments at compile-time to perform run-time analysis falling back to LLVM' ThreadSanitizer~\cite{thread-sanitizer-llvm}.
 Motivations and results of Archer~\cite{archer} showed its effectiveness for \emph{debugging} applications, even at large scale.
 However, as suggested by E. Dijkstra~\cite{EWD303}, \emph{"debugging is an inadequate means for ensuring programs correctness and that we must prove the correctness of programs"}.
-In particular, both tools are subject to \emph{false negative}: it may report no data race in an erroneous program.
-One source of false negatives comes from non-instrumented code, which source code is invisible at compilation time - for instance, in vendor-specific dynamic libraries.
+In particular, both tools are subject to \emph{false negative}: it may report no data race in an erroneous program. 
+One source of false negatives comes from non-instrumented code, for which source code is invisible at compilation time - for instance, in vendor-specific dynamic libraries.
 ROMP~\cite{ROMP} is a static binary instrumentation tool relying on Dyninst~\cite{dyninstr} for checking OpenMP program's correctness.
-It tackles Archer/TaskSanitizer limitation by recompiling and instrumenting \emph{binary programs}.
+It tackles Archer/TaskSanitizer's limitation by recompiling and instrumenting \emph{binary programs}.
 The main drawback of ROMP is its poor error reporting, which provides no hints to programmers on how to correct the program; it also only supports OpenMP semantics.
 
 This paper explores the use of heavyweight Dynamic Binary Instrumentation (DBI) towards (1) no false negatives and (2) meaningful determinacy race reports.
@@ -30,7 +32,7 @@ Our contributions are:
 \end{itemize}
 
 The paper is organized as follows.
-\sect{sec:background} provides background.
+\sect{sec:background} provides relevant background.
 \sect{sec:taskgrind} introduces the design of Taskgrind and the determinacy race detector implementation.
 \sect{sec:pitfalls} presents a few pitfalls on parallel programs heavyweight DBI, and how Taskgrind workarounds them.
 \sect{sec:eval} evaluates Taskgrind overheads and its determinacy race detection analysis.

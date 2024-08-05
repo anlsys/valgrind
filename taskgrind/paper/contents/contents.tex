@@ -1,13 +1,15 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Background} \label{sec:background}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-We introduce the segment graph data structure and Valgrind concepts on which rely Taskgrind.
+Here we introduce the segment graph data structure and Valgrind concepts on which rely Taskgrind.
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Segment Graph}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 Parallel programs can be represented as a \emph{segment graph} where nodes are non-divisible sequences of instructions, and so that there exists a path from nodes $N_i$ to $N_j$ if and only if a synchronization imposes $N_i$ to \emph{happen-before} $N_j$.
 \fig{fig:segment-graph} illustrates such a graph, used in race detector tools such as TaskSanitizer~\cite{Matar18} or ROMP~\cite{ROMP}.
+
+\george{Probably should define what the different node types end edges mean somewhere for Figure~\ref{fig:segment-graph}}
 
 \begin{figure}[h]
 	\centering
@@ -16,11 +18,13 @@ Parallel programs can be represented as a \emph{segment graph} where nodes are n
 	\label{fig:segment-graph}
 \end{figure}
 
-To reason effectively about concurrency, we build on the formal definitions of~\cite{Matar18}. In particular, we refine the definition of a happens-before (HB, $\prec$) relation to include reasoning about parallel regions. Precisely, if one parallel region happens before another, than all task segments in the first happen before all test segments in the second. Formally: 
+To reason about segment graphs, we build on the formal definitions of TaskSanitizer~\cite{Matar18}. In particular, we refine the definition of a happens-before relation (HB, $\prec$) to include reasoning about parallel regions. Precisely, if one parallel region happens before another, than all task segments in the first happen before all test segments in the second. Formally: 
 
 \begin{equation}
 \infer{\forall t1 \in p1, \forall t2 \in p2, t1 \prec t2}{p1 \prec p2}
 \end{equation}
+
+This is a useful definition in implementing and reasoning about OpenMP (and perhaps Qthreads), while Cilk programs can be assumed to have a single parallel region containing all tasks. 
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Valgrind}
@@ -44,7 +48,7 @@ Valgrind also makes read/write instruction instrumentation relatively simple thr
 	\label{fig:taskgrind}
 \end{figure}
 
-Taskgrind is a Valgrind tool designed to analyze parallel program memory accesses.
+We present Taskgrind, a Valgrind tool designed to analyze parallel program memory accesses.
 \fig{fig:taskgrind} summarizes its design.
 The application may be any program supported by Valgrind.
 It must rely on a parallel programming model that provides a segment graph to Taskgrind through client requests.
@@ -75,6 +79,12 @@ Taskgrind
 - sync(children|all) - the executing thread must wait for
 - all children tasks completion
 - all descendant tasks completion
+
+\paragraph{OpenCilk}
+Cilk is a programming model that uses tasks as its fundamental building block~\cite{cilk}. While there is a race detector for Cilk~\cite{opencilk}, it has the previously mentioned drawback of requiring compile-time instrumentation. The implementation of the Cilk runtime, Cheetah, takes a drastically different approach from OpenMP, making a Taskgrind integration difficult. As a result, we have a work-in-progress implementation available at \url{https://github.com/stelleg/cheetah/tree/taskgrind}.  
+
+\paragraph{Qthreads}
+Qthreads is a userspace threading runtime that implements tasks and other synchronization primitives~\cite{qthreads}. It provides a wide range of primitives for organizing dependencies between tasks, which presents unique challenges for taskgrind. As a result, instrumenting qthreads for use with Taskgrind will require subtle extensions to Taskgrind semantics to allow handling of constructs such as the full/empty-bits (FEBs). That said, we hope to get some of the basic tasking semantics of Qthreads instrumented for use with Taskgrind. 
 
 Remark:
 - a parallel-for loop chunk could be interpreted as a single-segment ttask - cannot map a chunk creation (work callback) with its schedule (dispatch callback)
