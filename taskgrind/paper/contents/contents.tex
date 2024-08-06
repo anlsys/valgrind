@@ -9,7 +9,8 @@ Here we introduce the segment graph data structure and Valgrind concepts on whic
 Parallel programs can be represented as a \emph{segment graph} where nodes are non-divisible sequences of instructions, and so that there exists a path from nodes $N_i$ to $N_j$ if and only if a synchronization imposes $N_i$ to \emph{happen-before} $N_j$.
 \fig{fig:segment-graph} illustrates such a graph, used in race detector tools such as TaskSanitizer~\cite{Matar18} or ROMP~\cite{ROMP}.
 
-\george{Probably should define what the different node types end edges mean somewhere for Figure~\ref{fig:segment-graph}}
+%\george{Probably should define what the different node types end edges mean somewhere for Figure~\ref{fig:segment-graph}}
+%\romain{i updated the figure so all nodes have the same shape, so we don't have to introduce 'node types'}
 
 \begin{figure}[h]
 	\centering
@@ -81,14 +82,16 @@ Taskgrind
 - all descendant tasks completion
 
 \paragraph{OpenCilk}
-Cilk is a programming model that uses tasks as its fundamental building block~\cite{cilk}. While there is a race detector for Cilk~\cite{opencilk}, it has the previously mentioned drawback of requiring compile-time instrumentation. The implementation of the Cilk runtime, Cheetah, takes a drastically different approach from OpenMP, making a Taskgrind integration difficult. As a result, we have a work-in-progress implementation available at \url{https://github.com/stelleg/cheetah/tree/taskgrind}.  
+Cilk is a programming model that uses tasks as its fundamental building block~\cite{cilk}. While there is a race detector for Cilk~\cite{opencilk}, it has the previously mentioned drawback of requiring compile-time instrumentation. The implementation of the Cilk runtime, Cheetah, takes a drastically different approach from OpenMP, making a Taskgrind integration difficult. As a result, we have a work-in-progress implementation\footnote{\url{https://github.com/stelleg/cheetah/tree/taskgrind}}.
 
 \paragraph{Qthreads}
 Qthreads is a userspace threading runtime that implements tasks and other synchronization primitives~\cite{qthreads}. It provides a wide range of primitives for organizing dependencies between tasks, which presents unique challenges for taskgrind. As a result, instrumenting qthreads for use with Taskgrind will require subtle extensions to Taskgrind semantics to allow handling of constructs such as the full/empty-bits (FEBs). That said, we hope to get some of the basic tasking semantics of Qthreads instrumented for use with Taskgrind. 
 
+\romain{
 Remark:
 - a parallel-for loop chunk could be interpreted as a single-segment ttask - cannot map a chunk creation (work callback) with its schedule (dispatch callback)
 - a target is semantically an OpenMP task - so targeting CPU, should work seamlessly
+}
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Memory Accesses Recording} \label{taskgrind-plugin}
@@ -226,13 +229,13 @@ A pattern commonly found in OpenMP code is indexing an array with the executing 
 \subsection{Segment-Local Accesses}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 
-%\begin{minipage}{\linewidth}
+\begin{minipage}{\linewidth}
 \begin{lstlisting}[style=CStyle, captionpos=b, caption={Memory Recycling false-positives}, label={lst:task-local-false-positive}]
 	for (int i = 0 ; i < 2 ; i++)
 		<@\textcolor{mBlue}{\# pragma omp task}@>	// T(i)
 			int x = 0;
 \end{lstlisting}
-%\end{minipage}
+\end{minipage}
 
 The last source of false-positive suppression presented in this paper is depicted on
 \listing{lst:task-local-false-positive}.

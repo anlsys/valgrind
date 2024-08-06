@@ -11,8 +11,10 @@ As opposed to source code compile-time instrumentation (such as LLVM Sanitizers)
 However, it required a lot of engineering to filter out the many false positives that arose and provide meaningful report to programmers.
 In this paper, we have illustrated a few, such as the inherent non-determinacy of parallel runtime systems, memory allocators recycling, and thread/segment-local accesses.
 
-In the future, in addition to implementing support for Cilk and Qthreads, we would like to extend the support of Taskgrind to a parallel programming model that could include GPUs. \george{Doesn't openmp already support GPUs, maybe clarify slightly?}
-In addition, the current design has a few drawbacks that could be improved:
+In the future, we would like to implement support for Cilk, Qthreads, and explore the support of GPU programming models.
+% \george{Doesn't openmp already support GPUs, maybe clarify slightly?}
+% \romain{yes, and its would be fairly straightfoward as they are 'tasks' with all the OMPT callbacks raised similarly - Taskgrind could force 'omp target' construct to target the 'host' to be capable of instrumenting accesses.
+In addition, a few drawbacks of the current design could be improved:
 \begin{itemize}
 	\item 	On memory recycling, removing free operations is not a satisfactory solution, and we also need to support programming models with built-in memory allocators.
 	\item 	The determinacy race analysis is an embarrassingly parallel algorithm, but running it within the Valgrind framework makes it hard to parallelize.

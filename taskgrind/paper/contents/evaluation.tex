@@ -30,12 +30,13 @@
 
 The original motivations of Taskgrind were to have no false negative reports (as compared to Archer and TaskSanitizer) - while improving error reports (as compared to ROMP).
 This section evaluates Taskgrind determinacy race analysis, its overhead over execution time, and memory use, and illustrates its error reporting capabilities\footnote{Software versions and source code are referenced in the Appendix of this document.}.
+Every program were compiled using LLVM and disabling optimizations (option \code{-O0}).
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Microbenchmarks}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 We evaluate Taskgrind determinacy race detection analysis on a subset of the DataRaceBenchmarks~\cite{drb} focusing on task-related constructs.
-We extended it with 7 Taskgrind-specific microbenchmarks (TMB) treating heavyweight DBI pitfalls discussed in \sect{sec:pitfalls}.
+We extended it with seven Taskgrind-specific microbenchmarks (TMB) treating heavyweight DBI pitfalls discussed in \sect{sec:pitfalls}.
 We run TMBs with 1 and 4 threads to
 \begin{itemize}
 	\item	force memory recycling, thread-local accesses, and segment-local accesses of independent segments,
@@ -84,13 +85,11 @@ Still, measurements showed that memory use and execution time follow a similar s
 \subsection{Error Reporting}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 
-
 \listing{lst:error-report} is a minimal erroneous OpenMP program, where the tasks line 8 and 11 may both concurrently access $x$.
-\listing{lst:error-report-romp} and \listing{lst:error-report-taskgrind} respectively transcribe errors reported by ROMP and Taskgrind, compiling the program with LLVM and debug symbols (option \code{-g}).
+\listing{lst:error-report-romp} and \listing{lst:error-report-taskgrind} respectively transcribe errors reported by ROMP and Taskgrind, compiling with debug symbols (option \code{-g}).
 As you can see, Taskgrind provides meaningful information towards fixing the determinacy race thanks to the Valgrind framework. 
-\george{So this example makes me think it might be worth mentioning compiler optimizations somewhere. I think a bunch of the race detection tools technically require turning off optimizations to ensure correct race detection, though in practice openmp compilers are dumb enough that it doesn't matter. I \emph{think technically} the compiler could in theory optimize away all the code here and just return 0.}
 
-
+\begin{minipage}{\linewidth}
 \begin{lstlisting}[style=CStyle, captionpos=b, caption={task.c - an errorneous OpenMP Program}, label={lst:error-report}]
 	int main(void)
 	{
@@ -109,6 +108,7 @@ As you can see, Taskgrind provides meaningful information towards fixing the det
 		return 0;
 	}
 \end{lstlisting}
+\end{minipage}
 
 \begin{minipage}{\linewidth}
 \begin{lstlisting}[style=text, captionpos=b, caption={An error report from ROMP}, label={lst:error-report-romp}]
