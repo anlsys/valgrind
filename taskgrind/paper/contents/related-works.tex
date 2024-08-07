@@ -32,7 +32,7 @@ Archer~\cite{archer} was introduced in 2016 as a ThreadSanitizer extension to su
 However, it is a thread-centric analyzer that may be a source of false negatives running under task-related synchronizations which is a source of motivations for TaskSanitizer~\cite{Matar18}, ROMP~\cite{ROMP} and Taskgrind.
 
 OmpSs-2 has a toolchain to verify the parallelization of programs~\cite{ompss2-correctness}.
-It looks for five errors (E1, E2, E3, E4, E5) "\emph{using local task analysis to deal with each task separately}" - as opposed to Taskgrind which looks at the program entirely through its segment graph.
+It checks five errors (E1, E2, E3, E4, E5) "\emph{using local task analysis to deal with each task separately}" - as opposed to Taskgrind which looks at the program entirely through its segment graph.
 If OmpSs-2 were to be supported by Taskgrind, errors E3, E4 and E5 would fallback to a generic determinacy-error.
 On the other hand, OmpSs-2 toolchain seems to provide more insights about the error, such as synchronizations mechanism suggestions.
 Extending Taskgrind to report programming model-specific suggestion is left as future work, and could assist programmers in parallelizing their applications.

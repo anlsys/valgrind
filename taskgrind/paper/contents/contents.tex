@@ -53,45 +53,34 @@ We present Taskgrind, a Valgrind tool designed to analyze parallel program memor
 \fig{fig:taskgrind} summarizes its design.
 The application may be any program supported by Valgrind.
 It must rely on a parallel programming model that provides a segment graph to Taskgrind through client requests.
-\sect{pms} presents the supported parallel programming models, \sect{taskgrind-plugin} the per-segment memory accesses recording, and finally \sect{taskgrind-analysis} an analysis for determinacy race detection.
+\sect{pms} presents the considered parallel programming models and their support, \sect{taskgrind-plugin} the per-segment memory accesses recording, and finally \sect{taskgrind-analysis} an analysis for determinacy race detection.
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Parallel Programming Models Support} \label{pms}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
-
-The Taskgrind plugin constructs a segment tree from passed client requests.
-
-\romain{TODO: write this section}
-
-Taskgrind
-- Note: Taskgrind could use function replacement to wrap any parallel libraries and re-implement OMPT internally, for instance
-- but interfaces exists, more convenient and portable to use them
+In order to support a programming model, Taskgrind must build a segment tree from a program execution.
+We briefly introduced considered programming models and their current support.
 
 \paragraph{OpenMP}
-- OMPT tool
-- Convert OMPT callbacks to a Taskgrind segment graph
-- create(T) - the executing thread creates the task 'T'
-- schedule(T) - the executing thread schedules the task 'T'
-- depend(T, list<in|out|outset, addr>) - openmp-like dependences
-- the first segment the successor depends on the last segment of the predecessor
-- detach
-- when omp-fulfill-event(e) is raised, create an empty segment S
-- successors of e.T also depends on S
-- sync(children|all) - the executing thread must wait for
-- all children tasks completion
-- all descendant tasks completion
+OpenMP is a parallel programming model with a main focus on intra-node parallelism.
+It provides many synchronization mechanism such as threads fork-join, mutex, barriers, dependencies or detachable tasks.
+It also comes with a standard tooling interface: OMPT~\cite{ompt}.
+An OMPT-tool can register callbacks raised on specific run-time events.
+Taskgrind provides a built-in OMPT-tool that forward the OpenMP program state to the Taskgrind plugin via client requests.
+The OMPT-tool is automatically injected into the instrumented program by Taskgrind.
+Such approach to building a segment tree is similar to TaskSanitizer~\cite{Matar18}, the main differences stands in the supported interfaces: for instance, TaskSanitizer supports mutexes but does not support the \code{inoutset} dependency type nor the \code{detach} clause, while Taskgrind the opposite.
 
 \paragraph{OpenCilk}
-Cilk is a programming model that uses tasks as its fundamental building block~\cite{cilk}. While there is a race detector for Cilk~\cite{opencilk}, it has the previously mentioned drawback of requiring compile-time instrumentation. The implementation of the Cilk runtime, Cheetah, takes a drastically different approach from OpenMP, making a Taskgrind integration difficult. As a result, we have a work-in-progress implementation\footnote{\url{https://github.com/stelleg/cheetah/tree/taskgrind}}.
+Cilk is a programming model that uses tasks as its fundamental building block~\cite{cilk}.
+While there is a race detector for Cilk~\cite{opencilk}, it has the previously mentioned drawback of requiring compile-time instrumentation.
+The implementation of the Cilk runtime, Cheetah, takes a drastically different approach from OpenMP, making a Taskgrind integration difficult.
+As a result, we have a work-in-progress implementation\footnote{\url{https://github.com/stelleg/cheetah/tree/taskgrind}}.
 
 \paragraph{Qthreads}
 Qthreads is a userspace threading runtime that implements tasks and other synchronization primitives~\cite{qthreads}. It provides a wide range of primitives for organizing dependencies between tasks, which presents unique challenges for taskgrind. As a result, instrumenting qthreads for use with Taskgrind will require subtle extensions to Taskgrind semantics to allow handling of constructs such as the full/empty-bits (FEBs). That said, we hope to get some of the basic tasking semantics of Qthreads instrumented for use with Taskgrind. 
 
-\romain{
-Remark:
-- a parallel-for loop chunk could be interpreted as a single-segment ttask - cannot map a chunk creation (work callback) with its schedule (dispatch callback)
-- a target is semantically an OpenMP task - so targeting CPU, should work seamlessly
-}
+% TODO : dirty but ensure correct positioning
+\input{contents/related-works-table.tex}
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Memory Accesses Recording} \label{taskgrind-plugin}

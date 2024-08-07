@@ -87,7 +87,7 @@ Still, measurements showed that memory use and execution time follow a similar s
 
 \listing{lst:error-report} is a minimal erroneous OpenMP program, where the tasks line 8 and 11 may both concurrently access $x$.
 \listing{lst:error-report-romp} and \listing{lst:error-report-taskgrind} respectively transcribe errors reported by ROMP and Taskgrind, compiling with debug symbols (option \code{-g}).
-As you can see, Taskgrind provides meaningful information towards fixing the determinacy race thanks to the Valgrind framework. 
+As you can see, Taskgrind provides debug information thanks to the Valgrind framework, while ROMP does not due to a lack of support in its DBI framework (Dyninst).
 
 \begin{minipage}{\linewidth}
 \begin{lstlisting}[style=CStyle, captionpos=b, caption={task.c - an errorneous OpenMP Program}, label={lst:error-report}]
@@ -116,9 +116,6 @@ As you can see, Taskgrind provides meaningful information towards fixing the det
 	data race found:
 \end{lstlisting}
 \end{minipage}
-
-% TODO : dirty but ensure correct positioning
-\input{contents/related-works-table.tex}
 
 \begin{minipage}{\linewidth}
 \begin{lstlisting}[style=text, captionpos=b, caption={An error report from Taskgrind}, label={lst:error-report-taskgrind}]
