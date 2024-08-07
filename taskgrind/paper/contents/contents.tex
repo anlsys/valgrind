@@ -177,10 +177,6 @@ It must be noted that Valgrind memory allocator overriding does not support cust
 For instance, the LLVM OpenMP runtime 19.x has its own memory allocator that can also perform memory recycling (\code{___kmp_fast_allocate}).
 Extending the support of memory allocators is kept as future work.
 
-
-% TODO : move me if needed
-\input{contents/evaluations-table.tex}
-
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Thread-Local Accesses}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
@@ -231,3 +227,7 @@ The last source of false-positive suppression presented in this paper is depicte
 Running with code with LLVM' OpenMP, both segments associated with tasks $T(0)$ and $T(1)$ may be executed on the same thread one after the other. With LLVM/GCC implementation, $x$ is pushed at the same address onto the executing thread stack, resulting in a conflict when analyzing.
 In order to suppress such false positives, Taskgrind registers the stack frame address at the start of a segment.
 Then, during the determinacy analysis, such false positives are suppressed by confronting conflicting stack accesses with registered stack frames.
+
+
+% TODO : move me if needed
+\input{contents/evaluations-table.tex}
