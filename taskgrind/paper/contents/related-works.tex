@@ -10,8 +10,8 @@ We present a brief review of the literature on programs instrumentation framewor
 Instrumenting programmes to analyse them is a much-studied subject in the literature, and several approaches had been explored.
 Pin~\cite{pin} and Valgrind~\cite{valgrind} rely on Dynamic Binary Translation (DBT)~\cite{dbt}: the binary program is translated to an intermediate representation, instrumented, and its execution is emulated keeping track of a virtual machine state.
 The main drawback is the cost of translating and emulating, that lead to important slowdown when executing.
-It motivates the design of instrumentation frameworks such as DynamoRIO~\cite{dynamorio}, Dyninstr~\cite{dyninstr} or Instrew~\cite{llvm-dbi}, which is capable of instrumenting while executing natively.
-All these frameworks presents different capabilities, in the end, we choose Valgrind for its well-established capabilities (memory allocator overloading, memory accesses instrumentation, debug information reading...) and for its active community.
+It motivates the design of instrumentation frameworks such as DynamoRIO~\cite{dynamorio}, Dyninst~\cite{dyninstr} or Instrew~\cite{llvm-dbi}, which is capable of instrumenting while executing natively.
+All these frameworks present different capabilities, in the end, we choose Valgrind for its well-established capabilities (memory allocator overloading, memory access instrumentation, debug information reading...) and for its active community.
 
 \paragraph{Determinacy Race Analyzer}
 In 1997, Nondeterminator~\cite{nondeterminator} was designed as an entire toolsuite (including compile-time instrumentation and run-time analysis) to detect accurately and provably determinacy races of Cilk programs.
@@ -19,9 +19,7 @@ The core of its analyzer relies on a low complexity algorithm (SP-Bags) which as
 Taskgrind has no such assumption.
 
 Helgrind$^{+}$ (2007-2009) is a Valgrind tool for data race detection.
-It supports pthread synchronizations primitives, including mutexes and condition variables.
-Taskgrind does not support these primitives but targets task-based synchronizations such as barriers or dependencies.
-Adding full pthread-support is left for future work.
+It supports pthread synchronizations primitives, including mutexes and condition variables, which are currently not supported by Taskgrind but could be added in the future.
 
 ThreadSanitizer~\cite{thread-sanitizer-valgrind} (2009) was originally designed as a Valgrind tool, support pthread-based synchronizations.
 Its core moved to the LLVM compiler~\cite{tsan-llvm} to reduce execution overheads by instrumenting at compile-time and executing natively.

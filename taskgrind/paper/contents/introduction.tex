@@ -26,10 +26,10 @@ ROMP~\cite{ROMP} is a static binary instrumentation tool relying on Dyninst~\cit
 It tackles Archer/TaskSanitizer's limitation by recompiling and instrumenting \emph{binary programs}.
 However, ROMP' main drawbacks are its poor error reporting and that it only supports OpenMP semantics.
 
-This paper explores the use of heavyweight Dynamic Binary Instrumentation (DBI) towards (1) no false negatives, (2) meaningful determinacy race reports and (3) multi-parallel programming model support.
+This paper explores the use of heavyweight Dynamic Binary Instrumentation (DBI) towards (1) reducing false-negatives detection, (2) meaningful determinacy race reports and (3) multi-parallel programming model support.
 Our contributions are:
 \begin{itemize}
-	\item	the introduction of Taskgrind: a Valgrind tool for parallel programming model memory accesses analysis - with support for OpenMP and a work-in-progress support for Cilk.
+	\item	the introduction of Taskgrind: a Valgrind tool for parallel programming model memory accesses analysis - with support for OpenMP and a work-in-progress Cilk support.
 	\item 	a brief survey on pitfalls related to heavyweight DBI of parallel programs,
 	\item 	the implementation of a determinacy race analysis in Taskgrind, and its evaluation with respect to state-of-the-art tools.
 \end{itemize}

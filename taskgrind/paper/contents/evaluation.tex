@@ -30,7 +30,7 @@
 
 The original motivations of Taskgrind were to have no false negative reports (as compared to Archer and TaskSanitizer) - while improving error reports (as compared to ROMP).
 This section evaluates Taskgrind determinacy race analysis, its overhead over execution time, and memory use, and illustrates its error reporting capabilities\footnote{Software versions and source code are referenced in the Appendix of this document.}.
-Every program were compiled using LLVM and disabling optimizations (option \code{-O0}).
+Every program was compiled using LLVM and disabling optimizations (option \code{-O0}).
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Microbenchmarks}
@@ -71,8 +71,7 @@ We also run it on 1 and 4 threads for the same reason as the previous experiment
 On the single-threaded run, we observe a slowdown against non-instrumented versions of $10x$ for Archer and $100x$ for Taskgrind and a memory overhead of $4x$ for Archer and $6x$ for Taskgrind.
 The reasons for Taskgrind deadlocks running with multiple threads remain to be investigated.
 Regarding data race, Archer never reports errors when running in a single-thread, most likely because it only sees undeferred tasks through OMPT due to LLVM serialization.
-On the other hand, Taskgrind has been notified that the task is semantically deferrable, which leads to no false negatives on the racy version.
-Over 10 runs of the correct version, Archer reported from 149 to 273 false-positive of LULESH while Taskgrind had none.
+On the other hand, we annotated the code to notify Taskgrind that the task is semantically deferrable, which leads to no false negatives on the racy version with 458 races detected.
 
 On the figure, the x-axis varies the problem size \code{-s} - with the application having a $O(s^3)$ time and memory complexity.
 The reference and Archer execute with four threads, and Taskgrind with a single thread.
@@ -87,7 +86,7 @@ Still, measurements showed that memory use and execution time follow a similar s
 
 \listing{lst:error-report} is a minimal erroneous OpenMP program, where the tasks line 8 and 11 may both concurrently access $x$.
 \listing{lst:error-report-romp} and \listing{lst:error-report-taskgrind} respectively transcribe errors reported by ROMP and Taskgrind, compiling with debug symbols (option \code{-g}).
-As you can see, Taskgrind provides debug information thanks to the Valgrind framework, while ROMP does not due to a lack of support in its DBI framework (Dyninst).
+As you can see, Taskgrind provides debug information thanks to the Valgrind framework, while ROMP does not by default even though its DBI framework (Dyninst) can be patched to enable similar report.
 
 \begin{minipage}{\linewidth}
 \begin{lstlisting}[style=CStyle, captionpos=b, caption={task.c - an errorneous OpenMP Program}, label={lst:error-report}]
