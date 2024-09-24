@@ -1,0 +1,11 @@
+%!TEX root =  ../article.tex
+\begin{abstract}
+
+
+Determinacy races are concurrent programming hazards occurring when two accesses on the same memory address are not ordered, and at least one is writing.
+Their presence hints at a correctness error, particularly under asynchronous task-based parallel programming models.
+This paper introduces Taskgrind: a Valgrind tool for memory access analysis of parallel programming models such as Cilk or OpenMP.
+We illustrate the tool's capabilities with a determinacy-race analysis and confront it with state-of-the-art tools.
+Results show fewer false negatives and memory overheads on a set of microbenchmarks and LULESH, with meaningful error reports toward assisting programmers when parallelizing programs.
+
+\end{abstract}

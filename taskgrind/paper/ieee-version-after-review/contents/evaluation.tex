@@ -1,7 +1,7 @@
 
 \begin{figure*}[h]
 	\centering
-	\includegraphics[width=\linewidth]{figures/lulesh.pdf}
+	\includegraphics[width=\linewidth]{../figures/lulesh.pdf}
 	\caption{Execution Time and Memory overheads on LULESH with parameters `-s \$s -tel 4 -tnl 4 -p -i 4`}
 	\label{fig:lulesh}
 \end{figure*}
@@ -18,7 +18,7 @@
 		\multirow{2}{*}{no}      & 1                                  & 0.01                         & 0.12                       & 1.23                           & 10                           & 41                         & 64                             & 0                & 0              \\
 		& 4                                  & 0.01                         & 0.43                       & \emph{deadlock}                       & 15                           & 83                         & \emph{deadlock}                       & 149 to 273       & \emph{deadlock}       \\
 		\multirow{2}{*}{yes}     & 1                                  & 0.01                         & 0.12                       & 1.23                           & 10                           & 41                         & 64                             & 0                & 458            \\
-		& 4                                  & 0.01                         & 0.46                       & \emph{deadlock}                       & 15                           & 84                         & \emph{deadlock}                       & 140 to 221       & \emph{deadlock}      
+		& 4                                  & 0.01                         & 0.46                       & \emph{deadlock}                       & 15                           & 84                         & \emph{deadlock}                       & 140 to 221       & \emph{deadlock}
 	\end{tabular}
 	\caption{Execution time, memory usage overheads and number of reports for Archer and Taskgrind, on a dependent task-based OpenMP implementation of LULESH with -s 16 -tel 4 -tnl 4 -p -i 4}
 	\label{tbl:results-lulesh}

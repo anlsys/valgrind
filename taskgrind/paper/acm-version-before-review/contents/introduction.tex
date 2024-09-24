@@ -1,0 +1,42 @@
+%!TEX root =  ../article.tex
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Introduction}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% CONTEXT
+
+\emph{Determinacy races} are concurrent programming hazards occurring when two accesses on the same memory address are not ordered, and at least one is writing~\cite{determinator}.
+The presence of determinacy races in a program can make its output vary given the same input, which may hint at the presence of correctness errors.
+With the ever-growing intra-node parallelism of supercomputers, porting simulation codes while ensuring parallel execution correctness is challenging.
+It is particularly true with dependent task-based programming models over more synchronous programming models.
+A missing synchronization can lead to an incorrect order of execution and, in the end, to an erroneous simulation.
+%\george{Maybe explain briefly why it's easier to be missing a synchronization in tasking systems? I think it is true, but maybe not obvious to the reader, and I think this is important for the strength of the paper.}
+%\romain{I agree}
+
+%\george{We switch between determinacy race and data race. Should probably clarify if you mean something differentor subtly different by data race, but I think they can be used synonymously.}
+%\romain{yes - i don't think 'determinacy race' and 'data race' differences are clearly stated somewhere... I tend to prefer the term 'determinacy race' though}
+To help prevent unintended determinacy races, many tools had been developed, which we summarize briefly here.
+LLOV~\cite{LLOV} is a static data-race checker, meaning it detects the presence or absence of errors at compile-time, hence with a limited vision of the program.
+Archer~\cite{archer} and TaskSanitizer~\cite{Matar18} instruments at compile-time to perform run-time analysis falling back to LLVM' ThreadSanitizer~\cite{thread-sanitizer-llvm}.
+Motivations and results of Archer~\cite{archer} showed its effectiveness for \emph{debugging} applications, even at large scale.
+However, as suggested by E. Dijkstra~\cite{EWD303}, \emph{"debugging is an inadequate means for ensuring programs correctness and that we must prove the correctness of programs"}.
+In particular, both tools are subject to \emph{false negative}: it may report no data race in an erroneous program. 
+One source of false negatives comes from non-instrumented code - for instance, in vendor-specific dynamic libraries which source code may not be visible at compile-time.
+ROMP~\cite{ROMP} is a static binary instrumentation tool relying on Dyninst~\cite{dyninstr} for checking OpenMP program's correctness.
+It tackles Archer/TaskSanitizer's limitation by recompiling and instrumenting \emph{binary programs}.
+However, ROMP' main drawbacks are its poor error reporting and that it only supports OpenMP semantics.
+
+This paper explores the use of heavyweight Dynamic Binary Instrumentation (DBI) towards (1) no false negatives, (2) meaningful determinacy race reports and (3) multi-parallel programming model support.
+Our contributions are:
+\begin{itemize}
+	\item	the introduction of Taskgrind: a Valgrind tool for parallel programming model memory accesses analysis - with support for OpenMP and a work-in-progress support for Cilk.
+	\item 	a brief survey on pitfalls related to heavyweight DBI of parallel programs,
+	\item 	the implementation of a determinacy race analysis in Taskgrind, and its evaluation with respect to state-of-the-art tools.
+\end{itemize}
+
+The paper is organized as follows.
+\sect{sec:background} provides relevant background.
+\sect{sec:taskgrind} introduces the design of Taskgrind and the determinacy race detector implementation.
+\sect{sec:pitfalls} presents a few pitfalls on parallel programs heavyweight DBI, and how Taskgrind workarounds them.
+\sect{sec:eval} evaluates Taskgrind overheads and its determinacy race detection analysis.
+Finally, \sect{sec:relworks} review the literature, and we conclude in \sect{sec:conclusion}.

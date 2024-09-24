@@ -14,7 +14,7 @@ Parallel programs can be represented as a \emph{segment graph} where nodes are n
 
 \begin{figure}[h]
 	\centering
-	\includegraphics[width=0.8\linewidth]{figures/segment-graph.pdf}
+	\includegraphics[width=0.8\linewidth]{../figures/segment-graph.pdf}
 	\caption{Minimal example of a segment graph}
 	\label{fig:segment-graph}
 \end{figure}
@@ -44,7 +44,7 @@ Valgrind also makes read/write instruction instrumentation relatively simple thr
 \begin{figure}[h]
 	\centering
 	\includegraphics[width=
-	\linewidth]{figures/taskgrind.pdf}
+	\linewidth]{../figures/taskgrind.pdf}
 	\caption{The design of Taskgrind}
 	\label{fig:taskgrind}
 \end{figure}
@@ -68,7 +68,7 @@ It also comes with a standard tooling interface: OMPT~\cite{ompt}.
 An OMPT-tool can register callbacks raised on specific run-time events.
 Taskgrind provides a built-in OMPT-tool that forward the OpenMP program state to the Taskgrind plugin via client requests.
 The OMPT-tool is automatically injected into the instrumented program by Taskgrind.
-Such approach to building a segment tree is similar to TaskSanitizer~\cite{Matar18}, the main differences stands in the supported interfaces: for instance, TaskSanitizer supports mutexes but does not support the \code{inoutset} dependency type nor the \code{detach} clause, while Taskgrind is the opposite.
+Such approach to building a segment tree is similar to TaskSanitizer~\cite{Matar18}, the main differences stands in the supported interfaces: for instance, TaskSanitizer supports mutexes but does not support the \code{inoutset} dependency type nor the \code{detach} clause, while Taskgrind the opposite.
 
 \paragraph{OpenCilk}
 Cilk is a programming model that uses tasks as its fundamental building block~\cite{cilk}.
@@ -90,7 +90,7 @@ Qthreads is a userspace threading runtime that implements tasks and other synchr
 \begin{figure}[h]
 	\centering
 	\includegraphics[width=
-	\linewidth]{figures/interval-tree.pdf}
+	\linewidth]{../figures/interval-tree.pdf}
 	\caption{Write interval tree for the right-side segment}
 	\label{fig:interval-tree}
 \end{figure}
@@ -103,9 +103,9 @@ Such structure allows compactly accumulated dense memory accesses and a light $O
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Determinacy Race Analysis} \label{taskgrind-analysis}
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
-When the parallel program finishes execution, Taskgrind will have generated a segment tree representation of the execution, with accesses recorded for each segment.
+Once the parallel program completed, Taskgrind have a segment tree representation of the execution, with accesses recorded for each segment.
 Using that knowledge, \alg{alg:cg} presents the implementation of a determinacy race analysis.
-It compares each independent-segments to one-another, intersecting their accesses location where at least one is writing.
+It compares each segments independent to one-another, intersecting their accesses location where at least one is writing.
 If the intersection is not empty, then a determinacy race may be reported.
 
 \begin{algorithm}[h!t]
@@ -132,7 +132,7 @@ In order to provide meaningful report to the programmer, Taskgrind overloads the
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 The original motivations of Taskgrind were to avoid false-negative detection by instrumenting every instruction of the program understudy.
-However, naively running Taskgrind and its determinacy race analysis leads to many false positives.
+However, naively running Taskgrind and its determinacy race analysis leads to immeasurable false positives.
 Instrumenting an OpenMP dependent task-based version of LULESH~\footnote{\url{https://github.com/rpereira-dev/LULESH}} reports about 400,000 determinacy races with a low problem size \code{-s~4} (the mesh size) and low parallelism \code{-tel~2} (the number of tasks per loop).
 This section presents a few sources of false-positives, illustrated with OpenMP, and how Taskgrind suppresses them.
 
@@ -146,7 +146,7 @@ For instance, OpenMP and Cilk implementations rely on work-stealing task schedul
 In order to turn off the report of such unharmful determinacy races, we added two lists of symbols: the \emph{ignore-list} and the \emph{instrument-list}.
 The former one tells Taskgrind to turn off instrumentation for accesses occurring in a symbol matching any.
 The latter tells Taskgrind only to allow instrument accesses occurring in a symbol matching any.
-For instance, the \emph{ignore-list} contains symbols prefixed with \code{__kmp} corresponding to LLVM' OpenMP runtime.
+For instance, the \emph{ignore-list} contains prefixed with \code{__kmp} corresponding to LLVM' OpenMP runtime.
 
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 \subsection{Memory Recycling}

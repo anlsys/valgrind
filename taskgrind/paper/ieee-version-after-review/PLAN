@@ -1,0 +1,61 @@
+# Abstract
+TODO
+
+# Introduction
+MOTIVATIONS
+- On the reliability of programs. E.W. Dijkstra
+""" I shall argue that our programs should be correct [...] """
+-> cite famous example of program errors
+
+""" I shall argue that debugging is an inadequate means for achieving that goal and that we must prove the correctness of programs [...] """
+-> Currently (Helgrind, ThreadSanitizer(=Archer), ... : programmer observed an error, then debug it. Maybe there is other that didn't show; maybe the debugger does not handle all cases ...
+
+
+""" I shall argue that we must tailor our programs to the proof requirements """
+-> (Romain: Is Rust going that direction ?)
+   Not the direction taken over the past 50 years, for the sake of productivity
+   Cite languages that tried that, and failed
+
+CONTEXT
+- Porting of code historically sequential towards many-core and heterogeneous
+- Express parallelism from sequential code
+
+PROBLEM
+- Parallelize is tedious and error-prone
+- How to ensure correctness ?
+- Verification tools exists that recompile to instrument parts of the code
+    - can produce false-negative on non-instrumented parts
+
+OBJECTIVES
+- "heavy instrumentation" towards no false-negative
+
+CONTRIBUTIONS
+- A survey on issues related to "heavy instrumentations"
+- Some solutions to these issues
+- An implementation in Valgrind
+
+# Related works
+See GETTING-STARTED
+
+# Taskgrind
+## Design
+- Taskgrind associate memory accesses (read, write) to segments
+    - Stored in a "sparse memory tree" to construct intervals, and perform union/intersect
+    - Perform analysis at the end of execution with an entire view of the program
+- Present Taskgrind interfaces here (~4-5 interfaces)
+
+## OMPT Bridging
+- Tool, Valgrind callbacks, construct segments
+
+# Issues with 'seeing everything'
+See GETTING-STARTED
+
+# Evaluation
+- Footprint on memory and execution time
+- Evaluation - false positive
+    - a few microbenchmarks
+    - LULESH
+
+# Conclusion
+- Very slow, as expected, but strong guarantees
+- Many issues remains to be faced for this approach
