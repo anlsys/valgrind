@@ -15,14 +15,14 @@ All these frameworks present different capabilities, in the end, we choose Valgr
 
 \paragraph{Determinacy Race Analyzer}
 In 1997, Nondeterminator~\cite{nondeterminator} was designed as an entire toolsuite (including compile-time instrumentation and run-time analysis) to detect accurately and provably determinacy races of Cilk programs.
-The core of its analyzer relies on a low complexity algorithm (SP-Bags) which assumes the program serial execution correct - also known as the \emph{serial elision}.
+The core of its analyzer relies on a low complexity algorithm (SP-Bags) which assumes the program serial execution correct - known as the \emph{serial elision}.
 Taskgrind has no such assumption.
 
 Helgrind$^{+}$ (2007-2009) is a Valgrind tool for data race detection.
 It supports pthread synchronizations primitives, including mutexes and condition variables, which are currently not supported by Taskgrind but could be added in the future.
 
-ThreadSanitizer~\cite{thread-sanitizer-valgrind} (2009) was originally designed as a Valgrind tool, support pthread-based synchronizations.
-Its core moved to the LLVM compiler~\cite{tsan-llvm} to reduce execution overheads by instrumenting at compile-time and executing natively.
+ThreadSanitizer~\cite{thread-sanitizer-valgrind} (2009) was originally designed as a Valgrind tool and support pthread-based synchronizations.
+Its core moved to the LLVM compiler~\cite{tsan-llvm} to reduce execution overheads by instrumenting during the compilation and executing natively.
 
 R. Raghavan et al.~\cite{x10-determinacy-race} (2010) generalized Nondeterminator approach for async/await programming models, and provided a tool for X10 programs, still under the serial elision assumption.
 

@@ -14,7 +14,7 @@ Parallel programs can be represented as a \emph{segment graph} where nodes are n
 
 \begin{figure}[h]
 	\centering
-	\includegraphics[width=0.8\linewidth]{../figures/segment-graph.pdf}
+	\includegraphics[width=0.95\linewidth]{../figures/segment-graph.pdf}
 	\caption{Minimal example of a segment graph}
 	\label{fig:segment-graph}
 \end{figure}
@@ -117,7 +117,7 @@ If the intersection is not empty, then a determinacy race may be reported.
 			\ForEach {segment $s_2 \in G \backslash \{s_1\}$}
 				\If {no path exists between $s_1$ and $s_2$}
 					\If {$s_1.w \cap (s_2.r \cup s_2.w)$ is not empty}
-						\State {Possible determinacy races on $s_1$ and $s_2$}
+						\State {Possible determinacy races ($s_1$, $s_2$)}
 					\EndIf
 				\EndIf
 			\EndFor
@@ -183,11 +183,11 @@ Extending the support of memory allocators is kept as future work.
 
 %\begin{minipage}{\linewidth}
 \begin{lstlisting}[style=CStyle, captionpos=b, caption={Memory Recycling false-positives}, label={lst:thread-local-false-positive}]
-	_Thread_local int * x;
-	[...]
-	for (int i = 0 ; i < 2 ; i++)
-	    <@\textcolor{mBlue}{\# pragma omp task}@>	// T(i)
-	        write(x);
+_Thread_local int * x;
+[...]
+for (int i = 0 ; i < 2 ; i++)
+ <@\textcolor{mBlue}{\# pragma omp task}@>	// T(i)
+     write(x);
 \end{lstlisting}
 %\end{minipage}
 
@@ -216,9 +216,9 @@ A pattern commonly found in OpenMP code is indexing an array with the executing 
 
 \begin{minipage}{\linewidth}
 \begin{lstlisting}[style=CStyle, captionpos=b, caption={Memory Recycling false-positives}, label={lst:task-local-false-positive}]
-	for (int i = 0 ; i < 2 ; i++)
-		<@\textcolor{mBlue}{\# pragma omp task}@>	// T(i)
-			int x = 0;
+for (int i = 0 ; i < 2 ; i++)
+	<@\textcolor{mBlue}{\# pragma omp task}@>	// T(i)
+		int x = 0;
 \end{lstlisting}
 \end{minipage}
 

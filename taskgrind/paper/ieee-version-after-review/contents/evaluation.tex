@@ -37,7 +37,7 @@ Every program was compiled using LLVM and disabling optimizations (option \code{
 % - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - . - .%
 We evaluate Taskgrind determinacy race detection analysis on a subset of the DataRaceBenchmarks~\cite{drb} focusing on task-related constructs.
 We extended it with seven Taskgrind-specific microbenchmarks (TMB) treating heavyweight DBI pitfalls discussed in \sect{sec:pitfalls}.
-We run TMBs with 1 and 4 threads to
+We run TMBs with 1 and 4 threads to:
 \begin{itemize}
 	\item	force memory recycling, thread-local accesses, and segment-local accesses of independent segments,
 	\item 	ensures the tool captures the code semantic and not implementation specific behavior.
@@ -88,42 +88,42 @@ Still, measurements showed that memory use and execution time follow a similar s
 \listing{lst:error-report-romp} and \listing{lst:error-report-taskgrind} respectively transcribe errors reported by ROMP and Taskgrind, compiling with debug symbols (option \code{-g}).
 As you can see, Taskgrind provides debug information thanks to the Valgrind framework, while ROMP does not by default even though its DBI framework (Dyninst) can be patched to enable similar report.
 
-\begin{minipage}{\linewidth}
+%\begin{minipage}{\linewidth}
 \begin{lstlisting}[style=CStyle, captionpos=b, caption={task.c - an errorneous OpenMP Program}, label={lst:error-report}]
-	int main(void)
+int main(void)
+{
+	int * x = (int *) malloc(2 * sizeof(int));
+	<@\textcolor{mBlue}{\# pragma omp parallel}@>
 	{
-		int * x = (int *) malloc(2 * sizeof(int));
-		<@\textcolor{mBlue}{\# pragma omp parallel}@>
+		<@\textcolor{mBlue}{\# pragma omp single}@>
 		{
-			<@\textcolor{mBlue}{\# pragma omp single}@>
-			{
-				<@\textcolor{mBlue}{\# pragma omp task}@>
-					x[0] = 42;
-				
-				<@\textcolor{mBlue}{\# pragma omp task}@>
-					x[0] = 43;
-			}
+			<@\textcolor{mBlue}{\# pragma omp task}@>
+				x[0] = 42;
+			
+			<@\textcolor{mBlue}{\# pragma omp task}@>
+				x[0] = 43;
 		}
-		return 0;
 	}
+	return 0;
+}
 \end{lstlisting}
-\end{minipage}
+%\end{minipage}
 
-\begin{minipage}{\linewidth}
+%\begin{minipage}{\linewidth}
 \begin{lstlisting}[style=text, captionpos=b, caption={An error report from ROMP}, label={lst:error-report-romp}]
 	[...]
 	data race found:
 \end{lstlisting}
-\end{minipage}
+%\end{minipage}
 
-\begin{minipage}{\linewidth}
+%\begin{minipage}{\linewidth}
 \begin{lstlisting}[style=text, captionpos=b, caption={An error report from Taskgrind}, label={lst:error-report-taskgrind}]
 	Segments task.1.c:8 and task.1.c:11 were declared independent while accessing the same memory address
 	4 bytes from 0xC3EA040 allocated in block 0xC3EA040 of size 8
 	from task.1.c:3
 	[...]
 \end{lstlisting}
-\end{minipage}
+%\end{minipage}
 
 
 
