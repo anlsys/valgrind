@@ -34,11 +34,9 @@ You may want to dump generated data structures to dot files with
 ```
 ../vg-in-place --tool=taskgrind --dump tests/test.exe
 ```
-
-# TODO (PRIORITY) LIST BEFORE MAKING TASKGRIND PUBLICLY AVAILABLE
-1) Having feedback from users
-2) Add the OMPT Plugin to the installation, and have Taskgrind loading it.
-3) Optimize the 'spmt.h' data structure. Probably rewrite it entirely keeping the same interfaces
+# References
+Taskgrind: Heavyweight Dynamic Binary Instrumentation for Parallel Programs Analysis
+https://hal.science/hal-04814885v1/document
 
 # Testing with dataracebench
 The project had been modded to 'dataracebench/' to support taskgrind
