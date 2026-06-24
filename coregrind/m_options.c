@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -182,11 +182,15 @@ XArray *VG_(clo_req_tsyms);  // array of strings
 Bool   VG_(clo_run_libc_freeres) = True;
 Bool   VG_(clo_run_cxx_freeres) = True;
 UInt   VG_(clo_track_fds)      = 0;
+UInt   VG_(clo_modify_fds)      = VG_MODIFY_FD_NO;
 Bool   VG_(clo_show_below_main)= False;
 Bool   VG_(clo_keep_debuginfo) = False;
 Bool   VG_(clo_show_emwarns)   = False;
 Word   VG_(clo_max_stackframe) = 2000000;
 UInt   VG_(clo_max_threads)    = MAX_THREADS_DEFAULT;
+#if defined(VGO_linux)
+UInt   VG_(clo_max_guard_pages) = MAX_GUARDS_DEFAULT;
+#endif
 Word   VG_(clo_main_stacksize) = 0; /* use client's rlimit.stack */
 Word   VG_(clo_valgrind_stacksize) = VG_DEFAULT_STACK_ACTIVE_SZB;
 Bool   VG_(clo_wait_for_gdb)   = False;
@@ -203,7 +207,8 @@ UInt   VG_(clo_unw_stack_scan_frames) = 5;
 VgSmc VG_(clo_smc_check) = Vg_SmcAllNonFile;
 #elif defined(VGA_ppc32) || defined(VGA_ppc64be) || defined(VGA_ppc64le) \
       || defined(VGA_arm) || defined(VGA_arm64) \
-      || defined(VGA_mips32) || defined(VGA_mips64) || defined(VGA_nanomips)
+      || defined(VGA_mips32) || defined(VGA_mips64) || defined(VGA_nanomips) \
+      || defined(VGA_riscv64)
 VgSmc VG_(clo_smc_check) = Vg_SmcStack;
 #else
 #  error "Unknown arch"

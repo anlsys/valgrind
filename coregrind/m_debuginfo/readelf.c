@@ -13,7 +13,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -88,6 +88,10 @@
 
 #if !defined(ELFCOMPRESS_ZLIB)
    #define ELFCOMPRESS_ZLIB 1
+#endif
+
+#if !defined(ELFCOMPRESS_ZSTD)
+   #define ELFCOMPRESS_ZSTD 2
 #endif
 
 #define SIZE_OF_ZLIB_HEADER 12
@@ -1730,12 +1734,13 @@ static Bool check_compression(ElfXX_Shdr* h, DiSlice* s) {
    if (h->sh_flags & SHF_COMPRESSED) {
       ElfXX_Chdr chdr;
       ML_(img_get)(&chdr, s->img, s->ioff, sizeof(ElfXX_Chdr));
-      if (chdr.ch_type != ELFCOMPRESS_ZLIB)
+      if (chdr.ch_type != ELFCOMPRESS_ZLIB && chdr.ch_type != ELFCOMPRESS_ZSTD )
          return False;
       s->ioff = ML_(img_mark_compressed_part)(s->img,
                                               s->ioff + sizeof(ElfXX_Chdr),
                                               s->szB - sizeof(ElfXX_Chdr),
-                                              (SizeT)chdr.ch_size);
+                                              (SizeT)chdr.ch_size,
+                                              (UChar)chdr.ch_type);
       s->szB = chdr.ch_size;
     } else if (h->sh_size > SIZE_OF_ZLIB_HEADER) {
        /* Read the zlib header.  In this case, it should be "ZLIB"
@@ -1761,7 +1766,8 @@ static Bool check_compression(ElfXX_Shdr* h, DiSlice* s) {
           s->ioff = ML_(img_mark_compressed_part)(s->img,
                                                   s->ioff + SIZE_OF_ZLIB_HEADER,
                                                   s->szB - SIZE_OF_ZLIB_HEADER,
-                                                  size);
+                                                  size,
+                                                  ELFCOMPRESS_ZLIB);
           s->szB = size;
        }
     }
@@ -1780,7 +1786,8 @@ static HChar* readlink_path (const HChar *path)
 
    while (tries > 0) {
       SysRes res;
-#if defined(VGP_arm64_linux) || defined(VGP_nanomips_linux)
+#if defined(VGP_arm64_linux) || defined(VGP_nanomips_linux) \
+    || defined(VGP_riscv64_linux)
       res = VG_(do_syscall4)(__NR_readlinkat, VKI_AT_FDCWD,
                                               (UWord)path, (UWord)buf, bufsiz);
 #elif defined(VGO_linux) || defined(VGO_darwin) || defined(VGO_freebsd)
@@ -2193,17 +2200,24 @@ Bool ML_(read_elf_object) ( struct _DebugInfo* di )
                      }
                   }
                }
-               if (!loaded) {
-#                 if defined(SOLARIS_PT_SUNDWTRACE_THRP)
-                  if ((a_phdr.p_memsz == VKI_PT_SUNWDTRACE_SIZE)
-                     && ((a_phdr.p_flags & (PF_R | PF_W | PF_X)) == PF_R)) {
+#              if defined(SOLARIS_PT_SUNDWTRACE_THRP)
+               if ((a_phdr.p_memsz == VKI_PT_SUNWDTRACE_SIZE)
+                  && ((a_phdr.p_flags & (PF_R | PF_W | PF_X)) == PF_R)) {
+                  if (dtrace_data_vaddr != 0) {
+                     ML_(symerr)(di, True, "Multiple dtrace_data headers detected");
+                     goto out;
+                  }
+                  dtrace_data_vaddr = a_phdr.p_vaddr;
+
+                  /* DTrace related section might be outside all mapped regions. */
+                  if (!loaded) {
                      TRACE_SYMTAB("PT_LOAD[%ld]:   ignore dtrace_data program "
                                   "header\n", i);
-                     dtrace_data_vaddr = a_phdr.p_vaddr;
                      continue;
                   }
-#                 endif /* SOLARIS_PT_SUNDWTRACE_THRP */
-
+               }
+#              endif /* SOLARIS_PT_SUNDWTRACE_THRP */
+               if (!loaded) {
                   ML_(symerr)(di, False,
                               "ELF section outside all mapped regions");
                   /* This problem might be solved by further memory mappings.
@@ -2705,6 +2719,7 @@ Bool ML_(read_elf_object) ( struct _DebugInfo* di )
          || defined(VGP_arm_linux) || defined (VGP_s390x_linux) \
          || defined(VGP_mips32_linux) || defined(VGP_mips64_linux) \
          || defined(VGP_arm64_linux) || defined(VGP_nanomips_linux) \
+         || defined(VGP_riscv64_linux) \
          || defined(VGP_x86_solaris) || defined(VGP_amd64_solaris) \
          || defined(VGP_x86_freebsd) || defined(VGP_amd64_freebsd) \
          || defined(VGP_arm64_freebsd)
@@ -3852,7 +3867,8 @@ Bool ML_(read_elf_debug) ( struct _DebugInfo* di )
    /* NOTREACHED */
 }
 
-Bool ML_(check_elf_and_get_rw_loads) ( Int fd, const HChar* filename, Int * rw_load_count )
+Bool ML_(check_elf_and_get_rw_loads) ( Int fd, const HChar* filename,
+                                       Int * rw_load_count, Bool from_nsegments )
 {
    Bool     res, ok;
    UWord    i;
@@ -3901,6 +3917,9 @@ Bool ML_(check_elf_and_get_rw_loads) ( Int fd, const HChar* filename, Int * rw_l
 
    /* Sets p_memsz to 0 to indicate we have not yet a previous a_phdr. */
    previous_rw_a_phdr.p_memsz = 0;
+   /* and silence compiler warnings */
+   previous_rw_a_phdr.p_filesz = 0;
+   previous_rw_a_phdr.p_vaddr = 0;
 
    for (i = 0U; i < phdr_mnent; i++) {
       ElfXX_Phdr a_phdr;
@@ -3924,9 +3943,10 @@ Bool ML_(check_elf_and_get_rw_loads) ( Int fd, const HChar* filename, Int * rw_l
                 * Hold your horses
                 * Just because The ELF file contains 2 RW PT_LOAD segments
                 * doesn't mean that Valgrind will also make 2 calls to
-                * VG_(di_notify_mmap): in some cases, the 2 NSegments will get
-                * merged and VG_(di_notify_mmap) only gets called once.
-                * How to detect that the segments will be merged ?
+                * VG_(di_notify_mmap): in some cases, the 2 NSegments will
+                * have been merged and VG_(di_notify_mmap) only gets called
+                * once.
+                * How to detect that the segments were merged ?
                 * Logically, they will be merged if the first segment ends
                 * at the beginning of the second segment:
                 *   Seg1 virtual address + Seg1 segment_size
@@ -3949,12 +3969,12 @@ Bool ML_(check_elf_and_get_rw_loads) ( Int fd, const HChar* filename, Int * rw_l
                 * the 2 different segments loaded separately are both counted
                 * here, we use the non rounded up p_filesz.
                 * This is all a nightmare/hack. Something cleaner should be
-                * done than trying to guess here if segments will or will not
-                * be merged later depending on how the loader will load
-                * with or without rounding up.
-                * */
+                * done than other than reverse engineering whether this call
+                * results from merged nsegments or not. Particularly as
+                * the mmap'ing and nsegment merging is all under our control.
+                */
                if (previous_rw_a_phdr.p_memsz > 0 &&
-                   ehdr_m.e_type == ET_EXEC &&
+                   from_nsegments &&
                    previous_rw_a_phdr.p_vaddr + previous_rw_a_phdr.p_filesz
                      == a_phdr.p_vaddr)
                {

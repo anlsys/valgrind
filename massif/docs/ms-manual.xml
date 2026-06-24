@@ -279,6 +279,13 @@ consumption was greatest.  The peak snapshot is represented in the graph by
 a bar consisting of '#' characters.  The text at the bottom shows
 that snapshot 14 was the peak.</para>
 
+<para> The option <option>--peak-only</option> limits the output to just the
+peak memory consumption figure and omits the full snapshot graph and
+associated output. This is primarily intended for use in automated
+environments such as CI pipelines, where the peak value is captured by a
+script for comparison against a threshold. The number of bytes printed
+does not use thousands separators to make parsing easier.</para>
+
 <para>Massif's determination of when the peak occurred can be wrong, for
 two reasons.</para>
 
@@ -703,6 +710,13 @@ various places online.
       true, but doing otherwise accurately is difficult.  Furthermore,
       starting at zero better indicates the size of the part of the main
       stack that a user program actually has control over.</para>
+      <para>If you give at least 4 <option>-v</option> verbosity arguments,
+        then massif produces a trace for each stack increase and decrease.
+        The stack increase trace contains the IP address that increased the stack.
+        Note that to get fully precise IP address, you must specify the options
+        <option>-px-default=unwindregs-at-mem-access
+          --px-file-backed=unwindregs-at-mem-access</option>.
+      </para>
     </listitem>
   </varlistentry>
 
@@ -762,7 +776,8 @@ various places online.
 ]]></screen>
       Arguments of type <computeroutput>size_t</computeroutput> need to be replaced
       with <computeroutput>unsigned long</computeroutput> on 64bit platforms and <computeroutput>unsigned</computeroutput>
-      on 32bit platforms.
+      on 32bit platforms. macOS x86 is the exception to that rule, using
+      <computeroutput>unsigned long</computeroutput> for size_t.
       </para>
 
       <para><option>--alloc-fn</option> will work with inline functions.
@@ -829,6 +844,16 @@ various places online.
       will run drastically slower as the number approaches zero.</para>
     </listitem>
   </varlistentry>
+
+  <varlistentry id="opt.peak-only" xreflabel="--peak-only">
+   <term>
+     <option><![CDATA[--peak-only]]></option>
+   </term>
+   <listitem>
+     <para>Print only the peak memory usage figure in bytes, omitting
+     the snapshot graph and all other output.</para>
+   </listitem>
+</varlistentry>
 
   <varlistentry id="opt.time-unit" xreflabel="--time-unit">
     <term>

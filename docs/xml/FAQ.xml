@@ -225,60 +225,6 @@ collect2: ld returned 1 exit status
 <qandadiv id="faq.unexpected" xreflabel="Valgrind behaves unexpectedly">
 <title>Valgrind behaves unexpectedly</title>
 
-<qandaentry id="faq.reports">
-  <question id="q-reports">
-    <para>My program uses the C++ STL and string classes.  Valgrind
-    reports 'still reachable' memory leaks involving these classes at
-    the exit of the program, but there should be none.</para>
-  </question>
-  <answer id="a-reports">
-    <para>First of all: relax, it's probably not a bug, but a feature.
-    Many implementations of the C++ standard libraries use their own
-    memory pool allocators.  Memory for quite a number of destructed
-    objects is not immediately freed and given back to the OS, but kept
-    in the pool(s) for later re-use.  The fact that the pools are not
-    freed at the exit of the program cause Valgrind to report this
-    memory as still reachable.  The behaviour not to free pools at the
-    exit could be called a bug of the library though.</para>
-
-    <para>Using GCC, you can force the STL to use malloc and to free
-    memory as soon as possible by globally disabling memory caching.
-    Beware!  Doing so will probably slow down your program, sometimes
-    drastically.</para>
-    <itemizedlist>
-      <listitem>
-        <para>With GCC 2.91, 2.95, 3.0 and 3.1, compile all source using
-        the STL with <literal>-D__USE_MALLOC</literal>. Beware!  This was
-        removed from GCC starting with version 3.3.</para>
-      </listitem>
-      <listitem>
-        <para>With GCC 3.2.2 and later, you should export the
-        environment variable <literal>GLIBCPP_FORCE_NEW</literal> before
-        running your program.</para>
-      </listitem>
-      <listitem>
-        <para>With GCC 3.4 and later, that variable has changed name to
-        <literal>GLIBCXX_FORCE_NEW</literal>.</para>
-      </listitem>
-    </itemizedlist>
-
-    <para>There are other ways to disable memory pooling: using the
-    <literal>malloc_alloc</literal> template with your objects (not
-    portable, but should work for GCC) or even writing your own memory
-    allocators. But all this goes beyond the scope of this FAQ.  Start
-    by reading 
-    <ulink 
-    url="http://gcc.gnu.org/onlinedocs/libstdc++/faq/index.html#4_4_leak">
-         http://gcc.gnu.org/onlinedocs/libstdc++/faq/index.html#4_4_leak</ulink>
-    if you absolutely want to do that. But beware: 
-    allocators belong to the more messy parts of the STL and
-    people went to great lengths to make the STL portable across
-    platforms. Chances are good that your solution will work on your
-    platform, but not on others.</para>
- </answer>
-</qandaentry>
-
-
 <qandaentry id="faq.unhelpful">
   <question id="q-unhelpful">
     <para>The stack traces given by Memcheck (or another tool) aren't
@@ -497,9 +443,9 @@ int main(void)
 
     <para>First, check if you are using an optimized build of Google
       tcmalloc (part of Google perftools). This library uses a single
-      alias for free/scalar delete/array delete as an unmeasurable
-      micro-optimization. There is simply no way for Memcheck to tell
-      which of these was originally used. There are a few possible
+      alias for free/scalar delete/array delete as a micro-optimization.
+      There is simply no way for Memcheck to tell which of these was
+      originally used. There are a few possible
       workarounds.
       <itemizedlist>
         <listitem>
@@ -512,12 +458,23 @@ int main(void)
         </listitem>
         <listitem>
           <para>Do not link with tcmalloc for the builds that you use for
-            Memecheck testing.</para>
+            Memcheck testing.</para>
         </listitem>
       </itemizedlist>
     </para>
 
-    <para>Second, if you are replacing operator new or operator delete
+    <para>Second, check that you are not using "Identical Code Folding".
+      The options look like "--icf=all" (or, if you are using a
+      C or C++ compiler as the linker driver "-Wl,--icf=all").
+      This is a feature present in the gold, lld and mold linkers. When this
+      option is used, the linker will compare the code emitted for functions
+      and may emit only one function for duplicates. If any of the
+      C++ "operator new" and "operator delete" overloads are treated in this
+      manner Memcheck may generate mismatch errors. The solution to this is
+      not to use identical code folding for builds that you will use for
+      testing with Valgrind.</para>
+
+    <para>Third, if you are replacing operator new or operator delete
       make sure that the compiler does not perform optimizations such as
       inlining on calls to these functions. Such optimizations can
       prevent Memcheck from correctly identifying the allocator or
@@ -540,6 +497,80 @@ int main(void)
     </para>
   </answer>
 </qandaentry>
+
+<qandaentry id="faq.hangs">
+  <question id="q-hangs">
+    <para>Why does Valgrind hang when using tcmalloc?</para>
+  </question>
+  <answer id="a-hangss">
+    <para>This is because tcmalloc versions 2.16-2.17 make a recursive call in its initialisation code.
+      Under Valgrind that becomes either an infinite loop with optimised builds of tcmalloc
+      or a stack overflow crash with debug builds.</para>
+
+    <para>Your options are:
+      <itemizedlist>
+        <listitem><para>Do not use tcmalloc in the builds that you test with Valgrind.</para></listitem>
+        <listitem><para>Use an older version of tcmalloc. This problem started on 2024-03-24.
+          If you use gperftools 2.15 or older you should not have this problem.</para></listitem>
+        <listitem><para>Use a more recent version of tcmalloc. This problem was fixed on 2025-10-07.
+          If you use gperftools 2.18 or later you should also not have this problem.</para></listitem>
+
+      </itemizedlist>
+    </para>
+
+  </answer>
+</qandaentry>
+
+<qandaentry id="faq.reports">
+  <question id="q-reports">
+    <para>My program uses the GNU C++ standard library container and string classes.
+    Valgrind reports 'still reachable' memory leaks involving these classes at the exit
+    of the program, but there should be none.</para>
+  </question>
+  <answer id="a-reports">
+    <para>If Valgrind reports a leak in C++ code using a GCC version dating from 2005 or later,
+    the most likely cause is a bug in your code, such as a missing deallocation or
+    a cyclic reference.</para>
+    <para>If you are using an old version of GCC (version 3.4 from 2004 or earlier)
+    or if you are using the optional <literal>__gnu_cxx::pool_alloc</literal> or
+    <literal>__gnu_cxx::__mt_alloc</literal> (both of which are considered obsolete), then this
+    may be a feature of the standard library implementation and not a bug in your
+    code.</para>
+    <para>These old C++ libraries and specialised allocators use their own
+    memory pools. Memory for quite a number of destructed objects is not immediately
+    freed and given back to the OS, but kept in the pool(s) for later re-use.
+    The fact that the pools are not freed at the exit of the program causes
+    Valgrind to report this memory as still reachable.</para>
+
+    <para>Using GCC, you can force the standard library to use new and delete
+    directly, thus globally disabling memory caching.
+    </para>
+    <itemizedlist>
+      <listitem>
+        <para>With GCC 3.4 and later you should export the environment variable
+        <literal>GLIBCXX_FORCE_NEW</literal> before running your program.</para>
+      </listitem>
+      <listitem>
+        <para>With GCC 3.2.2 up to GCC 3.4, the name of the environment
+        variable was <literal>GLIBCPP_FORCE_NEW</literal>.</para>
+      </listitem>
+      <listitem>
+        <para>With GCC 2.91, 2.95, 3.0 and 3.1, compile all source using
+        the standard library with <literal>-D__USE_MALLOC</literal>.</para>
+      </listitem>
+    </itemizedlist>
+
+    <para>If you replace the default <literal>std::allocator</literal> with your own allocator
+    or if you use a <literal>std::pmr::polymorphic_allocator</literal>, then you may have
+    similar issues. Dealing with these issues is beyond the scope of this document.</para>
+    <para>To read more about C++ allocators, see the cppreference pages on <ulink url="https://en.cppreference.com/cpp/memory/allocator">allocator</ulink>
+    or <ulink url="https://en.cppreference.com/cpp/memory/polymorphic_allocator">polymorphic_allocator</ulink>.</para>
+    <para>To read more about how to teach Valgrind to understand memory pools, see the Memcheck manual section <ulink url="https://valgrind.org/docs/manual/mc-manual.html#mc-manual.mempools">Memory Pools: describing and working with custom allocators</ulink>
+    for details. This <ulink url="https://developers.redhat.com/articles/2022/03/23/use-valgrind-memcheck-custom-memory-manager#">guide</ulink>
+    also shows how to instrument memory pools.</para>
+ </answer>
+</qandaentry>
+
 
 </qandadiv>
 
@@ -645,6 +676,26 @@ int main(void)
   </answer>
 </qandaentry>
 
+<qandaentry id="faq.pcre2_qt">
+  <question id="q-pcre2_qt">
+    <para>I'm developing a Qt application and I get huge numbers of "Conditional jump"
+    errors. Is there anything that I can do about it?</para>
+  </question>
+  <answer id="a-pcre2_qt">
+    <para>Yes, there is a workaround. Here is an example error:</para>
+<programlisting>
+Conditional jump or move depends on uninitialised value(s)
+   at 0x1051C39B: ???
+   by 0x12657AA7: ???
+</programlisting>
+    <para>Qt Regular Expressions are built on the pcre2 library.
+    pcre2 uses JITting which means that the errors cannot be suppressed
+    (no function name). However, Qt provides a mechanism to turn off
+    the use of JITting. To do so, use the following environment variable:
+    <computeroutput>export QT_ENABLE_REGEXP_JIT=0</computeroutput></para>
+  </answer>
+</qandaentry>
+
 
 <qandaentry id="faq.attach">
   <question id="q-attach">
@@ -687,9 +738,26 @@ online copy of the manual. -->
   <para>Read the appropriate section(s) of the 
   <ulink url="&vg-docs-url;">Valgrind Documentation</ulink>.</para>
 
-  <para><ulink url="http://search.gmane.org">Search</ulink> the 
-  <ulink url="http://news.gmane.org/gmane.comp.debugging.valgrind">valgrind-users</ulink> mailing list archives, using the group name 
-  <computeroutput>gmane.comp.debugging.valgrind</computeroutput>.</para>
+  <para><ulink url="https://sourceforge.net/p/valgrind/mailman/search/?mail_list=valgrind-users">Search</ulink> the
+  <ulink url="https://sourceforge.net/p/valgrind/mailman/valgrind-users/">valgrind-users</ulink> mailing list archives.</para>
+
+  <para>The valgrind-users mailing list has a read-only usenet nntp mirror on news.gmane.io. The newsgroup is
+  gmane.comp.debugging.valgrind.</para>
+
+  <para>Stack Overflow has a <ulink url="https://stackoverflow.com/questions/tagged/valgrind">[valgrind] tag</ulink>.
+  Questions there are sometimes answered by Valgrind developers. However you should also be aware of some of the
+  site's limitations:</para>
+
+  <itemizedlist>
+    <listitem>
+      <para>Moderation quality for specialist tools like Valgrind is poor. Reviewers frequently lack familiarity
+      with it and have been known to close legitimate questions or answers on spurious grounds.</para>
+    </listitem>
+    <listitem>
+      <para>For authoritative answers, the valgrind-users mailing list remains a more reliable resource.</para>
+    </listitem>
+  </itemizedlist>
+
 
   <para>If you think an answer in this FAQ is incomplete or inaccurate, please
   e-mail <ulink url="mailto:&vg-vemail;">&vg-vemail;</ulink>.</para>

@@ -10,12 +10,12 @@
 
    Copyright (C) 2000-2009 Nicholas Nethercote
       njn@valgrind.org
-   Copyright (C) 2018-2021 Paul Floyd
+   Copyright (C) 2018-2024 Paul Floyd
       pjfloyd@wanadoo.fr
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -258,7 +258,7 @@ static Addr build_sigframe(ThreadState *tst,
    VG_TRACK( pre_mem_write, Vg_CoreSignal, tst->tid, "signal handler frame",
              rsp, offsetof(struct sigframe, vg) );
 
-   frame->retaddr = (Addr)&VG_(amd64_freebsd_SUBST_FOR_sigreturn);
+   frame->retaddr = (Addr)VG_(amd64_freebsd_SUBST_FOR_sigreturn);
 
    if (siguc) {
       trapno = siguc->uc_mcontext.trapno;

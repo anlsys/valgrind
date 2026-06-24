@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -615,6 +615,17 @@ ExeContext* VG_(null_ExeContext) (void)
 {
    init_ExeContext_storage();
    return null_ExeContext;
+}
+
+const HChar* VG_(get_ExeContext_first_fnname)(ExeContext* ec)
+{
+   const HChar* fn_name;
+   vg_assert(ec->n_ips > 0);
+   Bool found_fn = VG_(get_fnname)(VG_(get_ExeContext_epoch)(ec), ec->ips[0], &fn_name);
+   if (found_fn) {
+      return fn_name;
+   }
+   return NULL;
 }
 
 /*--------------------------------------------------------------------*/

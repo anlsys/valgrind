@@ -5,7 +5,7 @@
 
   This program is free software; you can redistribute it and/or
   modify it under the terms of the GNU General Public License as
-  published by the Free Software Foundation; either version 2 of the
+  published by the Free Software Foundation; either version 3 of the
   License, or (at your option) any later version.
 
   This program is distributed in the hope that it will be useful, but
@@ -38,8 +38,6 @@ struct hb_info;
 void DRD_(hb_set_trace)(const Bool trace_hb);
 struct hb_info* DRD_(hb_get)(const Addr hb);
 struct hb_info* DRD_(hb_get_or_allocate)(const Addr hb);
-void DRD_(hb_init)(const Addr hb);
-void DRD_(hb_destroy)(const Addr hb);
 void DRD_(hb_happens_after)(const DrdThreadId tid, const Addr hb);
 void DRD_(hb_happens_before)(const DrdThreadId tid, const Addr hb);
 void DRD_(hb_happens_done)(const DrdThreadId tid, const Addr hb);

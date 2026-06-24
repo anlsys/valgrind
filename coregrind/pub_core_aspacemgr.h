@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -119,6 +119,11 @@ extern void VG_(am_show_nsegments) ( Int logLevel, const HChar* who );
 extern Bool VG_(am_do_sync_check) ( const HChar* fn, 
                                     const HChar* file, Int line );
 
+/* VG_(is_guarded) checks if address is part of a madvise
+   MADV_GUARD_INSTALL guard page */
+extern Bool VG_(is_guarded) ( Addr addr );
+
+
 //--------------------------------------------------------------
 // Functions pertaining to the central query-notify mechanism
 // used to handle mmap/munmap/mprotect resulting from client
@@ -186,6 +191,9 @@ extern Bool VG_(am_notify_client_shmat)( Addr a, SizeT len, UInt prot );
    should immediately discard translations from the specified address
    range. */
 extern Bool VG_(am_notify_mprotect)( Addr start, SizeT len, UInt prot );
+
+/* Bug 514297: Notifies aspacem about madvise(MADV_GUARD_*) */
+extern Bool VG_(am_notify_madv_guard) ( Addr start, SizeT len, Bool install );
 
 /* Notifies aspacem that an munmap completed successfully.  The
    segment array is updated accordingly.  As with
@@ -340,7 +348,7 @@ extern Bool VG_(am_relocate_nooverlap_client)( /*OUT*/Bool* need_discard,
 #else
 # define VG_STACK_GUARD_SZB  8192   // 2 pages
 #endif
-# define VG_DEFAULT_STACK_ACTIVE_SZB 1048576 // (4096 * 256) = 1Mb 
+# define VG_DEFAULT_STACK_ACTIVE_SZB 1048576 // (4096 * 256) = 1Mb
 
 typedef struct _VgStack VgStack;
 

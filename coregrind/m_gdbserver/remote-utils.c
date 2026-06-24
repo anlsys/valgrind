@@ -8,7 +8,7 @@
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2 of the License, or
+   the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -664,7 +664,7 @@ void decode_address (CORE_ADDR *addrp, const char *start, int len)
    Useful for register and int image */
 char* heximage (char *buf, const char *bin, int count)
 {
-#if (VKI_LITTLE_ENDIAN)
+#if defined(VKI_LITTLE_ENDIAN)
    char rev[count]; 
    /* note: no need for trailing \0, length is known with count */
    int i;
@@ -1137,7 +1137,7 @@ void prepare_resume_reply (char *buf, char status, unsigned char sig)
          CORE_ADDR addr;
          int i;
 
-         strncpy (buf, "watch:", 6);
+         memcpy (buf, "watch:", 6);
          buf += 6;
 
          addr = valgrind_stopped_data_address ();

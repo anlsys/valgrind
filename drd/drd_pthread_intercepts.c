@@ -9,7 +9,7 @@
 
   This program is free software; you can redistribute it and/or
   modify it under the terms of the GNU General Public License as
-  published by the Free Software Foundation; either version 2 of the
+  published by the Free Software Foundation; either version 3 of the
   License, or (at your option) any later version.
 
   This program is distributed in the hope that it will be useful, but
@@ -59,6 +59,7 @@
 
 #if defined(VGO_freebsd)
 #include <dlfcn.h>
+#include <osreldate.h>
 #endif
 
 #if defined(VGO_solaris)
@@ -201,6 +202,13 @@ ret_ty VG_WRAP_FUNCTION_ZZ(VG_Z_LIBPTHREAD_SONAME,zf) argl_decl         \
    { return implf argl; }
 #endif
 
+#if defined(VGO_darwin)
+#define LIBC_FUNC(ret_ty, zf, implf, argl_decl, argl)                    \
+   ret_ty VG_WRAP_FUNCTION_ZZ(VG_Z_LIBSYSTEM_KERNEL_SONAME,zf) argl_decl;           \
+   ret_ty VG_WRAP_FUNCTION_ZZ(VG_Z_LIBSYSTEM_KERNEL_SONAME,zf) argl_decl            \
+   { return implf argl; }
+#endif
+
 /**
  * Macro for generating three Valgrind interception functions: one with the
  * Z-encoded name zf, one with ZAZa ("@*") appended to the name zf and one
@@ -285,11 +293,11 @@ static void DRD_(init)(void)
        * is neither. So we force loading of libthr.so, which
        * avoids this junk tid value.
        */
-#if (FREEBSD_VERS >= FREEBSD_15)
+#if (__FreeBSD_version >= 1500013)
       void* libsys = dlopen("/lib/libsys.so.7", RTLD_NOW|RTLD_GLOBAL|RTLD_NODELETE);
 #endif
       dlclose(dlopen("/lib/libthr.so.3", RTLD_NOW|RTLD_GLOBAL|RTLD_NODELETE));
-#if (FREEBSD_VERS >= FREEBSD_15)
+#if (__FreeBSD_version >= 1500013)
       if (libsys) {
          dlclose(libsys);
       }
@@ -868,12 +876,50 @@ int pthread_once_intercept(pthread_once_t *once_control,
    CALL_FN_W_WW(ret, fn, once_control, init_routine);
    ANNOTATE_IGNORE_READS_AND_WRITES_END();
    DRD_STOP_IGNORING_VAR(*once_control);
+#if defined(VGO_darwin)
+   /*
+    * The Darwin function that implemented this is _os_once. That uses
+    * __ulock_wait/__ulock_wake to make any subsequent threads wait for
+    * the first thread to complete calling the init_routine.
+    * DRD can't see these ulock functions so we need to create
+    * an HB edge manually.
+    */
+   ANNOTATE_HAPPENS_BEFORE(once_control);
+   ANNOTATE_HAPPENS_AFTER(once_control);
+#endif
    return ret;
 }
 
 PTH_FUNCS(int, pthreadZuonce, pthread_once_intercept,
           (pthread_once_t *once_control, void (*init_routine)(void)),
           (once_control, init_routine));
+
+#if defined(VGO_solaris)
+// see https://bugs.kde.org/show_bug.cgi?id=501479
+// temporary (?) workaround
+// Helgrind doesn't have this problem because it only redirects mutex_init
+// and not thread_mutex_init which also uses pthread_mutexattr_gettype
+// maybe DRD should do the same.
+typedef	struct{
+	int	pshared;
+	int	protocol;
+	int	prioceiling;
+	int	type;
+	int	robustness;
+} workaround_mattr_t;
+
+static int
+pthread_mutexattr_gettype_workaround(const pthread_mutexattr_t *attr, int *typep)
+{
+	workaround_mattr_t	*ap;
+
+	if (attr == NULL || (ap = attr->__pthread_mutexattrp) == NULL ||
+	    typep == NULL)
+		return (EINVAL);
+	*typep = ap->type;
+	return (0);
+}
+#endif
 
 static __always_inline
 int pthread_mutex_init_intercept(pthread_mutex_t *mutex,
@@ -884,8 +930,13 @@ int pthread_mutex_init_intercept(pthread_mutex_t *mutex,
    int mt;
    VALGRIND_GET_ORIG_FN(fn);
    mt = PTHREAD_MUTEX_DEFAULT;
+#if !defined(VGO_solaris)
    if (attr)
       pthread_mutexattr_gettype(attr, &mt);
+#else
+   if (attr)
+      pthread_mutexattr_gettype_workaround(attr, &mt);
+#endif
    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ_DRD_PRE_MUTEX_INIT,
                                    mutex, DRD_(pthread_to_drd_mutex_type)(mt),
                                    0, 0, 0);
@@ -1458,7 +1509,7 @@ int sem_init_intercept(sem_t *sem, int pshared, unsigned int value)
    return ret;
 }
 
-#if defined(VGO_freebsd)
+#if defined(VGO_freebsd) || defined(VGO_darwin)
 LIBC_FUNC(int, semZuinit, sem_init_intercept,
           (sem_t *sem, int pshared, unsigned int value), (sem, pshared, value));
 #else
@@ -1501,7 +1552,7 @@ int sem_destroy_intercept(sem_t *sem)
    return ret;
 }
 
-#if defined(VGO_freebsd)
+#if defined(VGO_freebsd) || defined(VGO_darwin)
 LIBC_FUNC(int, semZudestroy, sem_destroy_intercept, (sem_t *sem), (sem));
 #else
 PTH_FUNCS(int, semZudestroy, sem_destroy_intercept, (sem_t *sem), (sem));
@@ -1523,14 +1574,21 @@ sem_t* sem_open_intercept(const char *name, int oflag, mode_t mode,
    CALL_FN_W_WWWW(ret, fn, name, oflag, mode, value);
    // To do: figure out why gcc 9.2.1 miscompiles this function if the printf()
    // call below is left out.
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-zero-length"
+#endif
    printf("");
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ_DRD_POST_SEM_OPEN,
                                    ret != SEM_FAILED ? ret : 0,
                                    name, oflag, mode, value);
    return ret;
 }
 
-#if defined(VGO_freebsd)
+#if defined(VGO_freebsd) || defined(VGO_darwin)
 LIBC_FUNC(sem_t *, semZuopen, sem_open_intercept,
           (const char *name, int oflag, mode_t mode, unsigned int value),
           (name, oflag, mode, value));
@@ -1553,7 +1611,7 @@ static __always_inline int sem_close_intercept(sem_t *sem)
    return ret;
 }
 
-#if defined(VGO_freebsd)
+#if defined(VGO_freebsd) || defined(VGO_darwin)
 LIBC_FUNC(int, semZuclose, sem_close_intercept, (sem_t *sem), (sem));
 #else
 PTH_FUNCS(int, semZuclose, sem_close_intercept, (sem_t *sem), (sem));
@@ -1572,7 +1630,7 @@ static __always_inline int sem_wait_intercept(sem_t *sem)
    return ret;
 }
 
-#if defined(VGO_freebsd)
+#if defined(VGO_freebsd) || defined(VGO_darwin)
 LIBC_FUNC(int, semZuwait, sem_wait_intercept, (sem_t *sem), (sem));
 #else
 PTH_FUNCS(int, semZuwait, sem_wait_intercept, (sem_t *sem), (sem));
@@ -1595,7 +1653,7 @@ static __always_inline int sem_trywait_intercept(sem_t *sem)
    return ret;
 }
 
-#if defined(VGO_freebsd)
+#if defined(VGO_freebsd) || defined(VGO_darwin)
 LIBC_FUNC(int, semZutrywait, sem_trywait_intercept, (sem_t *sem), (sem));
 #else
 PTH_FUNCS(int, semZutrywait, sem_trywait_intercept, (sem_t *sem), (sem));
@@ -1618,7 +1676,7 @@ int sem_timedwait_intercept(sem_t *sem, const struct timespec *abs_timeout)
    return ret;
 }
 
-#if defined(VGO_freebsd)
+#if defined(VGO_freebsd) || defined(VGO_darwin)
 LIBC_FUNC(int, semZutimedwait, sem_timedwait_intercept,
           (sem_t *sem, const struct timespec *abs_timeout),
           (sem, abs_timeout));
@@ -1671,7 +1729,7 @@ static __always_inline int sem_post_intercept(sem_t *sem)
    return ret;
 }
 
-#if defined(VGO_freebsd)
+#if defined(VGO_freebsd) || defined(VGO_darwin)
 LIBC_FUNC(int, semZupost, sem_post_intercept, (sem_t *sem), (sem));
 #else
 PTH_FUNCS(int, semZupost, sem_post_intercept, (sem_t *sem), (sem));

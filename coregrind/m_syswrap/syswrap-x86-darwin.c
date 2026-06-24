@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -195,7 +195,7 @@ ThreadState *build_thread(const thread_state_t state,
 // Edit the thread state to send to the real kernel.
 // The real thread will run start_thread_NORETURN(tst)
 // on a separate non-client stack.
-void hijack_thread_state(thread_state_t mach_generic, 
+void hijack_thread_state(thread_state_t mach_generic,
                          thread_state_flavor_t flavor, 
                          mach_msg_type_number_t count, 
                          ThreadState *tst)
@@ -271,7 +271,7 @@ asm(
 
 
 
-void pthread_hijack(Addr self, Addr kport, Addr func, Addr func_arg, 
+void pthread_hijack(Addr self, Addr kport, Addr func, Addr func_arg,
                     Addr stacksize, Addr flags, Addr sp)
 {
    vki_sigset_t blockall;
@@ -358,6 +358,7 @@ asm(
 "   push $0\n"    // alignment
 "   push $0\n"    // alignment
 "   push %ebp\n"  // original sp
+"   push %esi\n"  // kevent_count
 "   push %edi\n"  // reuse
 "   push %edx\n"  // workitem
 "   push %ecx\n"  // stackaddr
@@ -376,7 +377,7 @@ asm(
     thread for every work item.
 */
 void wqthread_hijack(Addr self, Addr kport, Addr stackaddr, Addr workitem, 
-                     Int reuse, Addr sp)
+                     UInt reuse, Int kevent_count, Addr sp)
 {
    ThreadState *tst;
    VexGuestX86State *vex;
@@ -396,40 +397,29 @@ void wqthread_hijack(Addr self, Addr kport, Addr stackaddr, Addr workitem,
 
    if (0) VG_(printf)(
              "wqthread_hijack: self %#lx, kport %#lx, "
-             "stackaddr %#lx, workitem %#lx, reuse/flags %x, sp %#lx\n",
-             self, kport, stackaddr, workitem, reuse, sp);
+             "stackaddr %#lx, workitem %#lx, reuse/flags %x, kevent_count %d, sp %#lx\n",
+             self, kport, stackaddr, workitem, reuse, kevent_count, sp);
 
    /* Start the thread with all signals blocked.  VG_(scheduler) will
       set the mask correctly when we finally get there. */
    VG_(sigfillset)(&blockall);
    VG_(sigprocmask)(VKI_SIG_SETMASK, &blockall, NULL);
 
-   /* For 10.7 and earlier, |reuse| appeared to be used as a simple
-      boolean.  In 10.8 and later its name changed to |flags| and has
-      various other bits OR-d into it too, so it's necessary to fish
-      out just the relevant parts.  Hence: */
-#  if DARWIN_VERS <= DARWIN_10_7
-   Bool is_reuse = reuse != 0;
-#  elif DARWIN_VERS > DARWIN_10_7
    Bool is_reuse = (reuse & 0x20000 /* == WQ_FLAG_THREAD_REUSE */) != 0;
-#  else
-#    error "Unsupported Darwin version"
-#  endif
 
    if (is_reuse) {
 
       /* For whatever reason, tst->os_state.pthread appear to have a
          constant offset of 72 on 10.7, but zero on 10.6 and 10.5.  No
          idea why. */
-#     if DARWIN_VERS <= DARWIN_10_6
-      UWord magic_delta = 0;
-#     elif DARWIN_VERS == DARWIN_10_7 || DARWIN_VERS == DARWIN_10_8
+#     if DARWIN_VERS == DARWIN_10_8
       UWord magic_delta = 0x48;
 #     elif DARWIN_VERS == DARWIN_10_9 \
            || DARWIN_VERS == DARWIN_10_10 \
            || DARWIN_VERS == DARWIN_10_11 \
            || DARWIN_VERS == DARWIN_10_12 \
-           || DARWIN_VERS == DARWIN_10_13
+           || DARWIN_VERS == DARWIN_10_13 \
+           || DARWIN_VERS == DARWIN_10_14
       UWord magic_delta = 0xB0;
 #     else
 #       error "magic_delta: to be computed on new OS version"
@@ -452,6 +442,10 @@ void wqthread_hijack(Addr self, Addr kport, Addr stackaddr, Addr workitem,
                          tid, tst, tst->os_state.pthread, self);
 
       vex = &tst->arch.vex;
+      if (tst->os_state.pthread - magic_delta != self) {
+        VG_(printf)("wqthread_hijack reuse: tst->os_state.pthread %#lx vs self %#lx (diff: %#lx vs %#lx)\n",
+                    tst->os_state.pthread, self, tst->os_state.pthread - self, magic_delta);
+      }
       vg_assert(tst->os_state.pthread - magic_delta == self);
    }
    else {
@@ -471,7 +465,7 @@ void wqthread_hijack(Addr self, Addr kport, Addr stackaddr, Addr workitem,
    vex->guest_ECX = stackaddr;
    vex->guest_EDX = workitem;
    vex->guest_EDI = reuse;
-   vex->guest_ESI = 0;
+   vex->guest_ESI = kevent_count;
    vex->guest_ESP = sp;
 
    stacksize = 512*1024;  // wq stacks are always DEFAULT_STACK_SIZE

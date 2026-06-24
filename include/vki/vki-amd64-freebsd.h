@@ -4,12 +4,12 @@
 
    Copyright (C) 2000-2005 Julian Seward
       jseward@acm.org
-   Copyright (C) 2018-2021 Paul Floyd
+   Copyright (C) 2018-2022 Paul Floyd
       pjfloyd@wanadoo.fr
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -25,6 +25,8 @@
 
 #ifndef VKI_AMD64_FREEBSD_H
 #define VKI_AMD64_FREEBSD_H
+
+#define VKI_LITTLE_ENDIAN  1
 
 /* PAGE_SHIFT determines the page size. */
 #define VKI_PAGE_SHIFT  12UL

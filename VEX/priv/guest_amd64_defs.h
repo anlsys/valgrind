@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -48,15 +48,15 @@
 /* Convert one amd64 insn to IR.  See the type DisOneInstrFn in
    guest_generic_bb_to_IR.h. */
 extern
-DisResult disInstr_AMD64 ( IRSB*        irbb,
-                           const UChar* guest_code,
+DisResult disInstr_AMD64 ( IRSB*        irsb_IN,
+                           const UChar* guest_code_IN,
                            Long         delta,
                            Addr         guest_IP,
                            VexArch      guest_arch,
                            const VexArchInfo* archinfo,
                            const VexAbiInfo*  abiinfo,
-                           VexEndness   host_endness,
-                           Bool         sigill_diag );
+                           VexEndness   host_endness_IN,
+                           Bool         sigill_diag_IN );
 
 /* Used by the optimiser to specialise calls to helpers. */
 extern
@@ -108,7 +108,7 @@ extern ULong amd64g_calculate_RCL  (
                 ULong arg, ULong rot_amt, ULong rflags_in, Long sz 
              );
 
-extern ULong amd64g_calculate_pclmul(ULong s1, ULong s2, ULong which);
+extern ULong amd64g_calculate_pclmul(ULong a, ULong b, ULong which);
 
 extern ULong amd64g_check_fldcw ( ULong fpucw );
 
@@ -139,16 +139,10 @@ extern void amd64g_dirtyhelper_FNSAVES ( VexGuestAMD64State*, HWord );
 extern ULong amd64g_calculate_mmx_pmaddwd  ( ULong, ULong );
 extern ULong amd64g_calculate_mmx_psadbw   ( ULong, ULong );
 
-extern ULong amd64g_calculate_sse_phminposuw ( ULong sLo, ULong sHi );
-
 extern ULong amd64g_calc_crc32b ( ULong crcIn, ULong b );
 extern ULong amd64g_calc_crc32w ( ULong crcIn, ULong w );
 extern ULong amd64g_calc_crc32l ( ULong crcIn, ULong l );
 extern ULong amd64g_calc_crc32q ( ULong crcIn, ULong q );
-
-extern ULong amd64g_calc_mpsadbw ( ULong sHi, ULong sLo,
-                                   ULong dHi, ULong dLo,
-                                   ULong imm_and_return_control_bit );
 
 extern ULong amd64g_calculate_pext  ( ULong, ULong );
 extern ULong amd64g_calculate_pdep  ( ULong, ULong );
@@ -169,7 +163,7 @@ extern void  amd64g_dirtyhelper_CPUID_avx_and_cx16 ( VexGuestAMD64State* st,
 
 extern void amd64g_dirtyhelper_CPUID_avx2 ( VexGuestAMD64State* st,
                                             ULong hasF16C, ULong hasRDRAND,
-                                            ULong hasRDSEED );
+                                            ULong hasRDSEED, ULong hasLZCNT );
 
 
 extern void  amd64g_dirtyhelper_FINIT ( VexGuestAMD64State* );

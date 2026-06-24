@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -55,7 +55,7 @@
 /* Note: The "MS" section flags are to remove duplicates.  */
 #define DEFINE_GDB_PY_SCRIPT(script_name) \
   asm("\
-.pushsection \".debug_gdb_scripts\", \"MS\",@progbits,1\n\
+.pushsection \".debug_gdb_scripts\", \"MS\",%progbits,1\n\
 .byte 1 /* Python */\n\
 .asciz \"" script_name "\"\n\
 .popsection \n\
@@ -188,19 +188,75 @@ static void env_unsetenv ( HChar **env, const HChar *varname )
       }
    }
    *(to++) = *(from++);
+
    /* fix the 4th "char* apple" pointer (aka. executable path pointer) */
    *(to++) = *(from++);
+
+#if DARWIN_VERS < DARWIN_12_00
+   /* We only do this on older versions of darwin because dyld changed
+      and by the point we do this changes, the apple env ptr is already set,
+      so if we move values around, we'll end up with a pointer pointing inside
+      (and even potentially after) applep.
+
+      Instead we copy the first value of the applelp over and over again
+      so that envp and applep are still separated by NULL,
+      applep is continuous and points to a correct value.
+
+      See the following example, using the following envp and applep:
+
+      ```
+        0xXXXX00: PATH=/bin (envp)
+        0xXXXX08: DYLD_INSERT_LIBRARIES=/lib
+        0xXXXX10: USER=foo
+        0xXXXX18: NULL
+        0xXXXX20: executable_path=/bin/ls (applep)
+        0xXXXX28: NULL
+      ```
+
+      # With this line
+
+      ```
+        0xXXXX00: PATH=/bin (envp)
+        0xXXXX08: USER=foo
+        0xXXXX10: NULL
+        0xXXXX18: executable_path=/bin/ls
+        0xXXXX20: NULL (applep)
+        0xXXXX28: NULL
+      ```
+
+      Notice that the applep is now invalid.
+
+      # Without this line
+
+      ```
+        0xXXXX00: PATH=/bin (envp)
+        0xXXXX08: USER=foo
+        0xXXXX10: NULL
+        0xXXXX18: executable_path=/bin/ls
+        0xXXXX20: executable_path=/bin/ls (applep)
+        0xXXXX28: NULL
+      ```
+
+      Notice that while values in applep are duplicated, this is only the case if browsing frop envp[len+1]
+      but not from applep which is always valid. Duplicated values are also harmless in this case.
+   */
    *to = NULL;
+#endif
 }
 
+// FIXME PJF to we really need this?
+// We already do env cleanup before any exec
 static void vg_cleanup_env(void)  __attribute__((constructor));
 static void vg_cleanup_env(void)
 {
     HChar **envp = (HChar**)*_NSGetEnviron();
-    env_unsetenv(envp, "VALGRIND_LAUNCHER");
+#if DARWIN_VERS < DARWIN_11_00
     env_unsetenv(envp, "DYLD_SHARED_REGION");
+#endif
     // GrP fixme should be more like mash_colon_env()
     env_unsetenv(envp, "DYLD_INSERT_LIBRARIES");
+    // FIXME PJF on macOS >= 10.15 we also insert PTHREAD_PTR_MUNGE_TOKEN
+    // should we remove it here?
 }   
 
 /* ---------------------------------------------------------------------
@@ -238,8 +294,6 @@ void VG_REPLACE_FUNCTION_ZU(libSystemZdZaZddylib, arc4random_addrandom)(unsigned
 
 #elif defined(VGO_freebsd)
 
-#if (FREEBSD_VERS >= FREEBSD_14_0)
-
 void * VG_NOTIFY_ON_LOAD(ifunc_wrapper) (void);
 void * VG_NOTIFY_ON_LOAD(ifunc_wrapper) (void)
 {
@@ -257,8 +311,6 @@ void * VG_NOTIFY_ON_LOAD(ifunc_wrapper) (void)
                                     fn.nraddr, fnentry, 0, 0, 0);
     return (void*)result;
 }
-
-#endif
 
 #elif defined(VGO_solaris)
 

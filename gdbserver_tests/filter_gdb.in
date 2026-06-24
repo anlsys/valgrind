@@ -55,6 +55,12 @@ s/^\[?1034hReading symbols/Reading symbols/
 #       Remove some Suse package manager messages
 /^Try: zypper install -C/d
 
+#      Remove python rpm module load warning
+/^Unable to load /d
+/^the RPM suggestions /d
+/^installing missing debuginfo /d
+/^please install /d
+
 #       Remove vgdb message
 /relaying data between gdb and process/d
 
@@ -100,9 +106,7 @@ s/\(#0  0x........ in do_burn ()\) at sleepers.c:41/\1/
 
 
 #       delete Reading symbols file lines
-#       Note: The 'done.' in "Reading symbols from <exe>...done."
-#         is optional (bugzilla 406357).
-/^Reading symbols from .*\.\.\.\(done\.\)\?/d
+/^Reading symbols from /d
 
 #       delete Loaded symbols file lines
 /^Loaded symbols for .*$/d
@@ -127,6 +131,24 @@ s/^>[> ]*//
 
 #       anonymise a 'general' system calls stack trace part
 s/in _dl_sysinfo_int80 () from \/lib\/ld-linux.so.*/in syscall .../
+
+#      in __syscall_cancel_arch is just in a syscall
+s/in __syscall_cancel_arch .*/in syscall .../
+
+#	as is just __syscall_cancel_arch
+s/__syscall_cancel_arch .*/0x........ in syscall .../
+
+#	gdb with source might figure out there is just a ret instruction
+/^[1-9][0-9\t ]*ret$/d
+
+#	do_syscall is in syscall
+s/__libc_do_syscall ().*/0x........ in syscall .../
+
+#       extra source code line
+/libc-do-syscall.S/d
+
+#       variation of the previous extra source code line
+/syscall_cancel.S/d
 
 #       anonymise kill syscall.
 s/in kill ().*$/in syscall .../
@@ -257,6 +279,12 @@ s/^0x........ in \(\w\+ (\)/\1/
 #           finishes with a new line, sometimes not ???).
 /^$/d
 
+#	delete any missing debuginfo messages
+/^Missing debuginfo.*/d
+/^Missing rpms.*/d
+
+#	illumos, but only when building the port
+/\.\/gdb: warning: Couldn't determine a path for the index cache directory\./d
 
 EOF
 

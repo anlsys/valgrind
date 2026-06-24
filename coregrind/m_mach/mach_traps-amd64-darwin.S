@@ -11,7 +11,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -71,6 +71,18 @@ _mach_msg_trap:
 	movq	%rcx, %r10
 	syscall
 	ret
+
+#if DARWIN_VERS >= DARWIN_13_00
+	// mach_msg_return_t mach_msg2_trap(...)
+	.text
+	.align 4
+	.globl _mach_msg2_trap
+_mach_msg2_trap:
+	movq	$__NR_mach_msg2_trap, %rax
+	movq	%rcx, %r10
+	syscall
+	ret
+#endif
 
 	// mach_port_t mach_reply_port(...)
 	.text

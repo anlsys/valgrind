@@ -1,0 +1,2 @@
+prog: bfp-convert
+vgopts: -q

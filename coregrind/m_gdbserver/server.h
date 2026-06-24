@@ -8,7 +8,7 @@
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2 of the License, or
+   the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -161,6 +161,9 @@ extern Int *syscalls_to_catch;
 #define strtoul(s,r,b)        ((b) == 16 ? \
                                VG_(strtoull16) ((s),(r)) \
                                : VG_(strtoull10) ((s),(r)))
+
+#define memcpy(_dd,_ss,_sz)   VG_(memcpy)((_dd),(_ss),(_sz))
+#define memset(_ss,_cc,_sz)   VG_(memset)((_ss),(_cc),(_sz))
 
 #define malloc(sz)            VG_(malloc)  ("gdbsrv", sz)
 #define calloc(n,sz)          VG_(calloc)  ("gdbsrv", n, sz)

@@ -886,18 +886,44 @@ in most cases.  We group the available options by rough categories.</para>
 
   <varlistentry id="opt.track-fds" xreflabel="--track-fds">
     <term>
-      <option><![CDATA[--track-fds=<yes|no|all> [default: no] ]]></option>
+      <option><![CDATA[--track-fds=<yes|no|all|bad> [default: no] ]]></option>
     </term>
     <listitem>
-      <para>When enabled, Valgrind will print out a list of open file
-      descriptors on exit or on request, via the gdbserver monitor
-      command <varname>v.info open_fds</varname>.  Along with each
-      file descriptor is printed a stack backtrace of where the file
-      was opened and any details relating to the file descriptor such
-      as the file name or socket details. Use <option>all</option> to
-      include reporting on <computeroutput>stdin</computeroutput>,
+      <para>When enabled, Valgrind will track all file descriptor
+      usage. It will produce errors for bad file descriptor usage like
+      closing a file descriptor twice, using a file descriptor
+      (number) that was never created, or passing an already closed
+      file descriptor to a system call. It will also print out a list
+      of open file descriptors on exit. Or on request, via the
+      gdbserver monitor command <varname>v.info open_fds</varname>.</para>
+
+      <para>When an error is generated, or when listing the still open
+      file descriptors at exit, a stack backtrace of where the file
+      was opened is printed. If the file descriptor has already been
+      closed, it will also include a backtrace of where it was
+      previously closed. Any error will include details relating to
+      the file descriptor such as the file name or socket details.</para>
+
+      <para>Use <option>all</option> to also include reporting
+      on <computeroutput>stdin</computeroutput>,
       <computeroutput>stdout</computeroutput> and
-      <computeroutput>stderr</computeroutput>.</para>
+      <computeroutput>stderr</computeroutput> (or other inherited file
+      descriptors) at exit.  If <option>bad</option> option is used,
+      then exclude reporting on leaked file descriptors at exit and
+      only produce errors about bad file decriptors usage.</para>
+    </listitem>
+  </varlistentry>
+
+  <varlistentry id="opt.modify-fds" xreflabel="--modify-fds">
+    <term>
+      <option><![CDATA[--modify-fds=<no|yes|high> [default: no] ]]></option>
+    </term>
+    <listitem>
+      <para>When enabled, when the program opens a new file descriptor,
+      the highest available file descriptor is returned instead of the
+      lowest one. Use <option>yes</option> to restrict the feature from
+      the 0/1/2 file descriptors as they're often used for stdout/stderr
+      redirection.</para>
     </listitem>
   </varlistentry>
 
@@ -1128,10 +1154,14 @@ that can report errors, e.g. Memcheck, but not Cachegrind.</para>
       <option><![CDATA[--demangle=<yes|no> [default: yes] ]]></option>
     </term>
     <listitem>
-      <para>Enable/disable automatic demangling (decoding) of C++ names.
+      <para>Enable/disable automatic demangling (decoding) of C++, D,
+      Rust, Java, Ada names.
       Enabled by default.  When enabled, Valgrind will attempt to
-      translate encoded C++ names back to something approaching the
-      original.  The demangler handles symbols mangled by g++ versions
+      translate encoded names in the listed languages back to something
+      approaching the original.
+      Note that the callgrind tool always disables Ada demangling in order
+      to differentiate overloaded functions and procedures in the callgraph.
+      The demangler handles symbols mangled by g++ versions
       2.X, 3.X and 4.X.</para>
 
       <para>An important fact about demangling is that function names
@@ -1158,6 +1188,14 @@ that can report errors, e.g. Memcheck, but not Cachegrind.</para>
       will make Valgrind run a bit more slowly and take a bit more
       memory, but can be useful when working with programs with
       deeply-nested call chains.</para>
+
+      <para>The minimum value for this is 2. A value of 1 is not allowed
+      for two reasons. Firstly, some of the default suppressions use
+      "<computeroutput>...</computeroutput>" which is forbidden with
+      <computeroutput>--num-callers=1</computeroutput>. Secondly, it would
+      make leak suppressions match all allocations using the allocation
+      function (e.g., <computeroutput>malloc</computeroutput>).</para>
+
     </listitem>
   </varlistentry>
 
@@ -1788,14 +1826,31 @@ that can report errors, e.g. Memcheck, but not Cachegrind.</para>
     </listitem>
   </varlistentry>
 
+  <varlistentry id="opt.max-guard-pages" xreflabel="--max-guard-pages">
+    <term>
+      <option><![CDATA[--max-guard-pages=<number> [default: 500] ]]></option>
+    </term>
+    <listitem>
+      <para>By default, Valgrind can handle to up to 500 madvise
+      guard pages.  With thread heavy workloads the default value
+      might not be sufficient. Use this option to provide a different
+      limit. E.g.
+      <computeroutput>--max-guard-pages=3000</computeroutput>.
+      If <computeroutput>--max-guard-pages</computeroutput> is not
+      set explicitly, then it will default to the 
+      <computeroutput>--max-threads</computeroutput> setting.
+      </para>
+    </listitem>
+  </varlistentry>
+
     <varlistentry id="opt.realloc-zero-bytes-frees" xreflabel="--realloc-zero-bytes-frees">
     <term>
       <option><![CDATA[--realloc-zero-bytes-frees=yes|no [default: yes for glibc no otherwise] ]]></option>
     </term>
     <listitem>
-      <para>The behaviour of <computeroutput>realloc()</computeroutput> is
-      implementation defined (in C17, in C23 it is likely to become
-      undefined). Valgrind tries to work in the same way as the
+      <para>The behaviour of <computeroutput>realloc()</computeroutput> with a size
+      of zero is implementation defined in C17 and undefined in C23.
+      Valgrind tries to work in the same way as the
       underlying system and C runtime library that it was configured and built on.
       However, if you use a different C runtime library then this default may be wrong.
       If the value is <option>yes</option> then <varname>realloc</varname> will

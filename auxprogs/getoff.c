@@ -6,7 +6,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -148,7 +148,7 @@ int main (int argc, char** argv)
          dummy_link_map[off] = off;
       if (dlinfo ((void*)dummy_link_map, RTLD_DI_TLS_MODID, 
                   &modid_offset) == 0) {
-         assert(modid_offset >= 0 && modid_offset < MAX_LINKMAP_WORDS);
+         assert(modid_offset < MAX_LINKMAP_WORDS);
          fprintf(outputfile,
                  "lm_modid_offset 0x%zx\n", modid_offset*sizeof(size_t));
       } else {

@@ -14,7 +14,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -3158,7 +3158,6 @@ static void vts_tab__do_GC ( Bool show_stats )
       tl_assert(old_te->u.remap == VtsID_INVALID);
       tl_assert(old_vts != NULL);
       tl_assert(old_vts->id == i);
-      tl_assert(old_vts->ts != NULL);
 
       /* It is in use. Make a pruned version. */
       nBeforePruning++;

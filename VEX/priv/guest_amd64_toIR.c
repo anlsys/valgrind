@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -291,6 +291,13 @@ static IRExpr* mkU ( IRType ty, ULong i )
       default: vpanic("mkU(amd64)");
    }
 }
+
+static IRExpr* mkV128 ( UShort mask )
+{
+   return IRExpr_Const(IRConst_V128(mask));
+}
+
+#include "guest_generic_sse.h"
 
 static void storeLE ( IRExpr* addr, IRExpr* data )
 {
@@ -1666,11 +1673,6 @@ static void putYMMRegLane32 ( UInt ymmreg, Int laneno, IRExpr* e )
 {
    vassert(typeOfIRExpr(irsb->tyenv,e) == Ity_I32);
    stmt( IRStmt_Put( ymmGuestRegLane32offset(ymmreg,laneno), e ) );
-}
-
-static IRExpr* mkV128 ( UShort mask )
-{
-   return IRExpr_Const(IRConst_V128(mask));
 }
 
 /* Write the low half of a YMM reg and zero out the upper half. */
@@ -5075,14 +5077,14 @@ static IRTemp gen_LZCNT ( IRType ty, IRTemp src )
           binop(Iop_Shl64, mkexpr(src64),
                            mkU8(64 - 8 * sizeofIRType(ty))));
 
-   // Clz64 has undefined semantics when its input is zero, so
-   // special-case around that.
+   /* Guard against 0 input value. Use ClzNat64 operator for all other
+      values */
    IRTemp res64 = newTemp(Ity_I64);
    assign(res64,
           IRExpr_ITE(
              binop(Iop_CmpEQ64, mkexpr(src64x), mkU64(0)),
              mkU64(8 * sizeofIRType(ty)),
-             unop(Iop_Clz64, mkexpr(src64x))
+             unop(Iop_ClzNat64, mkexpr(src64x))
    ));
 
    IRTemp res = newTemp(ty);
@@ -5103,14 +5105,14 @@ static IRTemp gen_TZCNT ( IRType ty, IRTemp src )
    IRTemp src64 = newTemp(Ity_I64);
    assign(src64, widenUto64( mkexpr(src) ));
 
-   // Ctz64 has undefined semantics when its input is zero, so
-   // special-case around that.
+   /* Guard against 0 input value. Use CtzNat64 operator for all other
+      values */
    IRTemp res64 = newTemp(Ity_I64);
    assign(res64,
           IRExpr_ITE(
              binop(Iop_CmpEQ64, mkexpr(src64), mkU64(0)),
              mkU64(8 * sizeofIRType(ty)),
-             unop(Iop_Ctz64, mkexpr(src64))
+             unop(Iop_CtzNat64, mkexpr(src64))
    ));
 
    IRTemp res = newTemp(ty);
@@ -5965,6 +5967,10 @@ ULong dis_FPU ( /*OUT*/Bool* decode_ok,
                assign(t2, get_ST(r_src));
                put_ST_UNCHECKED(0, mkexpr(t2));
                put_ST_UNCHECKED(r_src, mkexpr(t1));
+               break;
+
+            case 0xD0: /* FNOP */
+               DIP("fnop\n");
                break;
 
             case 0xE0: /* FCHS */
@@ -8421,30 +8427,28 @@ ULong dis_bs_E_G ( const VexAbiInfo* vbi,
       elimination of previous stores to this field work better. */
    stmt( IRStmt_Put( OFFB_CC_NDEP, mkU64(0) ));
 
-   /* Result: iff source value is zero, we can't use
-      Iop_Clz64/Iop_Ctz64 as they have no defined result in that case.
-      But anyway, amd64 semantics say the result is undefined in
-      such situations.  Hence handle the zero case specially. */
+   /* amd64 semantics say the result is undefined iff source value is
+      zero. Hence handle the zero case specially. */
 
    /* Bleh.  What we compute:
 
           bsf64:  if src == 0 then {dst is unchanged} 
-                              else Ctz64(src)
+                              else CtzNat64(src)
 
           bsr64:  if src == 0 then {dst is unchanged} 
-                              else 63 - Clz64(src)
+                              else 63 - ClzNat64(src)
 
           bsf32:  if src == 0 then {dst is unchanged} 
-                              else Ctz64(32Uto64(src))
+                              else CtzNat64(32Uto64(src))
 
           bsr32:  if src == 0 then {dst is unchanged}
-                              else 63 - Clz64(32Uto64(src))
+                              else 63 - ClzNat64(32Uto64(src))
 
           bsf16:  if src == 0 then {dst is unchanged} 
-                              else Ctz64(32Uto64(16Uto32(src)))
+                              else CtzNat64(32Uto64(16Uto32(src)))
 
           bsr16:  if src == 0 then {dst is unchanged} 
-                              else 63 - Clz64(32Uto64(16Uto32(src)))
+                              else 63 - ClzNat64(32Uto64(16Uto32(src)))
    */
 
    /* The main computation, guarding against zero. */
@@ -8452,10 +8456,10 @@ ULong dis_bs_E_G ( const VexAbiInfo* vbi,
            IRExpr_ITE( 
               mkexpr(srcB),
               /* src != 0 */
-              fwds ? unop(Iop_Ctz64, mkexpr(src64))
+              fwds ? unop(Iop_CtzNat64, mkexpr(src64))
                    : binop(Iop_Sub64, 
                            mkU64(63), 
-                           unop(Iop_Clz64, mkexpr(src64))),
+                           unop(Iop_ClzNat64, mkexpr(src64))),
               /* src == 0 -- leave dst unchanged */
               widenUto64( getIRegG( sz, pfx, modrm ) )
            )
@@ -11231,30 +11235,6 @@ static IRTemp math_SHUFPD_256 ( IRTemp sV, IRTemp dV, UInt imm8 )
 }
 
 
-static IRTemp math_BLENDPD_128 ( IRTemp sV, IRTemp dV, UInt imm8 )
-{
-   UShort imm8_mask_16;
-   IRTemp imm8_mask = newTemp(Ity_V128);
-
-   switch( imm8 & 3 ) {
-      case 0:  imm8_mask_16 = 0x0000; break;
-      case 1:  imm8_mask_16 = 0x00FF; break;
-      case 2:  imm8_mask_16 = 0xFF00; break;
-      case 3:  imm8_mask_16 = 0xFFFF; break;
-      default: vassert(0);            break;
-   }
-   assign( imm8_mask, mkV128( imm8_mask_16 ) );
-
-   IRTemp res = newTemp(Ity_V128);
-   assign ( res, binop( Iop_OrV128, 
-                        binop( Iop_AndV128, mkexpr(sV),
-                                            mkexpr(imm8_mask) ), 
-                        binop( Iop_AndV128, mkexpr(dV), 
-                               unop( Iop_NotV128, mkexpr(imm8_mask) ) ) ) );
-   return res;
-}
-
-
 static IRTemp math_BLENDPD_256 ( IRTemp sV, IRTemp dV, UInt imm8 )
 {
    IRTemp sVhi = IRTemp_INVALID, sVlo = IRTemp_INVALID;
@@ -11268,26 +11248,6 @@ static IRTemp math_BLENDPD_256 ( IRTemp sV, IRTemp dV, UInt imm8 )
    return rV;
 }
 
-
-static IRTemp math_BLENDPS_128 ( IRTemp sV, IRTemp dV, UInt imm8 )
-{
-   UShort imm8_perms[16] = { 0x0000, 0x000F, 0x00F0, 0x00FF, 0x0F00,
-                             0x0F0F, 0x0FF0, 0x0FFF, 0xF000, 0xF00F,
-                             0xF0F0, 0xF0FF, 0xFF00, 0xFF0F, 0xFFF0,
-                             0xFFFF };
-   IRTemp imm8_mask = newTemp(Ity_V128);
-   assign( imm8_mask, mkV128( imm8_perms[ (imm8 & 15) ] ) );
-
-   IRTemp res = newTemp(Ity_V128);
-   assign ( res, binop( Iop_OrV128,
-                        binop( Iop_AndV128, mkexpr(sV), 
-                                            mkexpr(imm8_mask) ),
-                        binop( Iop_AndV128, mkexpr(dV),
-                               unop( Iop_NotV128, mkexpr(imm8_mask) ) ) ) );
-   return res;
-}
-
-
 static IRTemp math_BLENDPS_256 ( IRTemp sV, IRTemp dV, UInt imm8 )
 {
    IRTemp sVhi = IRTemp_INVALID, sVlo = IRTemp_INVALID;
@@ -11299,29 +11259,6 @@ static IRTemp math_BLENDPS_256 ( IRTemp sV, IRTemp dV, UInt imm8 )
    IRTemp rV   = newTemp(Ity_V256);
    assign(rV, binop(Iop_V128HLtoV256, mkexpr(rVhi), mkexpr(rVlo)));
    return rV;
-}
-
-
-static IRTemp math_PBLENDW_128 ( IRTemp sV, IRTemp dV, UInt imm8 )
-{
-   /* Make w be a 16-bit version of imm8, formed by duplicating each
-      bit in imm8. */
-   Int i;
-   UShort imm16 = 0;
-   for (i = 0; i < 8; i++) {
-      if (imm8 & (1 << i))
-         imm16 |= (3 << (2*i));
-   }
-   IRTemp imm16_mask = newTemp(Ity_V128);
-   assign( imm16_mask, mkV128( imm16 ));
-
-   IRTemp res = newTemp(Ity_V128);
-   assign ( res, binop( Iop_OrV128,
-                        binop( Iop_AndV128, mkexpr(sV), 
-                                            mkexpr(imm16_mask) ),
-                        binop( Iop_AndV128, mkexpr(dV),
-                               unop( Iop_NotV128, mkexpr(imm16_mask) ) ) ) );
-   return res;
 }
 
 
@@ -16694,29 +16631,6 @@ Long dis_ESC_0F__SSE4 ( Bool* decode_OK,
 /*---                                                      ---*/
 /*------------------------------------------------------------*/
 
-static IRTemp math_PBLENDVB_128 ( IRTemp vecE, IRTemp vecG,
-                                  IRTemp vec0/*controlling mask*/,
-                                  UInt gran, IROp opSAR )
-{
-   /* The tricky bit is to convert vec0 into a suitable mask, by
-      copying the most significant bit of each lane into all positions
-      in the lane. */
-   IRTemp sh = newTemp(Ity_I8);
-   assign(sh, mkU8(8 * gran - 1));
-
-   IRTemp mask = newTemp(Ity_V128);
-   assign(mask, binop(opSAR, mkexpr(vec0), mkexpr(sh)));
-
-   IRTemp notmask = newTemp(Ity_V128);
-   assign(notmask, unop(Iop_NotV128, mkexpr(mask)));
-
-   IRTemp res = newTemp(Ity_V128);
-   assign(res,  binop(Iop_OrV128,
-                      binop(Iop_AndV128, mkexpr(vecE), mkexpr(mask)),
-                      binop(Iop_AndV128, mkexpr(vecG), mkexpr(notmask))));
-   return res;
-}
-
 static IRTemp math_PBLENDVB_256 ( IRTemp vecE, IRTemp vecG,
                                   IRTemp vec0/*controlling mask*/,
                                   UInt gran, IROp opSAR128 )
@@ -17753,8 +17667,8 @@ static Long dis_PHMINPOSUW_128 ( const VexAbiInfo* vbi, Prefix pfx,
    assign( sLo, unop(Iop_V128to64,   mkexpr(sV)) );
    assign( dLo, mkIRExprCCall(
                    Ity_I64, 0/*regparms*/,
-                   "amd64g_calculate_sse_phminposuw", 
-                   &amd64g_calculate_sse_phminposuw,
+                   "g_calculate_sse_phminposuw",
+                   &g_calculate_sse_phminposuw,
                    mkIRExprVec_2( mkexpr(sLo), mkexpr(sHi) )
          ));
    (isAvx ? putYMMRegLoAndZU : putXMMReg)
@@ -18606,8 +18520,9 @@ static Long dis_PEXTRQ ( const VexAbiInfo* vbi, Prefix pfx,
 
 static IRExpr* math_CTZ32(IRExpr *exp)
 {
-   /* Iop_Ctz32 isn't implemented by the amd64 back end, so use Iop_Ctz64. */
-   return unop(Iop_64to32, unop(Iop_Ctz64, unop(Iop_32Uto64, exp)));
+   /* Iop_CtzNat32 isn't implemented by the amd64 back end, so use
+      Iop_CtzNat64. */
+   return unop(Iop_64to32, unop(Iop_CtzNat64, unop(Iop_32Uto64, exp)));
 }
 
 static Long dis_PCMPISTRI_3A ( UChar modrm, UInt regNoL, UInt regNoR,
@@ -19109,60 +19024,6 @@ static IRTemp math_DPPS_128 ( IRTemp src_vec, IRTemp dst_vec, UInt imm8 )
                               binop( Iop_InterleaveLO32x4,
                                      mkexpr(sum_vec), mkexpr(sum_vec) ) ), 
                        mkV128( imm8_perms[ (imm8 & 15) ] ) ) );
-   return res;
-}
-
-
-static IRTemp math_MPSADBW_128 ( IRTemp dst_vec, IRTemp src_vec, UInt imm8 )
-{
-   /* Mask out bits of the operands we don't need.  This isn't
-      strictly necessary, but it does ensure Memcheck doesn't
-      give us any false uninitialised value errors as a
-      result. */
-   UShort src_mask[4] = { 0x000F, 0x00F0, 0x0F00, 0xF000 };
-   UShort dst_mask[2] = { 0x07FF, 0x7FF0 };
-
-   IRTemp src_maskV = newTemp(Ity_V128);
-   IRTemp dst_maskV = newTemp(Ity_V128);
-   assign(src_maskV, mkV128( src_mask[ imm8 & 3 ] ));
-   assign(dst_maskV, mkV128( dst_mask[ (imm8 >> 2) & 1 ] ));
-
-   IRTemp src_masked = newTemp(Ity_V128);
-   IRTemp dst_masked = newTemp(Ity_V128);
-   assign(src_masked, binop(Iop_AndV128, mkexpr(src_vec), mkexpr(src_maskV)));
-   assign(dst_masked, binop(Iop_AndV128, mkexpr(dst_vec), mkexpr(dst_maskV)));
-
-   /* Generate 4 64 bit values that we can hand to a clean helper */
-   IRTemp sHi = newTemp(Ity_I64);
-   IRTemp sLo = newTemp(Ity_I64);
-   assign( sHi, unop(Iop_V128HIto64, mkexpr(src_masked)) );
-   assign( sLo, unop(Iop_V128to64,   mkexpr(src_masked)) );
-
-   IRTemp dHi = newTemp(Ity_I64);
-   IRTemp dLo = newTemp(Ity_I64);
-   assign( dHi, unop(Iop_V128HIto64, mkexpr(dst_masked)) );
-   assign( dLo, unop(Iop_V128to64,   mkexpr(dst_masked)) );
-
-   /* Compute halves of the result separately */
-   IRTemp resHi = newTemp(Ity_I64);
-   IRTemp resLo = newTemp(Ity_I64);
-
-   IRExpr** argsHi
-      = mkIRExprVec_5( mkexpr(sHi), mkexpr(sLo), mkexpr(dHi), mkexpr(dLo),
-                       mkU64( 0x80 | (imm8 & 7) ));
-   IRExpr** argsLo
-      = mkIRExprVec_5( mkexpr(sHi), mkexpr(sLo), mkexpr(dHi), mkexpr(dLo),
-                       mkU64( 0x00 | (imm8 & 7) ));
-
-   assign(resHi, mkIRExprCCall( Ity_I64, 0/*regparm*/,
-                                "amd64g_calc_mpsadbw",
-                                &amd64g_calc_mpsadbw, argsHi ));
-   assign(resLo, mkIRExprCCall( Ity_I64, 0/*regparm*/,
-                                "amd64g_calc_mpsadbw",
-                                &amd64g_calc_mpsadbw, argsLo ));
-
-   IRTemp res = newTemp(Ity_V128);
-   assign(res, binop(Iop_64HLtoV128, mkexpr(resHi), mkexpr(resLo)));
    return res;
 }
 
@@ -20787,8 +20648,8 @@ Long dis_ESC_NONE (
          dis_REP_op ( dres, AMD64CondAlways, dis_MOVS, sz,
                       guest_RIP_curr_instr,
                       guest_RIP_bbstart+delta, "rep movs", pfx );
-        dres->whatNext = Dis_StopHere;
-        return delta;
+         vassert(dres->whatNext == Dis_StopHere);
+         return delta;
       }
       /* A4: movsb */
       if (!haveF3(pfx) && !haveF2(pfx)) {
@@ -20801,14 +20662,31 @@ Long dis_ESC_NONE (
 
    case 0xA6:
    case 0xA7:
-      /* F3 A6/A7: repe cmps/rep cmps{w,l,q} */
-      if (haveF3(pfx) && !haveF2(pfx)) {
+      /* F2 A6/A7: repne cmpsb/repne cmps{w,l,q} */
+      if (haveF2(pfx) && !haveF3(pfx)) {
+         if (opc == 0xA6)
+            sz = 1;
+         dis_REP_op ( dres, AMD64CondNZ, dis_CMPS, sz, 
+                      guest_RIP_curr_instr,
+                      guest_RIP_bbstart+delta, "repne cmps", pfx );
+         vassert(dres->whatNext == Dis_StopHere);
+         return delta;
+      }
+      /* F3 A6/A7: repe cmpsb/repe cmps{w,l,q} */
+      if (!haveF2(pfx) && haveF3(pfx)) {
          if (opc == 0xA6)
             sz = 1;
          dis_REP_op ( dres, AMD64CondZ, dis_CMPS, sz, 
                       guest_RIP_curr_instr,
                       guest_RIP_bbstart+delta, "repe cmps", pfx );
-         dres->whatNext = Dis_StopHere;
+         vassert(dres->whatNext == Dis_StopHere);
+         return delta;
+      }
+      /* A6/A7: cmpsb/cmps{w,l,q} */
+      if (!haveF2(pfx) && !haveF3(pfx)) {
+         if (opc == 0xA6)
+            sz = 1;
+         dis_string_op ( dis_CMPS, sz, "cmps", pfx );
          return delta;
       }
       goto decode_failure;
@@ -22082,10 +21960,12 @@ Long dis_ESC_0F (
          Bool hasF16C   = (archinfo->hwcaps & VEX_HWCAPS_AMD64_F16C) != 0;
          Bool hasRDRAND = (archinfo->hwcaps & VEX_HWCAPS_AMD64_RDRAND) != 0;
          Bool hasRDSEED = (archinfo->hwcaps & VEX_HWCAPS_AMD64_RDSEED) != 0;
-         args = mkIRExprVec_4(IRExpr_GSPTR(),
+         Bool hasLZCNT  = (archinfo->hwcaps & VEX_HWCAPS_AMD64_LZCNT) != 0;
+         args = mkIRExprVec_5(IRExpr_GSPTR(),
                               mkIRExpr_HWord(hasF16C ? 1 : 0),
                               mkIRExpr_HWord(hasRDRAND ? 1 : 0),
-                              mkIRExpr_HWord(hasRDSEED ? 1 : 0));
+                              mkIRExpr_HWord(hasRDSEED ? 1 : 0),
+                              mkIRExpr_HWord(hasLZCNT ? 1 : 0));
       } else {
          args = mkIRExprVec_1(IRExpr_GSPTR());
       }
@@ -27015,7 +26895,6 @@ Long dis_ESC_0F__VEX (
       break;
 
    case 0xD6:
-      /* I can't even find any Intel docs for this one. */
       /* Basically: 66 0F D6 = MOVQ -- move 64 bits from G (lo half
          xmm) to E (mem or lo half xmm).  Looks like L==0(128), W==0
          (WIG, maybe?) */
@@ -27024,8 +26903,15 @@ Long dis_ESC_0F__VEX (
          UChar modrm = getUChar(delta);
          UInt  rG    = gregOfRexRM(pfx,modrm);
          if (epartIsReg(modrm)) {
-            /* fall through, awaiting test case */
             /* dst: lo half copied, hi half zeroed */
+            UInt rE = eregOfRexRM(pfx,modrm);
+            putXMMRegLane64( rE, 0, getXMMRegLane64( rG, 0 ));
+            /* zero bits 255:64 */
+            putXMMRegLane64( rE, 1, mkU64(0) );
+            putYMMRegLane128( rE, 1, mkV128(0) );
+            DIP("vmovq %s,%s\n", nameXMMReg(rG), nameXMMReg(rE));
+            delta += 1;
+            goto decode_success;
          } else {
             addr = disAMode ( &alen, vbi, pfx, delta, dis_buf, 0 );
             storeLE( mkexpr(addr), getXMMRegLane64( rG, 0 ));

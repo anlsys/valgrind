@@ -1,7 +1,7 @@
 
 include $(top_srcdir)/Makefile.tool-tests.am
 
-dist_noinst_SCRIPTS = filter_stderr filter_verbose filter_new_aligned
+dist_noinst_SCRIPTS = filter_stderr filter_verbose filter_new_aligned filter_ignore_fn
 
 EXTRA_DIST = \
 	alloc-fns-A.post.exp alloc-fns-A.stderr.exp alloc-fns-A.vgtest \
@@ -21,13 +21,13 @@ EXTRA_DIST = \
 	custom_alloc.post.exp custom_alloc.stderr.exp custom_alloc.vgtest \
 	ignored.post.exp ignored.stderr.exp ignored.vgtest \
 	ignoring.post.exp ignoring.stderr.exp ignoring.vgtest \
-	inlinfomalloc.post.exp inlinfomalloc.stderr.exp inlinfomalloc.vgtest \
+	inlinfomalloc.post.exp inlinfomalloc.vgtest \
 	insig.post.exp insig.stderr.exp insig.vgtest \
 	long-names.post.exp long-names.stderr.exp long-names.vgtest \
 	long-time.post.exp long-time.stderr.exp long-time.vgtest \
-	malloc_usable.stderr.exp malloc_usable.vgtest \
+	malloc_usable.vgtest \
 	mmapunmap.post.exp mmapunmap.post.exp-ppc64 \
-	mmapunmap.stderr.exp mmapunmap.vgtest \
+	mmapunmap.vgtest \
 	new-cpp.post.exp new-cpp.stderr.exp new-cpp.vgtest \
 	no-stack-no-heap.post.exp no-stack-no-heap.stderr.exp no-stack-no-heap.vgtest \
 	null.post.exp null.stderr.exp null.vgtest \
@@ -36,6 +36,7 @@ EXTRA_DIST = \
 	overloaded-new.stderr.exp overloaded-new.vgtest \
 	pages_as_heap.stderr.exp pages_as_heap.vgtest \
 	peak.post.exp peak.stderr.exp peak.vgtest \
+	peak_only.post.exp peak_only.stderr.exp peak_only.vgtest \
 	peak2.post.exp peak2.stderr.exp peak2.vgtest \
 	realloc.post.exp realloc.stderr.exp realloc.vgtest \
 	thresholds_0_0.post.exp \
@@ -98,7 +99,7 @@ bug469146_CXXFLAGS	= $(AM_CXXFLAGS) -O2 -fno-optimize-sibling-calls @FLAG_W_NO_U
 new_cpp_SOURCES		= new-cpp.cpp
 overloaded_new_SOURCES	= overloaded-new.cpp
 # aligned new needs C++17
-overloaded_new_CXXFLAGS	= $(AM_CXXFLAGS) -Wno-implicit-exception-spec-mismatch -Wno-missing-exception-spec -std=c++17
+overloaded_new_CXXFLAGS	= $(AM_CXXFLAGS) @FLAG_W_NO_IMPLICIT_EXCEPTION_SPEC_MISMATCH@ @FLAG_W_NO_MISSING_EXCEPTION_SPEC@ @FLAG_W_NO_ATTRIBUTES@ -std=c++17
 
 # Suppress warnings for issues we are testing for
 alloc_fns_CFLAGS	= $(AM_CFLAGS) -Wno-unused-result
@@ -109,6 +110,8 @@ deep_CFLAGS		= $(AM_CFLAGS) -Wno-unused-result
 ignoring_CFLAGS		= $(AM_CFLAGS) -Wno-unused-result
 insig_CFLAGS		= $(AM_CFLAGS) -Wno-unused-result
 long_names_CFLAGS	= $(AM_CFLAGS) -Wno-unused-result
+malloc_usable_CFLAGS	= ${AM_CFLAGS} @FLAG_W_NO_MAYBE_UNINITIALIZED@
 one_CFLAGS		= $(AM_CFLAGS) -Wno-unused-result
-thresholds_CFLAGS	= $(AM_CFLAGS) -Wno-unused-result
+pages_as_heap_CFLAGS	= ${AM_CFLAGS} @FLAG_W_NO_DEPRECATED_DECLARATIONS@
 realloc_CFLAGS		= $(AM_CFLAGS) @FLAG_W_NO_FREE_NONHEAP_OBJECT@
+thresholds_CFLAGS	= $(AM_CFLAGS) -Wno-unused-result

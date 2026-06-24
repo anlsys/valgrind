@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -893,6 +893,10 @@ static void do_pre_run_checks ( volatile ThreadState* tst )
 #  if defined(VGA_mips32) || defined(VGA_mips64)
    /* no special requirements */
 #  endif
+
+#  if defined(VGA_riscv64)
+   /* no special requirements */
+#  endif
 }
 
 // NO_VGDB_POLL value ensures vgdb is not polled, while
@@ -1006,6 +1010,8 @@ void run_thread_for_a_while ( /*OUT*/HWord* two_words,
       || defined(VGP_nanomips_linux)
    tst->arch.vex.guest_LLaddr = (RegWord)(-1);
 #  elif defined(VGP_arm64_linux) || defined(VGP_arm64_freebsd)
+   tst->arch.vex.guest_LLSC_SIZE = 0;
+#  elif defined(VGP_riscv64_linux)
    tst->arch.vex.guest_LLSC_SIZE = 0;
 #  endif
 
@@ -1851,6 +1857,9 @@ void VG_(nuke_all_threads_except) ( ThreadId me, VgSchedReturnCode src )
 #elif defined(VGA_mips32) || defined(VGA_mips64) || defined(VGA_nanomips)
 #  define VG_CLREQ_ARGS       guest_r12
 #  define VG_CLREQ_RET        guest_r11
+#elif defined(VGA_riscv64)
+#  define VG_CLREQ_ARGS       guest_x14
+#  define VG_CLREQ_RET        guest_x13
 #else
 #  error Unknown arch
 #endif
@@ -1973,7 +1982,7 @@ Int print_client_message( ThreadId tid, const HChar *format,
       VG_(get_and_pp_StackTrace)( tid, VG_(clo_backtrace_size) );
    
    if (VG_(clo_xml))
-      VG_(printf_xml)( "</clientmsg>\n" );
+      VG_(printf_xml)( "</clientmsg>\n\n" );
 
    return count;
 }
@@ -2030,6 +2039,32 @@ void do_client_request ( ThreadId tid )
       // See comment in valgrind.h to understand what's going on.
       case VG_USERREQ__RUNNING_ON_VALGRIND:
          SET_CLREQ_RETVAL(tid, RUNNING_ON_VALGRIND+1);
+         break;
+
+      case VG_USERREQ__VALGRIND_REPLACES_MALLOC:
+         SET_CLREQ_RETVAL(tid, VG_(needs).malloc_replacement);
+         break;
+
+      case VG_USERREQ__VALGRIND_GET_TOOLNAME: {
+         HChar* buf = (HChar *)arg[1];
+         SizeT len_needed = VG_(strlen)(VG_(clo_toolname)) + 1;
+         SizeT buflen = (SizeT)arg[2];
+         if (buflen > 0) {
+            if (buf != NULL) {
+               VG_(strncpy)(buf, VG_(clo_toolname), buflen);
+               if (len_needed > buflen) {
+                  buf[buflen-1] = '\0';
+               }
+               VG_TRACK( post_mem_write, Vg_CoreClientReq, tid,
+                        (Addr)buf, VG_MIN(len_needed, buflen));
+            }
+         }
+         SET_CLREQ_RETVAL(tid, len_needed);
+         break;
+      }
+      
+      case VG_USERREQ__VALGRIND_RUNNING_VERSION:
+         SET_CLREQ_RETVAL(tid, (__VALGRIND_MAJOR__ *100) + (__VALGRIND_MINOR__));
          break;
 
       case VG_USERREQ__PRINTF: {
@@ -2136,8 +2171,12 @@ void do_client_request ( ThreadId tid )
 	 info->tl___builtin_vec_delete = VG_(tdict).tool___builtin_vec_delete;
 	 info->tl___builtin_vec_delete_aligned = VG_(tdict).tool___builtin_vec_delete_aligned;
 	 info->tl_malloc_usable_size   = VG_(tdict).tool_malloc_usable_size;
-
+#if defined(VGO_linux) || defined(VGO_solaris)
 	 info->mallinfo                = VG_(mallinfo);
+#endif
+#if defined(VGO_linux)
+	 info->mallinfo2               = VG_(mallinfo2);
+#endif
 	 info->clo_trace_malloc        = VG_(clo_trace_malloc);
          info->clo_realloc_zero_bytes_frees    = VG_(clo_realloc_zero_bytes_frees);
 

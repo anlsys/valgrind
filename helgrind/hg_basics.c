@@ -13,7 +13,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -89,6 +89,10 @@ Bool  HG_(clo_free_is_write) = False;
 UWord HG_(clo_vts_pruning) = 1;
 
 Bool  HG_(clo_check_stack_refs) = True;
+
+UWord HG_(clo_show_events) = 0;
+
+UWord HG_(clo_track_destroy) = 0;
 
 /*--------------------------------------------------------------------*/
 /*--- end                                              hg_basics.c ---*/

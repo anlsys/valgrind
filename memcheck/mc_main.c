@@ -15,7 +15,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -51,6 +51,7 @@
 
 #include "mc_include.h"
 #include "memcheck.h"   /* for client requests */
+#include "config.h"     /* DARWIN_VERS */
 
 /* Set to 1 to do a little more sanity checking */
 #define VG_DEBUG_MEMORY 0
@@ -1664,6 +1665,18 @@ void mc_STOREVn_slow ( Addr a, SizeT nBits, ULong vbytes, Bool bigendian )
 /*--- Setting permissions over address ranges.             ---*/
 /*------------------------------------------------------------*/
 
+#if defined(VGO_darwin) && DARWIN_VERS >= DARWIN_11_00
+#if DARWIN_VERS >= DARWIN_26_00
+// The new xzm_main_malloc_zone_create makes a 25GB (0x600000000) map in memory so, no choice but to raise the limit...
+# define VA_LARGE_RANGE ( 25UL * 1024 * 1024 * 1024)
+# else
+// Now that we parse the DSC, we might get mmap which are up to 4GB, put 2GB to be safe for now
+# define VA_LARGE_RANGE ( 2UL * 1024 * 1024 * 1024)
+#endif
+#else
+#define VA_LARGE_RANGE 256UL * 1024 * 1024
+#endif
+
 static void set_address_range_perms ( Addr a, SizeT lenT, UWord vabits16,
                                       UWord dsm_num )
 {
@@ -1689,8 +1702,8 @@ static void set_address_range_perms ( Addr a, SizeT lenT, UWord vabits16,
    if (lenT == 0)
       return;
 
-   if (lenT > 256 * 1024 * 1024) {
-      if (VG_(clo_verbosity) > 0 && !VG_(clo_xml)) {
+   if ((ULong)lenT > VA_LARGE_RANGE) {
+      if (VG_(clo_verbosity) > 1 && !VG_(clo_xml)) {
          const HChar* s = "unknown???";
          if (vabits16 == VA_BITS16_NOACCESS ) s = "noaccess";
          if (vabits16 == VA_BITS16_UNDEFINED) s = "undefined";
@@ -1901,7 +1914,7 @@ static void set_address_range_perms ( Addr a, SizeT lenT, UWord vabits16,
 void MC_(make_mem_noaccess) ( Addr a, SizeT len )
 {
    PROF_EVENT(MCPE_MAKE_MEM_NOACCESS);
-   DEBUG("MC_(make_mem_noaccess)(%p, %lu)\n", a, len);
+   DEBUG("MC_(make_mem_noaccess)(%p, %lu)\n", (void*)a, len);
    set_address_range_perms ( a, len, VA_BITS16_NOACCESS, SM_DIST_NOACCESS );
    if (UNLIKELY( MC_(clo_mc_level) == 3 ))
       ocache_sarp_Clear_Origins ( a, len );
@@ -1910,14 +1923,14 @@ void MC_(make_mem_noaccess) ( Addr a, SizeT len )
 static void make_mem_undefined ( Addr a, SizeT len )
 {
    PROF_EVENT(MCPE_MAKE_MEM_UNDEFINED);
-   DEBUG("make_mem_undefined(%p, %lu)\n", a, len);
+   DEBUG("make_mem_undefined(%p, %lu)\n", (void*)a, len);
    set_address_range_perms ( a, len, VA_BITS16_UNDEFINED, SM_DIST_UNDEFINED );
 }
 
 void MC_(make_mem_undefined_w_otag) ( Addr a, SizeT len, UInt otag )
 {
    PROF_EVENT(MCPE_MAKE_MEM_UNDEFINED_W_OTAG);
-   DEBUG("MC_(make_mem_undefined)(%p, %lu)\n", a, len);
+   DEBUG("MC_(make_mem_undefined)(%p, %lu)\n", (void*)a, len);
    set_address_range_perms ( a, len, VA_BITS16_UNDEFINED, SM_DIST_UNDEFINED );
    if (UNLIKELY( MC_(clo_mc_level) == 3 ))
       ocache_sarp_Set_Origins ( a, len, otag );
@@ -1954,7 +1967,7 @@ void mc_new_mem_w_tid_no_ECU  ( Addr a, SizeT len, ThreadId tid )
 void MC_(make_mem_defined) ( Addr a, SizeT len )
 {
    PROF_EVENT(MCPE_MAKE_MEM_DEFINED);
-   DEBUG("MC_(make_mem_defined)(%p, %lu)\n", a, len);
+   DEBUG("MC_(make_mem_defined)(%p, %lu)\n", (void*)a, len);
    set_address_range_perms ( a, len, VA_BITS16_DEFINED, SM_DIST_DEFINED );
    if (UNLIKELY( MC_(clo_mc_level) == 3 ))
       ocache_sarp_Clear_Origins ( a, len );
@@ -1974,7 +1987,7 @@ static void make_mem_defined_if_addressable ( Addr a, SizeT len )
 {
    SizeT i;
    UChar vabits2;
-   DEBUG("make_mem_defined_if_addressable(%p, %llu)\n", a, (ULong)len);
+   DEBUG("make_mem_defined_if_addressable(%p, %llu)\n", (void*)a, (ULong)len);
    for (i = 0; i < len; i++) {
       vabits2 = get_vabits2( a+i );
       if (LIKELY(VA_BITS2_NOACCESS != vabits2)) {
@@ -1991,7 +2004,7 @@ static void make_mem_defined_if_noaccess ( Addr a, SizeT len )
 {
    SizeT i;
    UChar vabits2;
-   DEBUG("make_mem_defined_if_noaccess(%p, %llu)\n", a, (ULong)len);
+   DEBUG("make_mem_defined_if_noaccess(%p, %llu)\n", (void*)a, (ULong)len);
    for (i = 0; i < len; i++) {
       vabits2 = get_vabits2( a+i );
       if (LIKELY(VA_BITS2_NOACCESS == vabits2)) {
@@ -6329,7 +6342,7 @@ static void mc_print_usage(void)
 "    --keep-stacktraces=alloc|free|alloc-and-free|alloc-then-free|none\n"
 "        stack trace(s) to keep for malloc'd/free'd areas       [alloc-and-free]\n"
 "    --show-mismatched-frees=no|yes   show frees that don't match the allocator? [yes]\n"
-"    --show-realloc-size-zero=no|yes  show realocs with a size of zero? [yes]\n"
+"    --show-realloc-size-zero=no|yes  show reallocs with a size of zero? [yes]\n"
    );
 }
 
@@ -7231,7 +7244,7 @@ static Bool mc_handle_client_request ( ThreadId tid, UWord* arg, UWord* ret )
          }
          // size zero not allowed on all platforms (e.g. Illumos)
          if (aligned_alloc_info->size == 0) {
-            MC_(record_bad_size) ( tid, aligned_alloc_info->size, "memalign()" );
+            MC_(record_unsafe_zero_size) ( tid );
          }
          break;
       case AllocKindPosixMemalign:
@@ -7243,7 +7256,7 @@ static Bool mc_handle_client_request ( ThreadId tid, UWord* arg, UWord* ret )
             MC_(record_bad_alignment) ( tid, aligned_alloc_info->orig_alignment , 0U, " (should be non-zero, a power of 2 and a multiple of sizeof(void*))" );
          }
          if (aligned_alloc_info->size == 0) {
-            MC_(record_bad_size) ( tid, aligned_alloc_info->size, "posix_memalign()" );
+            MC_(record_unsafe_zero_size) ( tid);
          }
          break;
       case AllocKindAlignedAlloc:
@@ -7257,7 +7270,7 @@ static Bool mc_handle_client_request ( ThreadId tid, UWord* arg, UWord* ret )
             MC_(record_bad_alignment) ( tid, aligned_alloc_info->orig_alignment , aligned_alloc_info->size, " (size should be a multiple of alignment)" );
          }
          if (aligned_alloc_info->size == 0) {
-            MC_(record_bad_size) ( tid, aligned_alloc_info->size, "aligned_alloc()" );
+            MC_(record_unsafe_zero_size) ( tid );
          }
          break;
       case AllocKindDeleteSized:
@@ -7279,16 +7292,13 @@ static Bool mc_handle_client_request ( ThreadId tid, UWord* arg, UWord* ret )
          }
          break;
       case AllocKindFreeAlignedSized:
-         // same alignment checks as aligned_alloc
+         // same alignment checks as aligned_alloc, but allow a size of 0
          if ((aligned_alloc_info->orig_alignment & (aligned_alloc_info->orig_alignment - 1)) != 0) {
             MC_(record_bad_alignment) ( tid, aligned_alloc_info->orig_alignment , 0U, " (should be a power of 2)" );
          }
          if (aligned_alloc_info->orig_alignment &&
              aligned_alloc_info->size % aligned_alloc_info->orig_alignment != 0U) {
             MC_(record_bad_alignment) ( tid, aligned_alloc_info->orig_alignment , aligned_alloc_info->size, " (size should be a multiple of alignment)" );
-         }
-         if (aligned_alloc_info->size == 0) {
-            MC_(record_bad_size) ( tid, aligned_alloc_info->size, "free_aligned_sized()" );
          }
          mc = VG_(HT_lookup) ( MC_(malloc_list), (UWord)aligned_alloc_info->mem );
          if (mc && aligned_alloc_info->orig_alignment != mc->alignB) {
@@ -8555,7 +8565,7 @@ static void mc_pre_clo_init(void)
    VG_(details_version)         (NULL);
    VG_(details_description)     ("a memory error detector");
    VG_(details_copyright_author)(
-      "Copyright (C) 2002-2024, and GNU GPL'd, by Julian Seward et al.");
+      "Copyright (C) 2002-2026, and GNU GPL'd, by Julian Seward et al.");
    VG_(details_bug_reports_to)  (VG_BUGS_TO);
    VG_(details_avg_translation_sizeB) ( 640 );
 

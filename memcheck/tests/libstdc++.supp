@@ -82,9 +82,7 @@
    Memcheck:Leak
    match-leak-kinds: reachable
    fun:malloc
-   obj:*
-   fun:call_init
-   fun:_dl_init
+   ...
    fun:_dl_start_user
 }
 {
@@ -108,4 +106,29 @@
    obj:/libexec/ld-elf*.so.1
    obj:/libexec/ld-elf*.so.1
    obj:/libexec/ld-elf*.so.1
+}
+{
+   Solaris-leaks-g++-malloc
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:_GLOBAL__sub_I_eh_alloc.cc
+   obj:*/libstdc++.so*
+   fun:_init
+   fun:call_init
+   fun:setup
+   fun:_setup
+   fun:_rt_boot
+}
+{
+   Illumos-leaks-g++-malloc
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:_GLOBAL__sub_I_eh_alloc.cc
+   fun:call_array
+   fun:call_init
+   fun:setup
+   fun:_setup
+   fun:_rt_boot
 }

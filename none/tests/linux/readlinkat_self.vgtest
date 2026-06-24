@@ -1,0 +1,2 @@
+prog: readlinkat_self
+vgopts: -q

@@ -28,8 +28,13 @@ usage: valgrind [options] prog-and-args
     --vgdb-stop-at=event1,event2,... invoke gdbserver for given events [none]
          where event is one of:
            startup exit abexit valgrindabexit all none
-    --track-fds=no|yes|all    track open file descriptors? [no]
-                              all includes reporting stdin, stdout and stderr
+    --track-fds=no|yes|all|bad track open file descriptors? [no]
+                              all also reports on open inherited file
+                              descriptors at exit (e.g. stdin/out/err)
+                              bad only reports on file descriptor usage
+                              errors and doesn't list open file descriptors
+                              at exit
+    --modify-fds=no|yes|high  modify newly open file descriptors? [no]
     --time-stamp=no|yes       add timestamps to log messages? [no]
     --log-fd=<number>         log messages to file descriptor [2=stderr]
     --log-file=<file>         log messages to <file>
@@ -43,7 +48,8 @@ usage: valgrind [options] prog-and-args
     --xml-file=<file>         XML output to <file>
     --xml-socket=ipaddr:port  XML output to socket ipaddr:port
     --xml-user-comment=STR    copy STR verbatim into XML output
-    --demangle=no|yes         automatically demangle C++ names? [yes]
+    --demangle=no|yes         automatically demangle decorated names? [yes]
+                              supported languages: C++, D, Rust, Java, Ada
     --num-callers=<number>    show <number> callers in stack traces [12]
     --error-limit=no|yes      stop showing new errors if too many? [yes]
     --exit-on-first-error=no|yes exit code on the first error found? [no]
@@ -157,8 +163,10 @@ usage: valgrind [options] prog-and-args
                   recovered by stack scanning [5]
     --resync-filter=no|yes|verbose [yes on MacOS, no on other OSes]
               attempt to avoid expensive address-space-resync operations
-    --max-threads=<number>    maximum number of threads that valgrind can
-                              handle [500]
+    --max-threads=<number>     maximum number of threads that valgrind can
+                               handle [500]
+    --max-guard-pages=<number> maximum number of madvise guard pages that
+                               valgrind can handle [500]
 
   user options for Nulgrind:
     (none)

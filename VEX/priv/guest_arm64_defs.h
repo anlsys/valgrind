@@ -11,7 +11,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -116,8 +116,6 @@ extern ULong arm64g_calc_crc32cw ( ULong acc, ULong bits );
 extern ULong arm64g_calc_crc32cx ( ULong acc, ULong bits );
 
 /* --- DIRTY HELPERS --- */
-extern ULong arm64g_dirtyhelper_MRS_DCZID_EL0 ( void );
-
 extern ULong arm64g_dirtyhelper_MRS_CNTVCT_EL0 ( void );
 
 extern ULong arm64g_dirtyhelper_MRS_CNTFRQ_EL0 ( void );

@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -191,6 +191,7 @@ typedef
       UShort guest_FS;
       UShort guest_GS;
       UShort guest_SS;
+      UInt paddingSeg;
       /* LDT/GDT stuff. */
       ULong  guest_LDT; /* host addr, a VexGuestX86SegDescr* */
       ULong  guest_GDT; /* host addr, a VexGuestX86SegDescr* */
@@ -213,19 +214,15 @@ typedef
       /* Used for Darwin syscall dispatching. */
       UInt guest_SC_CLASS;
 
-      /* Needed for Darwin (but mandated for all guest architectures):
-         EIP at the last syscall insn (int 0x80/81/82, sysenter,
-         syscall).  Used when backing up to restart a syscall that has
-         been interrupted by a signal. */
-      UInt guest_IP_AT_SYSCALL;
-
-      UInt guest_SETC;
 
       /* Padding to make it have an 16-aligned size */
       UInt padding1;
       UInt padding2;
+      UInt padding3;
    }
    VexGuestX86State;
+
+_Static_assert(sizeof(VexGuestX86State)%16 == 0, "sizeof VexGuestX86State is not a multiple of 16");
 
 #define VEX_GUEST_X86_LDT_NENT /*64*/ 8192 /* use complete LDT */
 #define VEX_GUEST_X86_GDT_NENT /*16*/ 8192 /* use complete GDT */
@@ -275,6 +272,10 @@ typedef struct {
 extern
 void LibVEX_GuestX86_initialise ( /*OUT*/VexGuestX86State* vex_state );
 
+/* CRC32 helpers */
+extern UInt x86g_calc_crc32b ( UInt crcIn, UInt b );
+extern UInt x86g_calc_crc32w ( UInt crcIn, UInt w );
+extern UInt x86g_calc_crc32l ( UInt crcIn, UInt l );
 
 /* Extract from the supplied VexGuestX86State structure the
    corresponding native %eflags value. */

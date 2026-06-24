@@ -11,7 +11,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -123,6 +123,10 @@ static inline Bool VG_(is_plausible_ECU)( UInt ecu ) {
 
 // Make an ExeContext containing exactly the specified stack frames.
 ExeContext* VG_(make_ExeContext_from_StackTrace)( const Addr* ips, UInt n_ips );
+
+// Get the name of the topmost function from an ExeContext
+const HChar* VG_(get_ExeContext_first_fnname)(ExeContext* ec);
+
 
 // Returns the "null" exe context. The null execontext is an artificial
 // exe context, with a stack trace made of one Addr (the NULL address).

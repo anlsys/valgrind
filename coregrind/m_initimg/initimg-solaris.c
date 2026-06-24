@@ -13,7 +13,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -65,7 +65,6 @@ static void load_client(/*OUT*/ExeInfo *info,
 {
    const HChar *exe_name;
    Int ret;
-   SysRes res;
 
    vg_assert(VG_(args_the_exename));
    exe_name = VG_(find_executable)(VG_(args_the_exename));
@@ -95,12 +94,20 @@ static void load_client(/*OUT*/ExeInfo *info,
       /*NOTREACHED*/
    }
    VG_(strcpy)(out_exe_name, exe_name);
-
-   /* Get hold of a file descriptor which refers to the client executable.
-      This is needed for attaching to GDB. */
-   res = VG_(open)(exe_name, VKI_O_RDONLY, VKI_S_IRUSR);
-   if (!sr_isError(res))
-      VG_(cl_exec_fd) = sr_Res(res);
+   if (VG_(resolved_exename) == NULL) {
+      HChar interp_name[VKI_PATH_MAX];
+      if (VG_(try_get_interp)(exe_name, interp_name, VKI_PATH_MAX)) {
+         exe_name = interp_name;
+      }
+      HChar resolved_name[VKI_PATH_MAX];
+      if (VG_(realpath)(exe_name, resolved_name)) {
+         VG_(resolved_exename) = VG_(strdup)("initimg-solaris.lc.1", resolved_name);
+      } else {
+         /* This should not really happen. realpath tried and failed.
+            So lets just continue with the exe_name as is. */
+         VG_(resolved_exename) = VG_(strdup)("initimg-solaris.lc.2", exe_name);
+      }
+   }
 
    /* Set initial brk values. */
    if (info->ldsoexec) {
@@ -492,11 +499,6 @@ static Addr setup_client_stack(Addr init_sp,
    /* Calculate the max stack size. */
    clstack_max_size = VG_PGROUNDUP(clstack_max_size);
 
-   /* Record stack extent -- needed for stack-change code. */
-   VG_(clstk_start_base) = clstack_start;
-   VG_(clstk_end) = clstack_end;
-   VG_(clstk_max_size) = clstack_max_size;
-
    if (0)
       VG_(printf)("stringsize=%lu, auxsize=%lu, stacksize=%lu, maxsize=%#lx\n"
                   "clstack_start %#lx\n"
@@ -569,6 +571,14 @@ static Addr setup_client_stack(Addr init_sp,
          VG_(exit)(1);
          /*NOTREACHED*/
       }
+
+      /* Record stack extent -- needed for stack-change code. */
+      VG_(clstk_start_base) = anon_start -inner_HACK;
+      VG_(clstk_end)  = VG_(clstk_start_base) + anon_size +inner_HACK -1;
+      // Only Solaris sets this despite a comment in syswrap-generic.c
+      // that all platforms should set it.
+      VG_(clstk_max_size) = clstack_max_size;
+
    }
 
    /* ==================== create client stack ==================== */

@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -104,12 +104,8 @@ typedef
          replace-style ones. */
       UInt guest_NRADDR;
 
-      /* Needed for Darwin (but mandated for all guest architectures):
-         program counter at the last syscall insn (int 0x80/81/82,
-         sysenter, syscall, svc).  Used when backing up to restart a
-         syscall that has been interrupted by a signal. */
       /* 124 */
-      UInt guest_IP_AT_SYSCALL;
+      UInt padding1;
 
       /* VFP state.  D0 .. D15 must be 8-aligned. */
       /* 128 */
@@ -198,6 +194,7 @@ typedef
    }
    VexGuestARMState;
 
+_Static_assert(sizeof(VexGuestARMState)%16 == 0, "sizeof VexGuestX86State is not a multiple of 16");
 
 /*---------------------------------------------------------------*/
 /*--- Utility functions for ARM guest stuff.                  ---*/

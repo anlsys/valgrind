@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -316,7 +316,6 @@ static Bool OV32_CA32_supported = False;
              offsetof(VexGuestPPC32State, _x))
 
 #define OFFB_CIA         offsetofPPCGuestState(guest_CIA)
-#define OFFB_IP_AT_SYSCALL offsetofPPCGuestState(guest_IP_AT_SYSCALL)
 #define OFFB_SPRG3_RO    offsetofPPCGuestState(guest_SPRG3_RO)
 #define OFFB_LR          offsetofPPCGuestState(guest_LR)
 #define OFFB_CTR         offsetofPPCGuestState(guest_CTR)
@@ -520,7 +519,6 @@ typedef enum {
     PPC_GST_EMWARN, // Emulation warnings
     PPC_GST_CMSTART,// For icbi: start of area to invalidate
     PPC_GST_CMLEN,  // For icbi: length of area to invalidate
-    PPC_GST_IP_AT_SYSCALL, // the CIA of the most recently executed SC insn
     PPC_GST_SPRG3_RO, // SPRG3
     PPC_GST_TFHAR,  // Transactional Failure Handler Address Register
     PPC_GST_TFIAR,  // Transactional Failure Instruction Address Register
@@ -3659,10 +3657,6 @@ static void putGST ( PPC_GST reg, IRExpr* src )
    IRType ty_src = typeOfIRExpr(irsb->tyenv,src );
    vassert( reg < PPC_GST_MAX );
    switch (reg) {
-   case PPC_GST_IP_AT_SYSCALL: 
-      vassert( ty_src == ty );
-      stmt( IRStmt_Put( OFFB_IP_AT_SYSCALL, src ) );
-      break;
    case PPC_GST_CIA: 
       vassert( ty_src == ty );
       stmt( IRStmt_Put( OFFB_CIA, src ) );
@@ -6149,13 +6143,13 @@ static IRExpr* dnorm_adj_Vector ( IRExpr* src )
  *------------------------------------------------------------*/
 
 static ULong generate_TMreason( UInt failure_code,
-                                             UInt persistant,
+                                             UInt persistent,
                                              UInt nest_overflow,
                                              UInt tm_exact )
 {
    ULong tm_err_code =
      ( (ULong) 0) << (63-6)   /* Failure code */
-     | ( (ULong) persistant) << (63-7)     /* Failure persistant */
+     | ( (ULong) persistent) << (63-7)     /* Failure persistent */
      | ( (ULong) 0) << (63-8)   /* Disallowed */
      | ( (ULong) nest_overflow) << (63-9)   /* Nesting Overflow */
      | ( (ULong) 0) << (63-10)  /* Footprint Overflow */
@@ -7691,7 +7685,7 @@ static Bool dis_int_misc ( UInt prefix, UInt theInstr )
        *
        *    0b00   Resume instruction fetching and execution when an
        *           exception or an event-based branch exception occurs,
-       *           or a resume signal from the platform is recieved.
+       *           or a resume signal from the platform is received.
        *
        *    0b01   Reserved.
        *
@@ -10790,11 +10784,6 @@ static Bool dis_syslink ( UInt prefix, UInt theInstr,
       return False;
    }
 
-   /* Copy CIA into the IP_AT_SYSCALL pseudo-register, so that on Darwin
-      Valgrind can back the guest up to this instruction if it needs
-      to restart the syscall. */
-   putGST( PPC_GST_IP_AT_SYSCALL, getGST( PPC_GST_CIA ) );
-
    /* It's important that all ArchRegs carry their up-to-date value
       at this point.  So we declare an end-of-block here, which
       forces any TempRegs caching ArchRegs to be flushed. */
@@ -12145,7 +12134,10 @@ static Bool dis_cache_manage ( UInt prefix, UInt theInstr,
    UChar opc1    = ifieldOPC(theInstr);
    UChar b21to25 = ifieldRegDS(theInstr);
    /* The L-field is 2 bits in ISA 3.0 and earlier and 3 bits in ISA 3.1 */
-   UChar flag_L  = IFIELD(theInstr, 21, (allow_isa_3_1 ? 3 : 2));
+   /* Relaxed the test to mach actual hardware, accept all L values from 0 to 7.
+      The hardware ignores the L value if not supported.      10/23/2024
+      UChar flag_L  = IFIELD(theInstr, 21, (allow_isa_3_1 ? 3 : 2));  */
+
    UChar rA_addr = ifieldRegA(theInstr);
    UChar rB_addr = ifieldRegB(theInstr);
    UInt  opc2    = ifieldOPClo10(theInstr);
@@ -12203,15 +12195,19 @@ static Bool dis_cache_manage ( UInt prefix, UInt theInstr,
          dcbf ra, rb, 0          dcbf
          dcbf ra, rb, 1          dcbf local
          dcbf ra, rb, 3          dcbf local primary
-         dcbf ra, rb, 4          dcbf block fjush to persistent storage    isa 3.1
-         dcbf ra, rb, 6          dcbf block store to persistent storage    isa 3.1
- */
-               if (!((flag_L == 0 || flag_L == 1 || flag_L == 3)
-               || ((flag_L == 4 || flag_L == 6) && allow_isa_3_1 == True)))
+         dcbf ra, rb, 4          dcbf block fjush to persistent storage isa 3.1
+         dcbf ra, rb, 6          dcbf block store to persistent storage isa 3.1
+         Relaxed requirement to allow all L values from 0 to 7 to match the
+         operation of the real hardware.  The real hardware accepts the
+         unsupported L values.      10/23/2024
+
+         if (!((flag_L == 0 || flag_L == 1 || flag_L == 3)
+           || ((flag_L == 4 || flag_L == 6) && allow_isa_3_1 == True)))
          {
             vex_printf("dis_cache_manage(ppc)(dcbf,flag_L)\n");
             return False;
          }
+      */
       /* nop as far as vex is concerned */
       break;
       
@@ -21278,7 +21274,7 @@ dis_vector_logical_mask_bits ( UInt prefix, UInt theInstr, UInt opc2,
                                   ) ) ) );
 
          assign( clz[0],
-                 unop( Iop_Clz64,
+                 unop( Iop_ClzNat64,
                        mkexpr( extracted_bits[0] ) ) );
 
          assign( extracted_bits[1],
@@ -21293,7 +21289,7 @@ dis_vector_logical_mask_bits ( UInt prefix, UInt theInstr, UInt opc2,
                                       mkexpr( cnt_extract_bits[1] )
                                   ) ) ) );
          assign( clz[1],
-                 unop( Iop_Clz64,
+                 unop( Iop_ClzNat64,
                        mkexpr( extracted_bits[1] ) ) );
 
          putVReg( vRT_addr, binop( Iop_64HLtoV128,
@@ -31506,14 +31502,14 @@ static Bool dis_VSR_byte_mask ( UInt prefix, UInt theInstr,
          immediate16_hi = (immediate16 >> 8) & 0xFF;
          immediate16_lo = immediate16 & 0xFF;
 
-         immediate64_hi = ((immediate16_hi << 32) | (immediate16_hi << 56) |
+         immediate64_hi = ((immediate16_hi << 56) |
                            (immediate16_hi << 48) | (immediate16_hi << 40) |
-                           (immediate16_hi << 32) | (immediate16_hi << 16) |
+                           (immediate16_hi << 32) | (immediate16_hi << 24) | (immediate16_hi << 16) |
                            (immediate16_hi << 8) | immediate16_hi);
 
-         immediate64_lo = ((immediate16_lo << 32) | (immediate16_lo << 56) |
+         immediate64_lo = ((immediate16_lo << 56) |
                            (immediate16_lo << 48) | (immediate16_lo << 40) |
-                           (immediate16_lo << 32) | (immediate16_lo << 16) |
+                           (immediate16_lo << 32) | (immediate16_lo << 24) | (immediate16_lo << 16) |
                            (immediate16_lo << 8) | immediate16_lo);
 
          /* Shift the bits in each element so the bit corresponding to the
@@ -33728,7 +33724,7 @@ static Bool dis_transactional_memory ( UInt prefix, UInt theInstr, UInt nextInst
       UInt failure_code = 0;  /* Forcing failure, will not be due to tabort
                                * or treclaim.
                                */
-      UInt persistant = 1;    /* set persistant since we are always failing
+      UInt persistent = 1;    /* set persistent since we are always failing
                                * the tbegin.
                                */
       UInt nest_overflow = 1; /* Alowed nesting depth overflow, we use this
@@ -33752,7 +33748,7 @@ static Bool dis_transactional_memory ( UInt prefix, UInt theInstr, UInt nextInst
        */
       putCR321( 0, mkU8( 0x2 ) );
 
-      tm_reason = generate_TMreason( failure_code, persistant,
+      tm_reason = generate_TMreason( failure_code, persistent,
                                      nest_overflow, tm_exact );
 
       storeTMfailure( guest_CIA_curr_instr, tm_reason,

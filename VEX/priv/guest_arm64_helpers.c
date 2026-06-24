@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -29,6 +29,7 @@
 #include "libvex_basictypes.h"
 #include "libvex_emnote.h"
 #include "libvex_guest_arm64.h"
+#include "libvex_guest_arm64_sysregs.h"
 #include "libvex_ir.h"
 #include "libvex.h"
 
@@ -776,19 +777,6 @@ ULong arm64g_calc_crc32cx ( ULong acc, ULong bits )
    return crc;
 }
 
-/* CALLED FROM GENERATED CODE */
-/* DIRTY HELPER (non-referentially-transparent) */
-/* Horrible hack.  On non-arm64 platforms, return 0. */
-ULong arm64g_dirtyhelper_MRS_DCZID_EL0 ( void )
-{
-#  if defined(__aarch64__) && !defined(__arm__)
-   ULong w = 0x5555555555555555ULL; /* overwritten */
-   __asm__ __volatile__("mrs %0, dczid_el0" : "=r"(w));
-   return w;
-#  else
-   return 0ULL;
-#  endif
-}
 
 /* CALLED FROM GENERATED CODE */
 /* DIRTY HELPER (non-referentially-transparent) */
@@ -842,27 +830,18 @@ ULong arm64g_dirtyhelper_MRS_ID_AA64PFR0_EL1 ( void )
    ULong w = 0x5555555555555555ULL; /* overwritten */
    __asm__ __volatile__("mrs %0, id_aa64pfr0_el1" : "=r"(w));
 
-   // The control word uses the following nibbles (as seen on RPi)
-   // unsupported unless indicated
-   // 0 to 3 - EL0 to EL3 exception level handling
-   // 4 - FP includes half-precision (partial support)
-   // 5 - AdvSIMD also includes haf-precision
+   MASK_SYSTEM_REGISTER_FIELDS(w,
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64PFR0_EL0_SHIFT) |
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64PFR0_EL1_SHIFT) |
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64PFR0_FP_SHIFT) |
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64PFR0_ADVSIMD_SHIFT));
 
-   /* If half-precision fp is present we fall back to normal
-      half precision implementation because of missing support in the emulation.
-      If no AdvSIMD and FP are implemented, we preserve the value */
-   w = (w >> 16);
-   w &= 0xff;
-   switch(w) {
-     case 0x01:
-       w = 0x0;
-       break;
-     case 0xff:
-       w = (0xFF<<16);
-       break;
-     default:
-       w = 0x0;
-       break;
+   if (SYSTEM_REGISTER_FIELD(w, ID_AA64PFR0_FP_SHIFT) != ID_AA64PFR0_FP_NOT_PRESENT) {
+      CLAMP_REGISTER_FIELD_INPLACE(w, ID_AA64PFR0_FP_SHIFT, ID_AA64PFR0_FP_NHP_SUPPORTED);
+   }
+
+   if (SYSTEM_REGISTER_FIELD(w, ID_AA64PFR0_ADVSIMD_SHIFT) != ID_AA64PFR0_ADVSIMD_NOT_PRESENT) {
+      CLAMP_REGISTER_FIELD_INPLACE(w, ID_AA64PFR0_ADVSIMD_SHIFT, ID_AA64PFR0_ADVSIMD_NHP_SUPPORTED);
    }
 
    return w;
@@ -894,8 +873,23 @@ ULong arm64g_dirtyhelper_MRS_ID_AA64MMFR1_EL1 ( void )
    ULong w = 0x5555555555555555ULL; /* overwritten */
    __asm__ __volatile__("mrs %0, id_aa64mmfr1_el1" : "=r"(w));
 
-   /* Clear VH and HAFDBS bits */
-   w &= ~(0xF0F);
+   // FIXME PJF we were just filtering out ID_AA64MMFR1_HAFDB and ID_AA64MMFR1_VH
+   // do we really support all of these?
+   MASK_SYSTEM_REGISTER_FIELDS(w,
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64MMFR1_VMIDBITS_SHIFT) |
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64MMFR1_HPDS_SHIFT) |
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64MMFR1_LO_SHIFT) |
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64MMFR1_PAN_SHIFT) |
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64MMFR1_SPECSEI_SHIFT) |
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64MMFR1_XNX_SHIFT) |
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64MMFR1_TWED_SHIFT) |
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64MMFR1_ETS_SHIFT) |
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64MMFR1_HCX_SHIFT) |
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64MMFR1_AFP_SHIFT) |
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64MMFR1_NTLBPA_SHIFT) |
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64MMFR1_TIDCP1_SHIFT) |
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64MMFR1_CMOW_SHIFT));
+
    return w;
 #  else
    return 0ULL;
@@ -911,23 +905,14 @@ ULong arm64g_dirtyhelper_MRS_ID_AA64ISAR0_EL1 ( void )
    ULong w = 0x5555555555555555ULL; /* overwritten */
    __asm__ __volatile__("mrs %0, id_aa64isar0_el1" : "=r"(w));
 
-   // In the mask below, nibbles are (higher nibbles all unsupported)
-   // 0 - RES0
-   // 1 - AES
-   // 2 - SHA1
-   // 3 - SHA2
-   // 4 - CRC32
-   // 5 - Atomic bits
-   // 6 - TME (unsupported)
-   // 7 - RDM
-   // 8 - SHA3 (unsupported)
-   // 9 - SM3 (unsupported)
-   // 10 - SM4 (unsupported)
-   // 11 - DP
-
-   //     10
-   //     109876543210
-   w &= 0xF000F0FFFFFF;
+   MASK_SYSTEM_REGISTER_FIELDS(w,
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64ISAR0_AES_SHIFT) |
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64ISAR0_SHA1_SHIFT) |
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64ISAR0_SHA2_SHIFT) |
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64ISAR0_CRC32_SHIFT) |
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64ISAR0_ATOMICS_SHIFT) |
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64ISAR0_RDM_SHIFT) |
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64ISAR0_DP_SHIFT));
 
    return w;
 #  else
@@ -944,8 +929,8 @@ ULong arm64g_dirtyhelper_MRS_ID_AA64ISAR1_EL1 ( void )
    ULong w = 0x5555555555555555ULL; /* overwritten */
    __asm__ __volatile__("mrs %0, id_aa64isar1_el1" : "=r"(w));
 
-   // only nibble 0 DBP
-   w &= 0xF;
+   MASK_SYSTEM_REGISTER_FIELDS(w,
+                               MAKE_SYSTEM_REGISTER_MASK_FIELD(ID_AA64ISAR1_DPB_SHIFT));
 
    return w;
 #  else
@@ -2109,7 +2094,6 @@ void LibVEX_GuestARM64_initialise ( /*OUT*/VexGuestARM64State* vex_state )
 //ZZ    vex_state->guest_CMSTART = 0;
 //ZZ    vex_state->guest_CMLEN   = 0;
 //ZZ    vex_state->guest_NRADDR  = 0;
-//ZZ    vex_state->guest_IP_AT_SYSCALL = 0;
 //ZZ 
 //ZZ    vex_state->guest_D0  = 0;
 //ZZ    vex_state->guest_D1  = 0;
@@ -2240,7 +2224,7 @@ VexGuestLayout
 
           /* Describe any sections to be regarded by Memcheck as
              'always-defined'. */
-          .n_alwaysDefd = 9,
+          .n_alwaysDefd = 8,
 
           /* flags thunk: OP is always defd, whereas DEP1 and DEP2
              have to be tracked.  See detailed comment in gdefs.h on
@@ -2253,8 +2237,7 @@ VexGuestLayout
                  /* 4 */ ALWAYSDEFD(guest_CMSTART),
                  /* 5 */ ALWAYSDEFD(guest_CMLEN),
                  /* 6 */ ALWAYSDEFD(guest_NRADDR),
-                 /* 7 */ ALWAYSDEFD(guest_IP_AT_SYSCALL),
-                 /* 8 */ ALWAYSDEFD(guest_TPIDR_EL0)
+                 /* 7 */ ALWAYSDEFD(guest_TPIDR_EL0)
                }
         };
 

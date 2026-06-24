@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -113,8 +113,13 @@ static void usage_NORETURN ( int need_help )
 "    --vgdb-stop-at=event1,event2,... invoke gdbserver for given events [none]\n"
 "         where event is one of:\n"
 "           startup exit abexit valgrindabexit all none\n"
-"    --track-fds=no|yes|all    track open file descriptors? [no]\n"
-"                              all includes reporting stdin, stdout and stderr\n"
+"    --track-fds=no|yes|all|bad track open file descriptors? [no]\n"
+"                              all also reports on open inherited file\n"
+"                              descriptors at exit (e.g. stdin/out/err)\n"
+"                              bad only reports on file descriptor usage\n"
+"                              errors and doesn't list open file descriptors\n"
+"                              at exit\n"
+"    --modify-fds=no|yes|high  modify newly open file descriptors? [no]\n"
 "    --time-stamp=no|yes       add timestamps to log messages? [no]\n"
 "    --log-fd=<number>         log messages to file descriptor [2=stderr]\n"
 "    --log-file=<file>         log messages to <file>\n"
@@ -130,7 +135,8 @@ static void usage_NORETURN ( int need_help )
 "    --xml-file=<file>         XML output to <file>\n"
 "    --xml-socket=ipaddr:port  XML output to socket ipaddr:port\n"
 "    --xml-user-comment=STR    copy STR verbatim into XML output\n"
-"    --demangle=no|yes         automatically demangle C++ names? [yes]\n"
+"    --demangle=no|yes         automatically demangle decorated names? [yes]\n"
+"                              supported languages: C++, D, Rust, Java, Ada\n"
 "    --num-callers=<number>    show <number> callers in stack traces [12]\n"
 "    --error-limit=no|yes      stop showing new errors if too many? [yes]\n"
 "    --exit-on-first-error=no|yes exit code on the first error found? [no]\n"
@@ -246,8 +252,12 @@ static void usage_NORETURN ( int need_help )
 "                  recovered by stack scanning [5]\n"
 "    --resync-filter=no|yes|verbose [yes on MacOS, no on other OSes]\n"
 "              attempt to avoid expensive address-space-resync operations\n"
-"    --max-threads=<number>    maximum number of threads that valgrind can\n"
-"                              handle [%d]\n"
+"    --max-threads=<number>     maximum number of threads that valgrind can\n"
+"                               handle [%d]\n"
+#if defined(VGO_linux)
+"    --max-guard-pages=<number> maximum number of madvise guard pages that\n"
+"                               valgrind can handle [%d]\n"
+#endif
 "\n";
 
    const HChar usage2[] =
@@ -288,6 +298,7 @@ static void usage_NORETURN ( int need_help )
 "    --vex-iropt-verbosity=<0..9>           [0]\n"
 "    --vex-iropt-level=<0..2>               [2]\n"
 "    --vex-iropt-unroll-thresh=<0..400>     [120]\n"
+"    --vex-iropt-fold-expr=no|yes           [yes]\n"
 "    --vex-guest-max-insns=<1..100>         [50]\n"
 "    --vex-guest-chase=no|yes               [yes]\n"
 "    Precise exception control.  Possible values for 'mode' are as follows\n"
@@ -330,8 +341,8 @@ static void usage_NORETURN ( int need_help )
 "  Extra options read from ~/.valgrindrc, $VALGRIND_OPTS, ./.valgrindrc\n"
 "\n"
 "  %s is %s\n"
-"  Valgrind is Copyright (C) 2000-2024, and GNU GPL'd, by Julian Seward et al.\n"
-"  LibVEX is Copyright (C) 2004-2024, and GNU GPL'd, by OpenWorks LLP et al.\n"
+"  Valgrind is Copyright (C) 2000-2026, and GNU GPL'd, by Julian Seward et al.\n"
+"  LibVEX is Copyright (C) 2004-2026, and GNU GPL'd, by OpenWorks LLP et al.\n"
 "\n"
 "  Bug reports, feedback, admiration, abuse, etc, to: %s.\n"
 "\n";
@@ -373,6 +384,9 @@ static void usage_NORETURN ( int need_help )
                   VG_(vgdb_prefix_default)() /* char* */,
                   N_SECTORS_DEFAULT          /* int */,
                   MAX_THREADS_DEFAULT        /* int */
+#if defined(VGO_linux)
+                , MAX_GUARDS_DEFAULT         /* int */
+#endif
                );
    if (need_help > 1 && VG_(details).name) {
       VG_(printf)("  user options for %s:\n", VG_(details).name);
@@ -451,9 +465,9 @@ static void process_option (Clo_Mode mode,
    // in case someone has combined a prefix with a core-specific option,
    // eg.  "--memcheck:verbose".
    if (*colon == ':') {
-      if (VG_STREQN(2,            arg,                "--") &&
-          VG_STREQN(toolname_len, arg+2,              VG_(clo_toolname)) &&
-          VG_STREQN(1,            arg+2+toolname_len, ":")) {
+      if (VG_STREQN(2, arg, "--") &&
+          VG_(strncmp)(arg+2, VG_(clo_toolname), toolname_len)==0 &&
+          VG_(strncmp)(arg+2+toolname_len, ":", 1)==0) {
          // Prefix matches, convert "--toolname:foo" to "--foo".
          // Two things to note:
          // - We cannot modify the option in-place.  If we did, and then
@@ -505,7 +519,19 @@ static void process_option (Clo_Mode mode,
    else if VG_INT_CLOM(cloE, arg, "--main-stacksize", VG_(clo_main_stacksize)) {}
 
    // Set up VG_(clo_max_threads); needed for VG_(tl_pre_clo_init)
-   else if VG_INT_CLOM(cloE, arg, "--max-threads", VG_(clo_max_threads)) {}
+   else if VG_INT_CLOM(cloE, arg, "--max-threads", VG_(clo_max_threads)) {
+#if defined(VGO_linux)
+      // VG_(clo_max_guard_pages) defaults to VG_(clo_max_threads)
+      // unless explititly set otherwise - below.  With glibc upstream
+      // commit a6fbe36b7f31 and others, a guard page is installed for
+      // each new thread.
+      VG_(clo_max_guard_pages) = VG_(clo_max_threads);
+#endif
+   }
+#if defined(VGO_linux)
+   // Set up VG_(clo_max_guard_pages); needed for aspacemgr init
+   else if VG_INT_CLOM(cloE, arg, "--max-guard-pages", VG_(clo_max_guard_pages)) {}
+#endif
 
    // Set up VG_(clo_sim_hints). This is needed a.o. for an inner
    // running in an outer, to have "no-inner-prefix" enabled
@@ -641,9 +667,22 @@ static void process_option (Clo_Mode mode,
          VG_(clo_track_fds) = 2;
       else if (VG_(strcmp)(tmp_str, "no") == 0)
          VG_(clo_track_fds) = 0;
+      else if (VG_(strcmp)(tmp_str, "bad") == 0)
+         VG_(clo_track_fds) = 3;
       else
          VG_(fmsg_bad_option)(arg,
             "Bad argument, should be 'yes', 'all' or 'no'\n");
+   }
+   else if VG_STR_CLO(arg, "--modify-fds",         tmp_str) {
+      if (VG_(strcmp)(tmp_str, "high") == 0)
+         VG_(clo_modify_fds) = VG_MODIFY_FD_HIGH;
+      else if (VG_(strcmp)(tmp_str, "yes") == 0)
+        VG_(clo_modify_fds) = VG_MODIFY_FD_YES;
+      else if (VG_(strcmp)(tmp_str, "no") == 0)
+         VG_(clo_modify_fds) = VG_MODIFY_FD_NO;
+      else
+         VG_(fmsg_bad_option)(arg,
+            "Bad argument, should be 'high', 'yes', or 'no'\n");
    }
    else if VG_BOOL_CLOM(cloPD, arg, "--trace-children",   VG_(clo_trace_children)) {}
    else if VG_BOOL_CLOM(cloPD, arg, "--child-silent-after-fork",
@@ -701,7 +740,7 @@ static void process_option (Clo_Mode mode,
    else if VG_INT_CLO (arg, "--dump-error",       VG_(clo_dump_error))   {}
    else if VG_INT_CLO (arg, "--input-fd",         VG_(clo_input_fd))     {}
    else if VG_INT_CLO (arg, "--sanity-level",     VG_(clo_sanity_level)) {}
-   else if VG_BINT_CLO(arg, "--num-callers",      VG_(clo_backtrace_size), 1,
+   else if VG_BINT_CLO(arg, "--num-callers",      VG_(clo_backtrace_size), 2,
                        VG_DEEPEST_BACKTRACE) {}
    else if VG_BINT_CLO(arg, "--num-transtab-sectors",
                        VG_(clo_num_transtab_sectors),
@@ -742,6 +781,8 @@ static void process_option (Clo_Mode mode,
                        VG_(clo_vex_control).iropt_level, 0, 2) {}
    else if VG_BINT_CLO(arg, "--vex-regalloc-version",
                        VG_(clo_vex_control).regalloc_version, 2, 3) {}
+   else if VG_BOOL_CLOM(cloPD, arg, "--vex-iropt-fold-expr",
+                        VG_(clo_vex_control).iropt_fold_expr) {}
 
    else if (VG_STRINDEX_CLO(arg, "--vex-iropt-register-updates",
                            pxStrings, ix)
@@ -920,6 +961,10 @@ void VG_(process_dynamic_option) (Clo_Mode mode, HChar *value)
    struct process_option_state dummy;
    process_option (mode, value, &dummy);
    // No need to handle a process_option_state once valgrind has started.
+
+   /* Update vex_control in case VALGRIND_CLO_CHANGE was used to modify a
+      VexControl member. */
+   LibVEX_set_VexControl(VG_(clo_vex_control));
 }
 
 /* Peer at previously set up VG_(args_for_valgrind) and do some
@@ -1307,8 +1352,8 @@ Int valgrind_main ( Int argc, HChar **argv, HChar **envp )
    /* Start the debugging-log system ASAP.  First find out how many
       "-d"s were specified.  This is a pre-scan of the command line.  Also
       get --profile-heap=yes, --core-redzone-size, --redzone-size
-      --aspace-minaddr which are needed by the time we start up dynamic
-      memory management.  */
+      --aspace-minaddr, --max-guard-pages  which are needed by the time
+      we start up dynamic memory management.  */
    loglevel = 0;
    for (i = 1; i < argc; i++) {
       const HChar* tmp_str;
@@ -1329,6 +1374,18 @@ Int valgrind_main ( Int argc, HChar **argv, HChar **envp )
                                                    &errmsg))
             VG_(fmsg_bad_option)(argv[i], "%s\n", errmsg);
       }
+      if VG_INT_CLOM(cloE, argv[i], "--max-threads", VG_(clo_max_threads)) {
+#if defined(VGO_linux)
+         // VG_(clo_max_guard_pages) defaults to VG_(clo_max_threads)
+         // unless explititly set otherwise - below.  With glibc upstream
+         // commit a6fbe36b7f31 and others, a guard page is installed for
+         // each new thread.
+         VG_(clo_max_guard_pages) = VG_(clo_max_threads);
+#endif
+      }
+#if defined(VGO_linux)
+      if VG_INT_CLOM(cloE, argv[i], "--max-guard-pages", VG_(clo_max_guard_pages)) {}
+#endif
    }
 
    /* ... and start the debug logger.  Now we can safely emit logging
@@ -1504,7 +1561,7 @@ Int valgrind_main ( Int argc, HChar **argv, HChar **envp )
         VG_(printf)("   * ARM (armv7)\n");
         VG_(printf)("   * MIPS (mips32 and above; mips64 and above)\n");
         VG_(printf)("   * PowerPC (most; ppc405 and above)\n");
-        VG_(printf)("   * System z (64bit only - s390x; z990 and above)\n");
+        VG_(printf)("   * System z (64bit only - s390x; z196 and above)\n");
         VG_(printf)("\n");
         VG_(exit)(1);
      }
@@ -1655,13 +1712,13 @@ Int valgrind_main ( Int argc, HChar **argv, HChar **envp )
    VG_(cl_psinfo_fd) = -1;
 #endif
 
-#if defined(VGO_linux) || defined(VGO_solaris)
+#if defined(VGO_linux) || defined(VGO_solaris) || defined(VGO_freebsd)
    if (!need_help) {
       HChar  buf[50];   // large enough
       HChar  buf2[VG_(mkstemp_fullname_bufsz)(sizeof buf - 1)];
       Int    fd, r;
 
-#if defined(VGO_linux) || defined(SOLARIS_PROC_CMDLINE)
+#if defined(VGO_linux) || defined(SOLARIS_PROC_CMDLINE) || defined(VGO_freebsd)
       /* Fake /proc/<pid>/cmdline only on Linux and Solaris if supported. */
       HChar  nul[1];
       const HChar* exename;
@@ -1694,7 +1751,9 @@ Int valgrind_main ( Int argc, HChar **argv, HChar **envp )
          VG_(err_config_error)("Can't delete client cmdline file in %s\n", buf2);
 
       VG_(cl_cmdline_fd) = fd;
-#endif // defined(VGO_linux) || defined(SOLARIS_PROC_CMDLINE)
+#endif // defined(VGO_linux) || defined(SOLARIS_PROC_CMDLINE) || defined(VGO_freebsd)
+
+#if !defined(VGO_freebsd)
 
       /* Fake /proc/<pid>/auxv on both Linux and Solaris. */
       VG_(debugLog)(1, "main", "Create fake /proc/<pid>/auxv\n");
@@ -1725,6 +1784,8 @@ Int valgrind_main ( Int argc, HChar **argv, HChar **envp )
          VG_(err_config_error)("Can't delete client auxv file in %s\n", buf2);
 
       VG_(cl_auxv_fd) = fd;
+
+#endif
 
 #if defined(VGO_solaris)
       /* Fake /proc/<pid>/psinfo on Solaris.
@@ -1887,7 +1948,7 @@ Int valgrind_main ( Int argc, HChar **argv, HChar **envp )
    addr2dihandle = VG_(newXA)( VG_(malloc), "main.vm.2",
                                VG_(free), sizeof(Addr_n_ULong) );
 
-#  if defined(VGO_linux) || defined(VGO_solaris) || defined(VGO_freebsd)
+#  if defined(VGO_linux) || defined(VGO_solaris) || defined(VGO_darwin) || defined(VGO_freebsd)
    { Addr* seg_starts;
      Int   n_seg_starts;
      Addr_n_ULong anu;
@@ -1907,22 +1968,6 @@ Int valgrind_main ( Int argc, HChar **argv, HChar **envp )
            anu.a = seg_starts[i];
            VG_(addToXA)( addr2dihandle, &anu );
         }
-     }
-
-     VG_(free)( seg_starts );
-   }
-#  elif defined(VGO_darwin)
-   { Addr* seg_starts;
-     Int   n_seg_starts;
-     seg_starts = VG_(get_segment_starts)( SkFileC, &n_seg_starts );
-     vg_assert(seg_starts && n_seg_starts >= 0);
-
-     /* show them all to the debug info reader.
-        Don't read from V segments (unlike Linux) */
-     // GrP fixme really?
-     for (i = 0; i < n_seg_starts; i++) {
-        VG_(di_notify_mmap)( seg_starts[i], False/*don't allow_SkFileV*/,
-                             -1/*don't use_fd*/);
      }
 
      VG_(free)( seg_starts );
@@ -1962,6 +2007,18 @@ Int valgrind_main ( Int argc, HChar **argv, HChar **envp )
    }
 
    VG_(init_Threads)();
+
+   //--------------------------------------------------------------
+   // Initialize the dyld cache, which is required with macOS 11 (Big Sur) and onwards
+   // as some system libraries aren't provided on the disk anymore
+   //   p: none
+   // Note: some tools don't like to start mapping memory right way, so we do it lazily in those cases.
+   //--------------------------------------------------------------
+#  if defined(VGO_darwin) && DARWIN_VERS >= DARWIN_11_00
+   if (the_iifii.dynamic) {
+     VG_(dyld_cache_init)(VG_(clo_toolname));
+   }
+#  endif
 
    //--------------------------------------------------------------
    // Initialise the scheduler (phase 1) [generates tid_main]
@@ -2078,22 +2135,8 @@ Int valgrind_main ( Int argc, HChar **argv, HChar **envp )
                True   /* executable? */,
                0 /* di_handle: no associated debug info */ );
 
-     /* Darwin only: tell the tools where the client's kernel commpage
-        is.  It would be better to do this by telling aspacemgr about
-        it -- see the now disused record_system_memory() in
-        initimg-darwin.c -- but that causes the sync checker to fail,
-        since the mapping doesn't appear in the kernel-supplied
-        process map.  So do it here instead. */
-#    if defined(VGP_amd64_darwin)
-     VG_TRACK( new_mem_startup,
-               0x7fffffe00000, 0x7ffffffff000-0x7fffffe00000,
-               True, False, True, /* r-x */
-               0 /* di_handle: no associated debug info */ );
-#    elif defined(VGP_x86_darwin)
-     VG_TRACK( new_mem_startup,
-               0xfffec000, 0xfffff000-0xfffec000,
-               True, False, True, /* r-x */
-               0 /* di_handle: no associated debug info */ );
+#if defined(VGO_darwin)
+     VG_(mach_record_system_memory)();
 #    endif
 
      /* Clear the running thread indicator */
@@ -2299,9 +2342,7 @@ void shutdown_actions_NORETURN( ThreadId tid,
    // affects what order the messages come.
    //--------------------------------------------------------------
    // First thing in the post-amble is a blank line.
-   if (VG_(clo_xml))
-      VG_(printf_xml)("\n");
-   else if (VG_(clo_verbosity) > 0)
+   if (VG_(clo_verbosity) > 0 && !VG_(clo_xml))
       VG_(message)(Vg_UserMsg, "\n");
 
    if (VG_(clo_xml)) {
@@ -2316,7 +2357,7 @@ void shutdown_actions_NORETURN( ThreadId tid,
    }
 
    /* Print out file descriptor summary and stats. */
-   if (VG_(clo_track_fds))
+   if (VG_(clo_track_fds) && VG_(clo_track_fds) < 3)
       VG_(show_open_fds)("at exit");
 
    /* Call the tool's finalisation function.  This makes Memcheck's
@@ -2343,9 +2384,7 @@ void shutdown_actions_NORETURN( ThreadId tid,
    }
 
    if (VG_(clo_xml)) {
-      VG_(printf_xml)("\n");
       VG_(printf_xml)("</valgrindoutput>\n");
-      VG_(printf_xml)("\n");
    }
 
    VG_(sanity_check_general)( True /*include expensive checks*/ );
@@ -2556,6 +2595,11 @@ static void final_tidyup(ThreadId tid)
    VG_TRACK(post_reg_write, Vg_CoreClientReq, tid,
             offsetof(VexGuestPPC64State, guest_GPR3),
             sizeof(VG_(threads)[tid].arch.vex.guest_GPR3));
+#  elif defined(VGA_riscv64)
+   VG_(threads)[tid].arch.vex.guest_x10 = to_run;
+   VG_TRACK(post_reg_write, Vg_CoreClientReq, tid,
+            offsetof(VexGuestRISCV64State, guest_x10),
+            sizeof(VG_(threads)[tid].arch.vex.guest_x10));
 #  elif defined(VGA_s390x)
    VG_(threads)[tid].arch.vex.guest_r2 = to_run;
    VG_TRACK(post_reg_write, Vg_CoreClientReq, tid,
@@ -3089,6 +3133,33 @@ asm(
     ".set pop                                           \n\t"
 ".previous                                              \n\t"
 );
+#elif defined(VGP_riscv64_linux)
+asm("\n"
+    "\t.text\n"
+    "\t.type _start,@function\n"
+    "\t.global _start\n"
+    "_start:\n"
+    /* establish the global pointer in gp */
+    ".option push\n"
+    ".option norelax\n"
+    "\tla gp, __global_pointer$\n"
+    ".option pop\n"
+    /* set up the new stack in t0 */
+    "\tla t0, vgPlain_interim_stack\n"
+    "\tli t1, "VG_STRINGIFY(VG_STACK_GUARD_SZB)"\n"
+    "\tadd t0, t0, t1\n"
+    "\tli t1, "VG_STRINGIFY(VG_DEFAULT_STACK_ACTIVE_SZB)"\n"
+    "\tadd t0, t0, t1\n"
+    "\tli t1, 0xFFFFFF00\n"
+    "\tand t0, t0, t1\n"
+    /* install it, and collect the original one */
+    "\tmv a0, sp\n"
+    "\tmv sp, t0\n"
+    /* call _start_in_C_linux, passing it the startup sp */
+    "\tj _start_in_C_linux\n"
+    "\tunimp\n"
+    ".previous\n"
+);
 #else
 #  error "Unknown platform"
 #endif
@@ -3504,12 +3575,12 @@ void *memcpy(void *dest, const void *src, size_t n);
 void *memcpy(void *dest, const void *src, size_t n) {
    return VG_(memcpy)(dest, src, n);
 }
-void* memmove(void *dest, const void *src, SizeT n);
-void* memmove(void *dest, const void *src, SizeT n) {
+void* memmove(void *dest, const void *src, size_t n);
+void* memmove(void *dest, const void *src, size_t n) {
    return VG_(memmove)(dest,src,n);
 }
-void* memset(void *s, int c, SizeT n);
-void* memset(void *s, int c, SizeT n) {
+void* memset(void *s, int c, size_t n);
+void* memset(void *s, int c, size_t n) {
   return VG_(memset)(s,c,n);
 }
 
@@ -3546,6 +3617,10 @@ void _start_in_C_freebsd ( UWord* pArgc, UWord *initial_sp )
 #  error "Unknown OS"
 #endif
 
+SizeT VG_(get_client_stack_max_size)(void)
+{
+   return the_iifii.clstack_max_size;
+}
 
 Addr VG_(get_initial_client_SP)( void )
 {

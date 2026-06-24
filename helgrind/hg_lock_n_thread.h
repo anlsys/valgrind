@@ -13,7 +13,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -163,6 +163,9 @@ typedef
       Addr          guestaddr; /* Guest address of lock */
       LockKind      kind;      /* what kind of lock this is */
       /* USEFUL-DYNAMIC */
+      /* True if pthread_*_init was seen.  Avoids spurious reporting
+         of static/inferred locks with --track-destroy.  */
+      Bool          explicit_init;
       Bool          heldW; 
       WordBag*      heldBy; /* bag of threads that hold this lock */
       /* .heldBy is NULL: lock is unheld, and .heldW is meaningless

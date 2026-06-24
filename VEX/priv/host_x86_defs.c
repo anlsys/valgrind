@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -1141,7 +1141,7 @@ void ppX86Instr ( const X86Instr* i, Bool mode64 ) {
          ppHRegX86(i->Xin.FpCmp.dst);
          break;
       case Xin_SseConst:
-         vex_printf("const $0x%04x,", (Int)i->Xin.SseConst.con);
+         vex_printf("const $0x%04x,", (UInt)i->Xin.SseConst.con);
          ppHRegX86(i->Xin.SseConst.dst);
          break;
       case Xin_SseLdSt:
@@ -2102,7 +2102,6 @@ static UChar* push_word_from_tags ( UChar* p, UShort tags )
       *p++ = 0x6A;
       *p++ = 0xFF;
    } else {
-      vassert(0); /* awaiting test case */
       w = 0;
       if (tags & 1) w |= 0x000000FF;
       if (tags & 2) w |= 0x0000FF00;
@@ -2122,7 +2121,7 @@ static UChar* push_word_from_tags ( UChar* p, UShort tags )
 
 Int emit_X86Instr ( /*MB_MOD*/Bool* is_profInc,
                     UChar* buf, Int nbuf, const X86Instr* i, 
-                    Bool mode64, VexEndness endness_host,
+                    Bool mode64, const VexArchInfo* archinfo_host,
                     const void* disp_cp_chain_me_to_slowEP,
                     const void* disp_cp_chain_me_to_fastEP,
                     const void* disp_cp_xindir,

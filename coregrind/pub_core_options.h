@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -325,6 +325,12 @@ extern Word VG_(clo_main_stacksize);
 /* The maximum number of threads we support. */
 #define MAX_THREADS_DEFAULT 500
 extern UInt VG_(clo_max_threads);
+
+/* The maximum number of madvise guard pages we support. */
+#if defined(VGO_linux)
+#define MAX_GUARDS_DEFAULT 500
+extern UInt VG_(clo_max_guard_pages);
+#endif
 
 /* If the same IP is found twice in a backtrace in a sequence of max
    VG_(clo_merge_recursive_frames) frames, then the recursive call

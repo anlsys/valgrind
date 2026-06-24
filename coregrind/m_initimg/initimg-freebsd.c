@@ -10,12 +10,12 @@
 
    Copyright (C) 2000-2009 Julian Seward
       jseward@acm.org
-   Copyright (C) 2018-2021 Paul Floyd
+   Copyright (C) 2018-2026 Paul Floyd
       pjfloyd@wanadoo.fr
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -64,7 +64,6 @@ static void load_client ( /*OUT*/ExeInfo* info,
 {
    const HChar* exe_name;
    Int    ret;
-   SysRes res;
 
    vg_assert( VG_(args_the_exename) != NULL);
    exe_name = VG_(find_executable)( VG_(args_the_exename) );
@@ -82,13 +81,6 @@ static void load_client ( /*OUT*/ExeInfo* info,
    }
 
    // The client was successfully loaded!  Continue.
-
-   /* Get hold of a file descriptor which refers to the client
-      executable.  This is needed for attaching to GDB. */
-   res = VG_(open)(exe_name, VKI_O_RDONLY, VKI_S_IRUSR);
-   if (!sr_isError(res)) {
-      VG_(cl_exec_fd) = sr_Res(res);
-   }
 
    /* Copy necessary bits of 'info' that were filled in */
    *client_ip  = info->init_ip;
@@ -418,15 +410,22 @@ static Addr setup_client_stack(const void*  init_sp,
    Addr client_SP;           /* client stack base (initial SP) */
    Addr clstack_start;       /* client_SP rounded down to nearest page */
    Int i;
-   Bool have_exename;
    Word client_argv;
 
    vg_assert(VG_IS_PAGE_ALIGNED(clstack_end+1));
    vg_assert( VG_(args_for_client) );
 
    const HChar *exe_name = VG_(find_executable)(VG_(args_the_exename));
+   HChar interp_name[VKI_PATH_MAX];
+   if (VG_(try_get_interp)(exe_name, interp_name, VKI_PATH_MAX)) {
+      exe_name = interp_name;
+   }
    HChar resolved_name[VKI_PATH_MAX];
-   VG_(realpath)(exe_name, resolved_name);
+   if (!VG_(realpath)(exe_name, resolved_name)) {
+      /* This should not really happen. realpath tried and failed.
+         So lets just continue with the exe_name as is. */
+      VG_(strcpy)(resolved_name, exe_name);
+   }
 
    /* use our own auxv as a prototype */
    orig_auxv = find_auxv(init_sp);
@@ -435,7 +434,6 @@ static Addr setup_client_stack(const void*  init_sp,
 
    /* first of all, work out how big the client stack will be */
    stringsize   = 0;
-   have_exename = VG_(args_the_exename) != NULL;
 
    /* paste on the extra args if the loader needs them (ie, the #!
       interpreter and its argument) */
@@ -450,9 +448,7 @@ static Addr setup_client_stack(const void*  init_sp,
    }
 
    /* now scan the args we're given... */
-   if (have_exename) {
-      stringsize += VG_(strlen)( VG_(args_the_exename) ) + 1;
-   }
+   stringsize += VG_(strlen)( VG_(args_the_exename) ) + 1;
 
    for (i = 0; i < VG_(sizeXA)( VG_(args_for_client) ); i++) {
       argc++;
@@ -481,29 +477,24 @@ static Addr setup_client_stack(const void*  init_sp,
          break;
       case VKI_AT_CANARYLEN:
          canarylen = cauxv->u.a_val;
-         /*VG_ROUNDUP(stringsize, sizeof(Word));*/
          stringsize += canarylen;
          break;
       case VKI_AT_PAGESIZESLEN:
          pagesizeslen = cauxv->u.a_val;
-         /*VG_ROUNDUP(stringsize, sizeof(Word));*/
          stringsize += pagesizeslen;
          break;
 #if 0
       case VKI_AT_TIMEKEEP:
-         /*VG_ROUNDUP(stringsize, sizeof(Word));*/
          stringsize += sizeof(struct vki_vdso_timehands);
          break;
 #endif
-#if (FREEBSD_VERS >= FREEBSD_13_0)
+      // from FreeBSD 13
       case VKI_AT_PS_STRINGS:
          stringsize += sizeof(struct vki_ps_strings);
          break;
-#endif
-#if (FREEBSD_VERS >= FREEBSD_13_1)
+      // from FreeBSD 13.1
       // case AT_FXRNG:
       // case AT_KPRELOAD:
-#endif
       default:
          break;
       }
@@ -512,7 +503,7 @@ static Addr setup_client_stack(const void*  init_sp,
    /* OK, now we know how big the client stack is */
    used_stacksize =
       sizeof(Word) +                          /* argc */
-      (have_exename ? sizeof(HChar **) : 0) +  /* argc[0] == exename */
+      sizeof(HChar **) +                      /* argc[0] == exename */
       sizeof(HChar **)*argc +                 /* argv */
       sizeof(HChar **) +                      /* terminal NULL */
       sizeof(HChar **)*envc +                 /* envp */
@@ -529,7 +520,7 @@ static Addr setup_client_stack(const void*  init_sp,
    client_SP = VG_ROUNDDN(client_SP, 16); /* make stack 16 byte aligned */
 
    /* base of the string table (aligned) */
-   stringbase = strtab = (HChar *)clstack_end
+   stringbase = strtab = (HChar *)clstack_end + 1
                          - VG_ROUNDUP(stringsize, sizeof(int));
 
    clstack_start = VG_PGROUNDDN(client_SP);
@@ -551,7 +542,7 @@ static Addr setup_client_stack(const void*  init_sp,
    higher address +-----------------+ <- clstack_end    ^                ^
                   | args env auxv   |                   |                |
                   |   see above     |                   |                |
-    ower address  +-----------------+ <- client_SP   anon_size           |
+   lower address  +-----------------+ <- client_SP   anon_size           |
                   |  round to page  |                   |                |
                   +-----------------+ <- clstack_start  |                |
                   |    one page     |                   |           clstack_max_size
@@ -560,6 +551,10 @@ static Addr setup_client_stack(const void*  init_sp,
                   :      RSVN       :                resvn_size          |
                   :                 :                   |                |
                   +-----------------+ <- resvn_start    v                v
+
+(The "one page" below clstack_start is only present when VG_STACK_REDZONE_SZB
+is not zero, which for FreeBSD is only on amd64. This page is not present
+on other platforms.)
 
    */
 
@@ -647,7 +642,7 @@ static Addr setup_client_stack(const void*  init_sp,
    ptr = (Addr*)client_SP;
 
    /* --- client argc --- */
-   *ptr++ = argc + (have_exename ? 1 : 0);
+   *ptr++ = argc + 1;
 
    /* --- client argv --- */
    client_argv = (Word)ptr;
@@ -658,9 +653,7 @@ static Addr setup_client_stack(const void*  init_sp,
       *ptr++ = (Addr)copy_str(&strtab, info->interp_args);
    }
 
-   if (have_exename) {
-      *ptr++ = (Addr)copy_str(&strtab, VG_(args_the_exename));
-   }
+   *ptr++ = (Addr)copy_str(&strtab, VG_(args_the_exename));
 
    for (i = 0; i < VG_(sizeXA)( VG_(args_for_client) ); i++) {
       *ptr++ = (Addr)copy_str(
@@ -711,16 +704,14 @@ static Addr setup_client_stack(const void*  init_sp,
       case VKI_AT_OSRELDATE:
       case VKI_AT_PAGESIZESLEN:
       case VKI_AT_CANARYLEN:
-
-#if (FREEBSD_VERS >= FREEBSD_11)
       case VKI_AT_EHDRFLAGS:
-#endif
          /* All these are pointerless, so we don't need to do
             anything about them. */
          break;
 #if defined(VGP_arm64_freebsd)
       // FreeBSD 11+ also have HWCAP and HWCAP2
       // but they aren't used on amd64
+      // FreeBSD 15 adds HWCAP3 and HWCAP4
       case VKI_AT_HWCAP:
 #define ARM64_SUPPORTED_HWCAP (VKI_HWCAP_ATOMICS        \
                                | VKI_HWCAP_AES          \
@@ -770,7 +761,7 @@ static Addr setup_client_stack(const void*  init_sp,
          break;
 #endif
 
-#if (FREEBSD_VERS >= FREEBSD_13_0)
+      // From FreeBSD 13.0
       /* @todo PJF BSDFLAGS causes serveral testcases to crash.
          Not sure why, it seems to be used for sigfastblock */
       // case AT_BSDFLAGS:
@@ -788,18 +779,16 @@ static Addr setup_client_stack(const void*  init_sp,
       case VKI_AT_ENVV:
          auxv->u.a_val = (Word)VG_(client_envp);
          break;
-#endif
 
-#if (FREEBSD_VERS >= FREEBSD_13_1)
+      // from FreeBSD 13.1
       // I think that this is a pointer to a "fenestrasX" structture
       // lots of stuff that I don't understand
       // arc4random, passing through VDSO page ...
       // case AT_FXRNG:
       // Again a pointer, to the VDSO base for use by rtld
       // case AT_KPRELOAD:
-#endif
 
-#if (FREEBSD_VERS >= FREEBSD_13_2)
+      // from FreeBSD 13.2
       case VKI_AT_USRSTACKBASE:
          VG_(debugLog)(2, "initimg",
                        "usrstackbase from OS %lx\n",
@@ -821,7 +810,6 @@ static Addr setup_client_stack(const void*  init_sp,
                        clstack_max_size);
 
          break;
-#endif
 
       case VKI_AT_PHDR:
          if (info->phdr == 0) {
@@ -861,6 +849,8 @@ static Addr setup_client_stack(const void*  init_sp,
 
    vg_assert((strtab-stringbase) == stringsize);
 
+   vg_assert((HChar*)auxv < stringbase);
+
    /* client_SP is pointing at client's argc/argv */
 
    if (0) {
@@ -868,7 +858,7 @@ static Addr setup_client_stack(const void*  init_sp,
    }
 
    if (VG_(resolved_exename) == NULL) {
-      VG_(resolved_exename) = VG_(strdup)("initimg-freebsd.sre.1", resolved_name);
+      VG_(resolved_exename) = VG_(strdup)("initimg-freebsd.scs.1", resolved_name);
    }
 
    return client_SP;

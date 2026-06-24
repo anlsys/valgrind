@@ -13,7 +13,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -46,6 +46,7 @@ typedef
       ThreadErr = -1,
       FdBadClose = -2,
       FdNotClosed = -3,
+      FdBadUse = -4,
    }
    CoreErrorKind;
 
@@ -77,7 +78,7 @@ extern void VG_(show_error_counts_as_XML) ( void );
 
 extern Bool VG_(is_action_requested)      ( const HChar* action, Bool* clo );
 
-extern Bool VG_(showing_core_errors)      ( void );
+extern Bool VG_(showing_core_warnings)    ( void );
 
 extern UInt VG_(get_n_errs_found)         ( void );
 extern UInt VG_(get_n_errs_shown)         ( void );

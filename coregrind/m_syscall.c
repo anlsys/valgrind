@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -194,6 +194,17 @@ SysRes VG_(mk_SysRes_arm_linux) ( Int val ) {
 }
 
 SysRes VG_(mk_SysRes_arm64_linux) ( Long val ) {
+   SysRes res;
+   res._isError = val >= -4095 && val <= -1;
+   if (res._isError) {
+      res._val = (ULong)(-val);
+   } else {
+      res._val = (ULong)val;
+   }
+   return res;
+}
+
+SysRes VG_(mk_SysRes_riscv64_linux) ( Long val ) {
    SysRes res;
    res._isError = val >= -4095 && val <= -1;
    if (res._isError) {
@@ -744,8 +755,9 @@ asm(
 
 #elif defined(VGP_amd64_freebsd)
 /* Convert function calling convention --> SYSCALL_STD calling
-   convention
-   PJF - not sure why we don't use SYSCALL0 convention like x86
+   convention.
+   Last stack arguments need to be pushed first, hence
+   a8 is pushed before a7.
  */
 extern UWord do_syscall_WRK (
           UWord syscall_no,    /* %rdi */
@@ -756,9 +768,8 @@ extern UWord do_syscall_WRK (
           UWord a5,            /* %r9 */
           UWord a6,            /* 8(%rsp) */
           UWord a7,            /* 16(%rsp) */
-          UWord a8,            /* 24(%rsp) */
-          UInt *flags,         /* 32(%rsp) */
-          UWord *rv2           /* 40(%rsp) */
+          UInt *flags,         /* 24(%rsp) */
+          UWord *rv2           /* 32(%rsp) */
        );
 asm(
 ".text\n"
@@ -771,21 +782,19 @@ asm(
 "      movq    %rcx, %rdx\n"    /* a3 */
 "      movq    %r8,  %r10\n"    /* a4 */
 "      movq    %r9,  %r8\n"     /* a5 */
-"      movq    16(%rbp), %r9\n" /* a6 last arg from stack, account for %rbp */
+"      movq    16(%rbp), %r9\n" /* a6 last register arg from stack, account for %rbp */
 "      movq    24(%rbp), %r11\n" /* a7 from stack */
-"      pushq  %r11\n"
-"      movq    32(%rbp), %r11\n" /* a8 from stack */
-"      pushq  %r11\n"
+"      pushq   %r11\n"
 "      subq    $8,%rsp\n"       /* fake return addr */
 "      syscall\n"
 "      jb      1f\n"
-"      movq    48(%rbp),%rsi\n" /* success */
+"      movq    40(%rbp),%rsi\n" /* success */
 "      movq    %rdx, (%rsi)\n"  /* second return value */
 "      movq    %rbp, %rsp\n"
 "      popq    %rbp\n"
 "      ret\n"
 "1:\n"                          /* error path */
-"      movq    40(%rbp), %rsi\n" /* flags */
+"      movq    32(%rbp), %rsi\n" /* flags */
 "      movl    $1,(%rsi)\n"
 "      movq    %rbp, %rsp\n"
 "      popq    %rbp\n"
@@ -796,32 +805,31 @@ asm(
 #elif defined(VGP_arm64_freebsd)
 
 /*
- * Arguments a1 to a8 are in registers x0 to x7.
+ * Arguments a1 to a7 are in registers x0 to x6.
  * Which is just what we want for a syscall.
  *
- * The syscall number is on the top of the stack
- * pointed to by sp. The flags are at sp+8 and
- * second return value at sp+16.
+ * The syscall number is in x7
+ * The flags are at the top of the stack, sp and
+ * second return value at sp+8.
  */
 
 extern UWord do_syscall_WRK (
    UWord a1, UWord a2, UWord a3,
    UWord a4, UWord a5, UWord a6,
-   UWord a7, UWord a8,
-   UWord syscall_no,
+   UWord a7, UWord syscall_no,
    UInt *flags,  UWord *rv2
    );
 asm(
    ".text\n"
    ".globl do_syscall_WRK\n"
    "do_syscall_WRK:\n"
-   "        ldr  x8, [sp]\n"          // retrieve syscall_no, put it in x8
+   "        mov x8, x7\n"             // get the syscall number from x7
    "        svc  0x0\n"               // do the syscall
    "        mov  x9, 1\n"             // flags for error will be 1 or 0
    "        csel x9, x9, xzr, cs\n"   // conditionally select 1 or 0 into x9
-   "        ldr  x10, [sp, #8]\n"     // load the address of flags
+   "        ldr  x10, [sp]\n"         // load the address of flags
    "        str  w9, [x10]\n"         // store flags result
-   "        ldr  x10, [sp, #16]\n"    // load the addres of rv2
+   "        ldr  x10, [sp, #8]\n"     // load the addres of rv2
    "        str  x1, [x10]\n"         // store rv2 result
    "        ret\n"
    ".previous\n"
@@ -1076,6 +1084,30 @@ asm (
    ".previous                              \n\t"
 );
 
+#elif defined(VGP_riscv64_linux)
+/* Calling convention is: args in a0-a5, sysno in a7, return value in a0.
+   Return value follows the usual convention that -4095 .. -1 (both inclusive)
+   is an error value. All other values are success values.
+
+   Registers a0 to a5 remain unchanged, but syscall_no is in a6 and needs to be
+   moved to a7.
+*/
+extern UWord do_syscall_WRK (
+          UWord a1, UWord a2, UWord a3,
+          UWord a4, UWord a5, UWord a6,
+          UWord syscall_no
+       );
+asm(
+".text\n"
+".globl do_syscall_WRK\n"
+"do_syscall_WRK:\n"
+"        mv a7, a6\n"
+"        li a6, 0\n"
+"        ecall\n"
+"        ret\n"
+".previous\n"
+);
+
 #elif defined(VGP_x86_solaris)
 
 extern ULong
@@ -1195,7 +1227,7 @@ SysRes VG_(do_syscall) ( UWord sysno, RegWord a1, RegWord a2, RegWord a3,
    UWord val2 = 0;
    UInt err = 0;
    val = do_syscall_WRK(sysno, a1, a2, a3, a4, a5,
-                        a6, a7, a8, &err, &val2);
+                        a6, a7, &err, &val2);
    return VG_(mk_SysRes_amd64_freebsd)( val, val2, (err & 1) != 0 ? True : False);
 
 #  elif defined(VGP_arm64_freebsd)
@@ -1203,7 +1235,7 @@ SysRes VG_(do_syscall) ( UWord sysno, RegWord a1, RegWord a2, RegWord a3,
    UWord val2 = 0;
    UInt err = 0;
    val = do_syscall_WRK(a1, a2, a3, a4, a5,
-                        a6, a7, a8, sysno, &err, &val2);
+                        a6, a7, sysno, &err, &val2);
    return VG_(mk_SysRes_arm64_freebsd)( val, val2, (err & 1) != 0 ? True : False);
 
 #  elif defined(VGP_ppc32_linux)
@@ -1323,6 +1355,10 @@ SysRes VG_(do_syscall) ( UWord sysno, RegWord a1, RegWord a2, RegWord a3,
    RegWord reg_a0 = 0;
    do_syscall_WRK(a1, a2, a3, a4, a5, a6, sysno, &reg_a0);
    return VG_(mk_SysRes_nanomips_linux)(reg_a0);
+
+#  elif defined(VGP_riscv64_linux)
+   UWord val = do_syscall_WRK(a1, a2, a3, a4, a5, a6, sysno);
+   return VG_(mk_SysRes_riscv64_linux)(val);
 
 #  elif defined(VGP_x86_solaris)
    UInt val, val2, err = False;

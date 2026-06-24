@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -2592,7 +2592,7 @@ static UChar* do_ffree_st ( UChar* p, Int n )
 
 Int emit_AMD64Instr ( /*MB_MOD*/Bool* is_profInc,
                       UChar* buf, Int nbuf, const AMD64Instr* i, 
-                      Bool mode64, VexEndness endness_host,
+                      Bool mode64, const VexArchInfo* archinfo_host,
                       const void* disp_cp_chain_me_to_slowEP,
                       const void* disp_cp_chain_me_to_fastEP,
                       const void* disp_cp_xindir,

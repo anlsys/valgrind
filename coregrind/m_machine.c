@@ -11,7 +11,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -39,6 +39,8 @@
 #include "pub_core_cpuid.h"
 #include "pub_core_libcsignal.h"   // for ppc32 messing with SIGILL and SIGFPE
 #include "pub_core_debuglog.h"
+
+#include "libvex_guest_arm64_sysregs.h"
 
 
 #define INSTR_PTR(regs)    ((regs).vex.VG_INSTR_PTR)
@@ -152,6 +154,11 @@ void VG_(get_UnwindStartRegs) ( /*OUT*/UnwindStartRegs* regs,
       = VG_(threads)[tid].arch.vex.guest_r31;
    regs->misc.MIPS64.r28
       = VG_(threads)[tid].arch.vex.guest_r28;
+#  elif defined(VGA_riscv64)
+   regs->r_pc = VG_(threads)[tid].arch.vex.guest_pc;
+   regs->r_sp = VG_(threads)[tid].arch.vex.guest_x2;
+   regs->misc.RISCV64.r_fp = VG_(threads)[tid].arch.vex.guest_x8;
+   regs->misc.RISCV64.r_ra = VG_(threads)[tid].arch.vex.guest_x1;
 #  else
 #    error "Unknown arch"
 #  endif
@@ -369,6 +376,39 @@ static void apply_to_GPs_of_tid(ThreadId tid, void (*f)(ThreadId,
    (*f)(tid, "x28", vex->guest_X28);
    (*f)(tid, "x29", vex->guest_X29);
    (*f)(tid, "x30", vex->guest_X30);
+#elif defined(VGA_riscv64)
+   (*f)(tid, "x0" , vex->guest_x0 );
+   (*f)(tid, "x1" , vex->guest_x1 );
+   (*f)(tid, "x2" , vex->guest_x2 );
+   (*f)(tid, "x3" , vex->guest_x3 );
+   (*f)(tid, "x4" , vex->guest_x4 );
+   (*f)(tid, "x5" , vex->guest_x5 );
+   (*f)(tid, "x6" , vex->guest_x6 );
+   (*f)(tid, "x7" , vex->guest_x7 );
+   (*f)(tid, "x8" , vex->guest_x8 );
+   (*f)(tid, "x9" , vex->guest_x9 );
+   (*f)(tid, "x10", vex->guest_x10);
+   (*f)(tid, "x11", vex->guest_x11);
+   (*f)(tid, "x12", vex->guest_x12);
+   (*f)(tid, "x13", vex->guest_x13);
+   (*f)(tid, "x14", vex->guest_x14);
+   (*f)(tid, "x15", vex->guest_x15);
+   (*f)(tid, "x16", vex->guest_x16);
+   (*f)(tid, "x17", vex->guest_x17);
+   (*f)(tid, "x18", vex->guest_x18);
+   (*f)(tid, "x19", vex->guest_x19);
+   (*f)(tid, "x20", vex->guest_x20);
+   (*f)(tid, "x21", vex->guest_x21);
+   (*f)(tid, "x22", vex->guest_x22);
+   (*f)(tid, "x23", vex->guest_x23);
+   (*f)(tid, "x24", vex->guest_x24);
+   (*f)(tid, "x25", vex->guest_x25);
+   (*f)(tid, "x26", vex->guest_x26);
+   (*f)(tid, "x27", vex->guest_x27);
+   (*f)(tid, "x28", vex->guest_x28);
+   (*f)(tid, "x29", vex->guest_x29);
+   (*f)(tid, "x30", vex->guest_x30);
+   (*f)(tid, "x31", vex->guest_x31);
 #else
 #  error Unknown arch
 #endif
@@ -475,10 +515,10 @@ Int VG_(machine_arm_archlevel) = 4;
 #endif
 
 
-/* For hwcaps detection on ppc32/64, s390x, and arm we'll need to do SIGILL
+/* For hwcaps detection on ppc32/64, mips and arm we'll need to do SIGILL
    testing, so we need a VG_MINIMAL_JMP_BUF. */
 #if defined(VGA_ppc32) || defined(VGA_ppc64be) || defined(VGA_ppc64le) \
-    || defined(VGA_arm) || defined(VGA_s390x) || defined(VGA_mips32) \
+    || defined(VGA_arm) || defined(VGA_mips32) \
     || defined(VGA_mips64) || defined(VGA_arm64)
 #include "pub_core_libcsetjmp.h"
 static VG_MINIMAL_JMP_BUF(env_unsup_insn);
@@ -564,7 +604,7 @@ static UInt VG_(get_machine_model)(void)
 {
    static struct model_map {
       const HChar name[5];
-      UInt  id;
+      const UInt  id;
    } model_map[] = {
       { "2064", VEX_S390X_MODEL_Z900 },
       { "2066", VEX_S390X_MODEL_Z800 },
@@ -586,6 +626,7 @@ static UInt VG_(get_machine_model)(void)
       { "8562", VEX_S390X_MODEL_Z15 },
       { "3931", VEX_S390X_MODEL_Z16 },
       { "3932", VEX_S390X_MODEL_Z16 },
+      { "9175", VEX_S390X_MODEL_Z17 },
    };
 
    Int    model, n, fh;
@@ -1486,126 +1527,76 @@ Bool VG_(machine_get_hwcaps)( void )
 
 #elif defined(VGA_s390x)
 
-#  include "libvex_s390x_common.h"
-
    {
-     /* Instruction set detection code borrowed from ppc above. */
-     vki_sigset_t          saved_set, tmp_set;
-     vki_sigaction_fromK_t saved_sigill_act;
-     vki_sigaction_toK_t     tmp_sigill_act;
-
-     volatile Bool have_LDISP, have_STFLE;
-     Int i, r, model;
+     Int i, model;
 
      /* If the model is "unknown" don't treat this as an error. Assume
         this is a brand-new machine model for which we don't have the 
         identification yet. Keeping fingers crossed. */
      model = VG_(get_machine_model)();
 
-     /* Unblock SIGILL and stash away the old action for that signal */
-     VG_(sigemptyset)(&tmp_set);
-     VG_(sigaddset)(&tmp_set, VKI_SIGILL);
-
-     r = VG_(sigprocmask)(VKI_SIG_UNBLOCK, &tmp_set, &saved_set);
-     vg_assert(r == 0);
-
-     r = VG_(sigaction)(VKI_SIGILL, NULL, &saved_sigill_act);
-     vg_assert(r == 0);
-     tmp_sigill_act = saved_sigill_act;
-
-     /* NODEFER: signal handler does not return (from the kernel's point of
-        view), hence if it is to successfully catch a signal more than once,
-        we need the NODEFER flag. */
-     tmp_sigill_act.sa_flags &= ~VKI_SA_RESETHAND;
-     tmp_sigill_act.sa_flags &= ~VKI_SA_SIGINFO;
-     tmp_sigill_act.sa_flags |=  VKI_SA_NODEFER;
-     tmp_sigill_act.ksa_handler = handler_unsup_insn;
-     VG_(sigaction)(VKI_SIGILL, &tmp_sigill_act, NULL);
-
-     /* Determine hwcaps. Note, we cannot use the stfle insn because it
-        is not supported on z900. */
-
-     have_LDISP = True;
-     if (VG_MINIMAL_SETJMP(env_unsup_insn)) {
-        have_LDISP = False;
-     } else {
-       /* BASR loads the address of the next insn into r1. Needed to avoid
-          a segfault in XY. */
-        __asm__ __volatile__("basr %%r1,%%r0\n\t"
-                             ".long  0xe3001000\n\t"  /* XY  0,0(%r1) */
-                             ".short 0x0057" : : : "r0", "r1", "cc", "memory");
+     /* When upgrading the minimum machine model do not forget to adjust
+        VEX_HWCAPS_S390X_MMM below and in main_main.c */
+     if (model < VEX_S390X_MODEL_Z196) {
+        VG_(message)(Vg_FailMsg, "Your machine is too old. "
+                     "You need at least a z196 to run valgrind.\n");
+        VG_(exit)(1);
      }
 
-     /* Check availability of STFLE. If available store facility bits
-        in hoststfle. */
-     ULong hoststfle[S390_NUM_FACILITY_DW];
+     /* Get number of double words to store all facilities */
+     unsigned long long dummy[1];
 
-     for (i = 0; i < S390_NUM_FACILITY_DW; ++i)
+     register ULong r0 asm("0") = 0;
+     asm volatile(".insn s,0xb2b00000,%0\n" /* stfle */
+                  : "=Q" (dummy), "+d"(r0)
+                  :
+                  : "cc", "memory");
+     UInt num_dw = r0 + 1;
+
+     /* Get the facility bits */
+     ULong hoststfle[num_dw];
+
+     for (i = 0; i < num_dw; ++i)
         hoststfle[i] = 0;
 
-     have_STFLE = True;
-     if (VG_MINIMAL_SETJMP(env_unsup_insn)) {
-        have_STFLE = False;
-     } else {
-         register ULong reg0 asm("0") = S390_NUM_FACILITY_DW - 1;
-
-         __asm__(".insn s,0xb2b00000,%0" /* stfle */
-                 : "=Q"(hoststfle), "+d"(reg0)
+     __asm__(".insn s,0xb2b00000,%0" /* stfle */
+                 : "=Q"(hoststfle), "+d"(r0)
                  :
                  : "cc");
-     }
 
-     /* Restore signals */
-     r = VG_(sigaction)(VKI_SIGILL, &saved_sigill_act, NULL);
-     vg_assert(r == 0);
-     r = VG_(sigprocmask)(VKI_SIG_SETMASK, &saved_set, NULL);
-     vg_assert(r == 0);
      va = VexArchS390X;
      vai.endness = VexEndnessBE;
 
      vai.hwcaps = model;
-     if (have_STFLE) vai.hwcaps |= VEX_HWCAPS_S390X_STFLE;
-     if (have_LDISP) {
-        /* Use long displacement only on machines >= z990. For all other
-           machines it is millicoded and therefore slow. */
-        if (model >= VEX_S390X_MODEL_Z990)
-           vai.hwcaps |= VEX_HWCAPS_S390X_LDISP;
-     }
 
-     /* Detect presence of certain facilities using the STFLE insn.
-        Note, that these facilities were introduced at the same time or later
-        as STFLE, so the absence of STLFE implies the absence of the facility
-        we're trying to detect. */
+     /* Detect presence of certain facilities using the STFLE insn. */
      struct fac_hwcaps_map {
         UInt installed;
-        UInt facility_bit;
-        UInt hwcaps_bit;
+        const UInt facility_bit;
+        const UInt hwcaps_bit;
         const HChar name[6];   // may need adjustment for new facility names
      } fac_hwcaps[] = {
-        { False, S390_FAC_EIMM,  VEX_HWCAPS_S390X_EIMM,  "EIMM"  },
-        { False, S390_FAC_GIE,   VEX_HWCAPS_S390X_GIE,   "GIE"   },
-        { False, S390_FAC_DFP,   VEX_HWCAPS_S390X_DFP,   "DFP"   },
-        { False, S390_FAC_FPSE,  VEX_HWCAPS_S390X_FGX,   "FGX"   },
-        { False, S390_FAC_ETF2,  VEX_HWCAPS_S390X_ETF2,  "ETF2"  },
-        { False, S390_FAC_ETF3,  VEX_HWCAPS_S390X_ETF3,  "ETF3"  },
-        { False, S390_FAC_STCKF, VEX_HWCAPS_S390X_STCKF, "STCKF" },
-        { False, S390_FAC_FPEXT, VEX_HWCAPS_S390X_FPEXT, "FPEXT" },
-        { False, S390_FAC_LSC,   VEX_HWCAPS_S390X_LSC,   "LSC"   },
-        { False, S390_FAC_PFPO,  VEX_HWCAPS_S390X_PFPO,  "PFPO"  },
-        { False, S390_FAC_VX,    VEX_HWCAPS_S390X_VX,    "VX"    },
-        { False, S390_FAC_MSA5,  VEX_HWCAPS_S390X_MSA5,  "MSA5"  },
-        { False, S390_FAC_MI2,   VEX_HWCAPS_S390X_MI2,   "MI2"   },
-        { False, S390_FAC_LSC2,  VEX_HWCAPS_S390X_LSC2,  "LSC2"  },
-        { False, S390_FAC_VXE,   VEX_HWCAPS_S390X_VXE,   "VXE"   },
-        { False, S390_FAC_DFLT,  VEX_HWCAPS_S390X_DFLT,  "DFLT"  },
-        { False, S390_FAC_NNPA,  VEX_HWCAPS_S390X_NNPA,  "NNPA"  },
+        { True,    0,  VEX_HWCAPS_S390X_MRMM,  "Z196"  }, /* always first */
+        { False, 129,  VEX_HWCAPS_S390X_VX,    "VX"    },
+        { False,  57,  VEX_HWCAPS_S390X_MSA5,  "MSA5"  },
+        { False,  58,  VEX_HWCAPS_S390X_MI2,   "MI2"   },
+        { False,  53,  VEX_HWCAPS_S390X_LSC2,  "LSC2"  },
+        { False, 135,  VEX_HWCAPS_S390X_VXE,   "VXE"   },
+        { False, 151,  VEX_HWCAPS_S390X_DFLT,  "DFLT"  },
+        { False, 165,  VEX_HWCAPS_S390X_NNPA,  "NNPA"  },
+        { False, 148,  VEX_HWCAPS_S390X_VXE2,  "VXE2"  },
+        { False, 134,  VEX_HWCAPS_S390X_VXD,   "VXD"   },
+        { False, 146,  VEX_HWCAPS_S390X_MSA8,  "MSA8"  },
+        { False, 155,  VEX_HWCAPS_S390X_MSA9,  "MSA9"  },
+        { False,  61,  VEX_HWCAPS_S390X_MI3,   "MI3"   },
+        { False, 198,  VEX_HWCAPS_S390X_VXE3,  "VXE3"  },
+        { False,  86,  VEX_HWCAPS_S390X_MSA12, "MSA12" },
      };
 
      /* Set hwcaps according to the detected facilities */
      UChar dw_number = 0;
      UChar fac_bit = 0;
      for (i=0; i < sizeof fac_hwcaps / sizeof fac_hwcaps[0]; ++i) {
-        vg_assert(fac_hwcaps[i].facility_bit <= 191);  // for now
         dw_number = fac_hwcaps[i].facility_bit / 64;
         fac_bit = fac_hwcaps[i].facility_bit % 64;
         if (hoststfle[dw_number] & (1ULL << (63 - fac_bit))) {
@@ -1870,100 +1861,58 @@ Bool VG_(machine_get_hwcaps)( void )
      if (is_base_v8)
         return True;
 
-     /* ID_AA64ISAR0_EL1 Instruction set attribute register 0 fields */
-     #define ID_AA64ISAR0_FHM_SHIFT            48
-     #define ID_AA64ISAR0_DP_SHIFT             44
-     #define ID_AA64ISAR0_SM4_SHIFT            40
-     #define ID_AA64ISAR0_SM3_SHIFT            36
-     #define ID_AA64ISAR0_SHA3_SHIFT           32
-     #define ID_AA64ISAR0_RDM_SHIFT            28
-     #define ID_AA64ISAR0_ATOMICS_SHIFT        20
-     /* Field values */
-     #define ID_AA64ISAR0_FHM_SUPPORTED        0x1
-     #define ID_AA64ISAR0_DP_SUPPORTED         0x1
-     #define ID_AA64ISAR0_SM4_SUPPORTED        0x1
-     #define ID_AA64ISAR0_SM3_SUPPORTED        0x1
-     #define ID_AA64ISAR0_SHA3_SUPPORTED       0x1
-     #define ID_AA64ISAR0_RDM_SUPPORTED        0x1
-     #define ID_AA64ISAR0_ATOMICS_SUPPORTED    0x2
 
-     /* ID_AA64ISAR1_EL1 Instruction set attribute register 1 fields */
-     #define ID_AA64ISAR1_I8MM_SHIFT           52
-     #define ID_AA64ISAR1_BF16_SHIFT           44
-     #define ID_AA64ISAR1_DPB_SHIFT             0
-     /* Field values */
-     #define ID_AA64ISAR1_I8MM_SUPPORTED       0x1
-     #define ID_AA64ISAR1_BF16_SUPPORTED       0x1
-     #define ID_AA64ISAR1_DPBCVAP_SUPPORTED    0x1
-     #define ID_AA64ISAR1_DPBCVADP_SUPPORTED   0x2
-
-     /* ID_AA64PFR0_EL1 Processor feature register 0 fields */
-     #define ID_AA64PFR0_VFP16_SHIFT           20
-     #define ID_AA64PFR0_FP16_SHIFT            16
-     /* Field values */
-     #define ID_AA64PFR0_VFP16_SUPPORTED       0x1
-     #define ID_AA64PFR0_FP16_SUPPORTED        0x1
-
-     #define get_cpu_ftr(id) ({                                             \
-         unsigned long val;                                                 \
+     #define get_cpu_ftr(id, val) ({                                             \
          asm("mrs %0, "#id : "=r" (val));                                   \
          VG_(debugLog)(1, "machine", "ARM64: %-20s: 0x%016lx\n", #id, val); \
      })
-     get_cpu_ftr(ID_AA64ISAR0_EL1);
-     get_cpu_ftr(ID_AA64ISAR1_EL1);
-     get_cpu_ftr(ID_AA64PFR0_EL1);
 
-     #define get_ftr(id, ftr, fval, have_ftr) ({                           \
-         unsigned long rval;                                               \
-         asm("mrs %0, "#id : "=r" (rval));                                 \
-         have_ftr = (fval & ((rval >> ftr) & 0xf)) >= fval ? True : False; \
-     })
+     unsigned long isar0;
+     unsigned long isar1;
+     unsigned long pfr0;
+
+     get_cpu_ftr(ID_AA64ISAR0_EL1, isar0);
+     get_cpu_ftr(ID_AA64ISAR1_EL1, isar1);
+     get_cpu_ftr(ID_AA64PFR0_EL1, pfr0);
 
      /* Read ID_AA64ISAR0_EL1 attributes */
 
      /* FHM indicates support for FMLAL and FMLSL instructions.
       * Optional for v8.2.
       */
-     get_ftr(ID_AA64ISAR0_EL1, ID_AA64ISAR0_FHM_SHIFT,
-             ID_AA64ISAR0_FHM_SUPPORTED, have_fhm);
+     have_fhm = SYSTEM_REGISTER_FIELD(isar0, ID_AA64ISAR0_FHM_SHIFT) >= ID_AA64ISAR0_FHM_SUPPORTED;
 
      /* DP indicates support for UDOT and SDOT instructions.
       * Optional for v8.2.
       */
-     get_ftr(ID_AA64ISAR0_EL1, ID_AA64ISAR0_DP_SHIFT,
-             ID_AA64ISAR0_DP_SUPPORTED, have_dp);
+     have_dp = SYSTEM_REGISTER_FIELD(isar0, ID_AA64ISAR0_DP_SHIFT) >= ID_AA64ISAR0_DP_SUPPORTED;
 
      /* SM4 indicates support for SM4E and SM4EKEY instructions.
       * Optional for v8.2.
       */
-     get_ftr(ID_AA64ISAR0_EL1, ID_AA64ISAR0_SM4_SHIFT,
-             ID_AA64ISAR0_SM4_SUPPORTED, have_sm4);
+     have_sm4 = SYSTEM_REGISTER_FIELD(isar0, ID_AA64ISAR0_SM4_SHIFT) >= ID_AA64ISAR0_SM4_SUPPORTED;
 
      /* SM3 indicates support for SM3SS1, SM3TT1A, SM3TT1B, SM3TT2A, * SM3TT2B,
       * SM3PARTW1, and SM3PARTW2 instructions.
       * Optional for v8.2.
       */
-     get_ftr(ID_AA64ISAR0_EL1, ID_AA64ISAR0_SM3_SHIFT,
-             ID_AA64ISAR0_SM3_SUPPORTED, have_sm3);
+     have_sm3 = SYSTEM_REGISTER_FIELD(isar0, ID_AA64ISAR0_SM3_SHIFT) >= ID_AA64ISAR0_SM3_SUPPORTED;
 
      /* SHA3 indicates support for EOR3, RAX1, XAR, and BCAX instructions.
       * Optional for v8.2.
       */
-     get_ftr(ID_AA64ISAR0_EL1, ID_AA64ISAR0_SHA3_SHIFT,
-             ID_AA64ISAR0_SHA3_SUPPORTED, have_sha3);
+     have_sha3 = SYSTEM_REGISTER_FIELD(isar0, ID_AA64ISAR0_SHA3_SHIFT) >= ID_AA64ISAR0_SHA3_SUPPORTED;
 
      /* RDM indicates support for SQRDMLAH and SQRDMLSH instructions.
       * Mandatory from v8.1 onwards.
       */
-     get_ftr(ID_AA64ISAR0_EL1, ID_AA64ISAR0_RDM_SHIFT,
-             ID_AA64ISAR0_RDM_SUPPORTED, have_rdm);
+     have_rdm = SYSTEM_REGISTER_FIELD(isar0, ID_AA64ISAR0_RDM_SHIFT) >= ID_AA64ISAR0_RDM_SUPPORTED;
 
      /* v8.1 ATOMICS indicates support for LDADD, LDCLR, LDEOR, LDSET, LDSMAX,
       * LDSMIN, LDUMAX, LDUMIN, CAS, CASP, and SWP instructions.
       * Mandatory from v8.1 onwards.
       */
-     get_ftr(ID_AA64ISAR0_EL1, ID_AA64ISAR0_ATOMICS_SHIFT,
-             ID_AA64ISAR0_ATOMICS_SUPPORTED, have_atomics);
+     have_atomics = SYSTEM_REGISTER_FIELD(isar0, ID_AA64ISAR0_ATOMICS_SHIFT) >= ID_AA64ISAR0_ATOMICS_SUPPORTED;
 
      /* Read ID_AA64ISAR1_EL1 attributes */
 
@@ -1971,41 +1920,41 @@ Bool VG_(machine_get_hwcaps)( void )
       * instructions.
       * Optional for v8.2.
       */
-     get_ftr(ID_AA64ISAR1_EL1, ID_AA64ISAR1_I8MM_SHIFT,
-             ID_AA64ISAR1_I8MM_SUPPORTED, have_i8mm);
+     have_i8mm = SYSTEM_REGISTER_FIELD(isar1, ID_AA64ISAR1_I8MM_SHIFT) >= ID_AA64ISAR1_I8MM_SUPPORTED;
 
      /* BF16 indicates support for BFDOT, BFMLAL, BFMLAL2, BFMMLA, BFCVT, and
       * BFCVT2 instructions.
       * Optional for v8.2.
       */
-     get_ftr(ID_AA64ISAR1_EL1, ID_AA64ISAR1_BF16_SHIFT,
-             ID_AA64ISAR1_BF16_SUPPORTED, have_bf16);
+     have_bf16 = SYSTEM_REGISTER_FIELD(isar1, ID_AA64ISAR1_BF16_SHIFT) >= ID_AA64ISAR1_BF16_SUPPORTED;
 
      /* DPB indicates support for DC CVAP instruction.
       * Mandatory for v8.2 onwards.
       */
-     get_ftr(ID_AA64ISAR1_EL1, ID_AA64ISAR1_DPB_SHIFT,
-             ID_AA64ISAR1_DPBCVAP_SUPPORTED, have_dpbcvap);
+     have_dpbcvap = SYSTEM_REGISTER_FIELD(isar1, ID_AA64ISAR1_DPB_SHIFT) >= ID_AA64ISAR1_DPBCVAP_SUPPORTED;
 
      /* DPB indicates support for DC CVADP instruction.
       * Optional for v8.2.
       */
-     get_ftr(ID_AA64ISAR1_EL1, ID_AA64ISAR1_DPB_SHIFT,
-             ID_AA64ISAR1_DPBCVADP_SUPPORTED, have_dpbcvadp);
+     have_dpbcvadp = SYSTEM_REGISTER_FIELD(isar1, ID_AA64ISAR1_DPB_SHIFT) >= ID_AA64ISAR1_DPBCVADP_SUPPORTED;
 
      /* Read ID_AA64PFR0_EL1 attributes */
 
      /* VFP16 indicates support for half-precision vector arithmetic.
-      * Optional for v8.2. Must be the same value as FP16.
+      * Optional for v8.2. Must be the same value as FP16. fp and
+      * advsimd are different to the usual isa/fp in that 0 means
+      * that the base features are present and 0xf means that the
+      * features are absent. Normally 0 means that the feature is absent.
       */
-     get_ftr(ID_AA64PFR0_EL1, ID_AA64PFR0_VFP16_SHIFT,
-             ID_AA64PFR0_VFP16_SUPPORTED, have_vfp16);
+     unsigned long advsimd = SYSTEM_REGISTER_FIELD(pfr0, ID_AA64PFR0_ADVSIMD_SHIFT);
+     have_vfp16 = advsimd >= ID_AA64PFR0_ADVSIMD_HP_SUPPORTED && advsimd != ID_AA64PFR0_ADVSIMD_NOT_PRESENT;
 
      /* FP16 indicates support for half-precision scalar arithmetic.
       * Optional for v8.2. Must be the same value as VFP16.
       */
-     get_ftr(ID_AA64PFR0_EL1, ID_AA64PFR0_FP16_SHIFT,
-             ID_AA64PFR0_FP16_SUPPORTED, have_fp16);
+     unsigned long fp = SYSTEM_REGISTER_FIELD(pfr0, ID_AA64PFR0_FP_SHIFT);
+     vg_assert(fp == advsimd);
+     have_fp16 = fp >= ID_AA64PFR0_FP_HP_SUPPORTED && fp != ID_AA64PFR0_FP_NOT_PRESENT;
 
      if (have_fhm)        vai.hwcaps |= VEX_HWCAPS_ARM64_FHM;
      if (have_dpbcvap)    vai.hwcaps |= VEX_HWCAPS_ARM64_DPBCVAP;
@@ -2021,7 +1970,6 @@ Bool VG_(machine_get_hwcaps)( void )
      if (have_vfp16)      vai.hwcaps |= VEX_HWCAPS_ARM64_VFP16;
 
      #undef get_cpu_ftr
-     #undef get_ftr
 
      return True;
    }
@@ -2241,6 +2189,22 @@ Bool VG_(machine_get_hwcaps)( void )
 
      return True;
    }
+
+#elif defined(VGA_riscv64)
+   {
+     va = VexArchRISCV64;
+     vai.endness = VexEndnessLE;
+
+     /* Hardware baseline is RV64GC. */
+     vai.hwcaps = 0;
+
+     VG_(debugLog)(1, "machine", "hwcaps = 0x%x\n", vai.hwcaps);
+
+     VG_(machine_get_cache_info)(&vai);
+
+     return True;
+   }
+
 #else
 #  error "Unknown arch"
 #endif
@@ -2362,7 +2326,7 @@ Int VG_(machine_get_size_of_largest_guest_register) ( void )
    return 8;
 
 #  elif defined(VGA_s390x)
-   return 8;
+   return (vai.hwcaps & VEX_HWCAPS_S390X_VX) ? 16 : 8;
 
 #  elif defined(VGA_arm)
    /* Really it depends whether or not we have NEON, but let's just
@@ -2381,6 +2345,10 @@ Int VG_(machine_get_size_of_largest_guest_register) ( void )
 #  elif defined(VGA_mips64)
    return 8;
 
+#  elif defined(VGA_riscv64)
+   /* 64-bit integer and floating-point registers, no vector set. */
+   return 8;
+
 #  else
 #    error "Unknown arch"
 #  endif
@@ -2397,7 +2365,7 @@ void* VG_(fnptr_to_fnentry)( void* f )
       || defined(VGP_s390x_linux) || defined(VGP_mips32_linux) \
       || defined(VGP_mips64_linux) || defined(VGP_arm64_linux) \
       || defined(VGP_x86_solaris) || defined(VGP_amd64_solaris) \
-      || defined(VGP_nanomips_linux)
+      || defined(VGP_nanomips_linux) || defined(VGP_riscv64_linux)
    return f;
 #  elif defined(VGP_ppc64be_linux)
    /* ppc64-linux uses the AIX scheme, in which f is a pointer to a

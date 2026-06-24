@@ -8,11 +8,11 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright IBM Corp. 2010-2020
+   Copyright IBM Corp. 2010-2026
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -44,127 +44,9 @@
 void
 LibVEX_GuestS390X_initialise(VexGuestS390XState *state)
 {
-/*------------------------------------------------------------*/
-/*--- Initialise ar registers                              ---*/
-/*------------------------------------------------------------*/
+   __builtin_memset(state, 0x0, sizeof *state);
 
-   state->guest_a0 = 0;
-   state->guest_a1 = 0;
-   state->guest_a2 = 0;
-   state->guest_a3 = 0;
-   state->guest_a4 = 0;
-   state->guest_a5 = 0;
-   state->guest_a6 = 0;
-   state->guest_a7 = 0;
-   state->guest_a8 = 0;
-   state->guest_a9 = 0;
-   state->guest_a10 = 0;
-   state->guest_a11 = 0;
-   state->guest_a12 = 0;
-   state->guest_a13 = 0;
-   state->guest_a14 = 0;
-   state->guest_a15 = 0;
-
-/*------------------------------------------------------------*/
-/*--- Initialise vr registers                             ---*/
-/*------------------------------------------------------------*/
-
-#define VRZERO(vr) \
-   do { \
-      vr.w64[0] = vr.w64[1] = 0ULL; \
-   } while(0);
-
-   VRZERO(state->guest_v0)
-   VRZERO(state->guest_v1)
-   VRZERO(state->guest_v2)
-   VRZERO(state->guest_v3)
-   VRZERO(state->guest_v4)
-   VRZERO(state->guest_v5)
-   VRZERO(state->guest_v6)
-   VRZERO(state->guest_v7)
-   VRZERO(state->guest_v8)
-   VRZERO(state->guest_v9)
-   VRZERO(state->guest_v10)
-   VRZERO(state->guest_v11)
-   VRZERO(state->guest_v12)
-   VRZERO(state->guest_v13)
-   VRZERO(state->guest_v14)
-   VRZERO(state->guest_v15)
-   VRZERO(state->guest_v16)
-   VRZERO(state->guest_v17)
-   VRZERO(state->guest_v18)
-   VRZERO(state->guest_v19)
-   VRZERO(state->guest_v20)
-   VRZERO(state->guest_v21)
-   VRZERO(state->guest_v22)
-   VRZERO(state->guest_v23)
-   VRZERO(state->guest_v24)
-   VRZERO(state->guest_v25)
-   VRZERO(state->guest_v26)
-   VRZERO(state->guest_v27)
-   VRZERO(state->guest_v28)
-   VRZERO(state->guest_v29)
-   VRZERO(state->guest_v30)
-   VRZERO(state->guest_v31)
-
-#undef VRZERO
-/*------------------------------------------------------------*/
-/*--- Initialise gpr registers                             ---*/
-/*------------------------------------------------------------*/
-
-   state->guest_r0 = 0;
-   state->guest_r1 = 0;
-   state->guest_r2 = 0;
-   state->guest_r3 = 0;
-   state->guest_r4 = 0;
-   state->guest_r5 = 0;
-   state->guest_r6 = 0;
-   state->guest_r7 = 0;
-   state->guest_r8 = 0;
-   state->guest_r9 = 0;
-   state->guest_r10 = 0;
-   state->guest_r11 = 0;
-   state->guest_r12 = 0;
-   state->guest_r13 = 0;
-   state->guest_r14 = 0;
-   state->guest_r15 = 0;
-
-/*------------------------------------------------------------*/
-/*--- Initialise S390 miscellaneous registers              ---*/
-/*------------------------------------------------------------*/
-
-   state->guest_counter = 0;
-   state->guest_fpc = 0;
-   state->guest_IA = 0;
-
-/*------------------------------------------------------------*/
-/*--- Initialise S390 pseudo registers                     ---*/
-/*------------------------------------------------------------*/
-
-   state->guest_SYSNO = 0;
-
-/*------------------------------------------------------------*/
-/*--- Initialise generic pseudo registers                  ---*/
-/*------------------------------------------------------------*/
-
-   state->guest_NRADDR = 0;
-   state->guest_CMSTART = 0;
-   state->guest_CMLEN = 0;
-   state->guest_IP_AT_SYSCALL = 0;
    state->guest_EMNOTE = EmNote_NONE;
-   state->host_EvC_COUNTER = 0;
-   state->host_EvC_FAILADDR = 0;
-
-/*------------------------------------------------------------*/
-/*--- Initialise thunk                                     ---*/
-/*------------------------------------------------------------*/
-
-   state->guest_CC_OP = 0;
-   state->guest_CC_DEP1 = 0;
-   state->guest_CC_DEP2 = 0;
-   state->guest_CC_NDEP = 0;
-
-   __builtin_memset(state->padding, 0x0, sizeof(state->padding));
 }
 
 
@@ -238,7 +120,7 @@ VexGuestLayout s390xGuest_layout = {
 
    /* Describe any sections to be regarded by Memcheck as
       'always-defined'. */
-   .n_alwaysDefd = 9,
+   .n_alwaysDefd = 8,
 
    /* Flags thunk: OP and NDEP are always defined, whereas DEP1
       and DEP2 have to be tracked.  See detailed comment in
@@ -249,10 +131,9 @@ VexGuestLayout s390xGuest_layout = {
       /*  2 */ ALWAYSDEFD(guest_EMNOTE),    /* generic */
       /*  3 */ ALWAYSDEFD(guest_CMSTART),   /* generic */
       /*  4 */ ALWAYSDEFD(guest_CMLEN),     /* generic */
-      /*  5 */ ALWAYSDEFD(guest_IP_AT_SYSCALL), /* generic */
-      /*  6 */ ALWAYSDEFD(guest_IA),        /* control reg */
-      /*  7 */ ALWAYSDEFD(guest_fpc),       /* control reg */
-      /*  8 */ ALWAYSDEFD(guest_counter),   /* internal usage register */
+      /*  5 */ ALWAYSDEFD(guest_IA),        /* control reg */
+      /*  6 */ ALWAYSDEFD(guest_fpc),       /* control reg */
+      /*  7 */ ALWAYSDEFD(guest_counter),   /* internal usage register */
    }
 };
 
@@ -260,9 +141,10 @@ VexGuestLayout s390xGuest_layout = {
 /*--- Dirty helper for EXecute                             ---*/
 /*------------------------------------------------------------*/
 void
-s390x_dirtyhelper_EX(ULong torun)
+s390x_dirtyhelper_EX(ULong torun, Addr64 addr)
 {
    last_execute_target = torun;
+   guest_IA_rel_base = addr;
 }
 
 
@@ -310,129 +192,6 @@ ULong s390x_dirtyhelper_STCKF(ULong *addr) {return 3;}
 ULong s390x_dirtyhelper_STCKE(ULong *addr) {return 3;}
 #endif /* VGA_s390x */
 
-/*------------------------------------------------------------*/
-/*--- Dirty helper for Store Facility instruction          ---*/
-/*------------------------------------------------------------*/
-#if defined(VGA_s390x)
-
-static ULong
-s390_stfle_range(UInt lo, UInt hi)
-{
-   return ((1UL << (hi + 1 - lo)) - 1) << (63 - (hi % 64));
-}
-
-ULong
-s390x_dirtyhelper_STFLE(VexGuestS390XState *guest_state, ULong *addr)
-{
-   ULong hoststfle[S390_NUM_FACILITY_DW], cc, last_dw, i;
-   register ULong reg0 asm("0") = guest_state->guest_r0;
-   last_dw = reg0 & 0xf;
-
-   /* Restrict to facilities that we know about and that we assume to be
-      compatible with Valgrind.  Of course, in this way we may reject features
-      that Valgrind is not really involved in (and thus would be compatible
-      with), but quering for such features doesn't seem like a typical use
-      case. */
-   ULong accepted_facility[S390_NUM_FACILITY_DW] = {
-      /* ===  0 .. 63  === */
-      (s390_stfle_range(0, 16)
-       /* 17: message-security-assist, not supported */
-       | s390_stfle_range(18, 19)
-       /* 20: HFP-multiply-and-add/subtract, not supported */
-       | s390_stfle_range(21, 22)
-       /* 23: HFP-unnormalized-extension, not supported */
-       | s390_stfle_range(24, 25)
-       /* 26: parsing-enhancement, not supported */
-       | s390_stfle_range(27, 28)
-       /* 29: unassigned */
-       | s390_stfle_range(30, 30)
-       /* 31: extract-CPU-time, not supported */
-       | s390_stfle_range(32, 41)
-       /* 42-43: DFP, not fully supported */
-       /* 44: PFPO, not fully supported */
-       | s390_stfle_range(45, 47)
-       /* 48: DFP zoned-conversion, not supported */
-       /* 49: includes PPA, not supported */
-       /* 50: constrained transactional-execution, not supported */
-       | s390_stfle_range(51, 55)
-       /* 56: unassigned */
-       /* 57: MSA5, not supported */
-       | s390_stfle_range(58, 63)),
-
-      /* ===  64 .. 127  === */
-      (s390_stfle_range(64, 72)
-       /* 73: transactional-execution, not supported */
-       | s390_stfle_range(74, 75)
-       /* 76: MSA3, not supported */
-       /* 77: MSA4, not supported */
-       | s390_stfle_range(78, 78)
-       /* 80: DFP packed-conversion, not supported */
-       /* 81: PPA-in-order, not supported */
-       | s390_stfle_range(82, 82)
-       /* 83-127: unassigned */ ),
-
-      /* ===  128 .. 191  === */
-      (s390_stfle_range(128, 131)
-       /* 132: unassigned */
-       /* 133: guarded-storage, not supported */
-       /* 134: vector packed decimal, not supported */
-       | s390_stfle_range(135, 135)
-       /* 136: unassigned */
-       /* 137: unassigned */
-       | s390_stfle_range(138, 142)
-       /* 143: unassigned */
-       | s390_stfle_range(144, 145)
-       /* 146: MSA8, not supported */
-       | s390_stfle_range(147, 149)
-       /* 150: unassigned */
-       | s390_stfle_range(151, 151)
-       /* 152: vector packed decimal enhancement, not supported */
-       /* 153: unassigned */
-       /* 154: unassigned */
-       /* 155: MSA9, not supported */
-       | s390_stfle_range(156, 156)
-       /* 157-164: unassigned */
-       | s390_stfle_range(165, 165)
-       /* 166-167: unassigned */
-       | s390_stfle_range(168, 168)
-       /* 168-191: unassigned */ ),
-
-      /* ===  192 .. 255  === */
-      /* 192: vector-packed-decimal, not supported */
-      (s390_stfle_range(193, 194)
-       /* 195: unassigned */
-       | s390_stfle_range(196, 197)),
-   };
-
-   asm(".insn s,0xb2b00000,%0\n" /* stfle */
-       "ipm   %2\n"
-       "srl   %2,28\n"
-       : "=Q"(hoststfle), "+d"(reg0), "=d"(cc)
-       :
-       : "cc");
-
-   /* Update guest register 0  with what STFLE set r0 to */
-   guest_state->guest_r0 = reg0;
-
-   /* VM facilities = host facilities, filtered by acceptance */
-   for (i = 0; i <= last_dw; ++i) {
-      if (i < S390_NUM_FACILITY_DW)
-         addr[i] = hoststfle[i] & accepted_facility[i];
-      else
-         addr[i] = 0; /* mask out any excess doublewords */
-   }
-
-   return cc;
-}
-
-#else
-
-ULong
-s390x_dirtyhelper_STFLE(VexGuestS390XState *guest_state, ULong *addr)
-{
-   return 3;
-}
-#endif /* VGA_s390x */
 
 /*------------------------------------------------------------*/
 /*--- Dirty helper for the "convert unicode" insn family.  ---*/
@@ -868,7 +627,7 @@ s390_do_cu12_cu14_helper2(UInt byte1, UInt byte2, UInt byte3, UInt byte4,
       UInt ij     = (byte3 >> 4) & 0x3;
       UInt klmn   = byte3 & 0xf;
       UInt opqrst = byte4 & 0x3f;
-      
+
       if (is_cu12) {
          UInt abcd = (uvwxy - 1) & 0xf;
          UInt high_surrogate = (0xd8 << 8) | (abcd << 6) | (efgh << 2) | ij;
@@ -1022,6 +781,12 @@ decode_bfp_rounding_mode(UInt irrm)
    case Irrm_NegINF:  return S390_BFP_ROUND_NEGINF;
    case Irrm_PosINF:  return S390_BFP_ROUND_POSINF;
    case Irrm_ZERO:    return S390_BFP_ROUND_ZERO;
+   case Irrm_NEAREST_TIE_AWAY_0: return S390_BFP_ROUND_NEAREST_AWAY;
+   case Irrm_PREPARE_SHORTER:    return S390_BFP_ROUND_PREPARE_SHORT;
+   case Irrm_AWAY_FROM_ZERO:
+   case Irrm_NEAREST_TIE_TOWARD_0:
+      /* These cannot occur as they are DFP specific */
+      break;
    }
    vpanic("decode_bfp_rounding_mode");
 }
@@ -1120,6 +885,12 @@ decode_bfp_rounding_mode(UInt irrm)
 ({                                                        \
    UInt cc;                                               \
    switch (decode_bfp_rounding_mode(cc_dep2)) {           \
+   case S390_BFP_ROUND_NEAREST_AWAY:                      \
+      cc = S390_CC_FOR_BFP_CONVERT_AUX(opcode,cc_dep1,1); \
+      break;                                              \
+   case S390_BFP_ROUND_PREPARE_SHORT:                     \
+      cc = S390_CC_FOR_BFP_CONVERT_AUX(opcode,cc_dep1,3); \
+      break;                                              \
    case S390_BFP_ROUND_NEAREST_EVEN:                      \
       cc = S390_CC_FOR_BFP_CONVERT_AUX(opcode,cc_dep1,4); \
       break;                                              \
@@ -1154,6 +925,12 @@ decode_bfp_rounding_mode(UInt irrm)
 ({                                                         \
    UInt cc;                                                \
    switch (decode_bfp_rounding_mode(cc_dep2)) {            \
+   case S390_BFP_ROUND_NEAREST_AWAY:                       \
+      cc = S390_CC_FOR_BFP_UCONVERT_AUX(opcode,cc_dep1,1); \
+      break;                                               \
+   case S390_BFP_ROUND_PREPARE_SHORT:                      \
+      cc = S390_CC_FOR_BFP_UCONVERT_AUX(opcode,cc_dep1,3); \
+      break;                                               \
    case S390_BFP_ROUND_NEAREST_EVEN:                       \
       cc = S390_CC_FOR_BFP_UCONVERT_AUX(opcode,cc_dep1,4); \
       break;                                               \
@@ -1191,6 +968,12 @@ decode_bfp_rounding_mode(UInt irrm)
       s390_cc_thunk_put3 for rationale. */                           \
    cc_dep2 = cc_dep2 ^ cc_ndep;                                      \
    switch (decode_bfp_rounding_mode(cc_ndep)) {                      \
+   case S390_BFP_ROUND_NEAREST_AWAY:                                 \
+      cc = S390_CC_FOR_BFP128_CONVERT_AUX(opcode,cc_dep1,cc_dep2,1); \
+      break;                                                         \
+   case S390_BFP_ROUND_PREPARE_SHORT:                                \
+      cc = S390_CC_FOR_BFP128_CONVERT_AUX(opcode,cc_dep1,cc_dep2,3); \
+      break;                                                         \
    case S390_BFP_ROUND_NEAREST_EVEN:                                 \
       cc = S390_CC_FOR_BFP128_CONVERT_AUX(opcode,cc_dep1,cc_dep2,4); \
       break;                                                         \
@@ -1228,6 +1011,12 @@ decode_bfp_rounding_mode(UInt irrm)
       s390_cc_thunk_put3 for rationale. */                            \
    cc_dep2 = cc_dep2 ^ cc_ndep;                                       \
    switch (decode_bfp_rounding_mode(cc_ndep)) {                       \
+   case S390_BFP_ROUND_NEAREST_AWAY:                                  \
+      cc = S390_CC_FOR_BFP128_UCONVERT_AUX(opcode,cc_dep1,cc_dep2,1); \
+      break;                                                          \
+   case S390_BFP_ROUND_PREPARE_SHORT:                                 \
+      cc = S390_CC_FOR_BFP128_UCONVERT_AUX(opcode,cc_dep1,cc_dep2,3); \
+      break;                                                          \
    case S390_BFP_ROUND_NEAREST_EVEN:                                  \
       cc = S390_CC_FOR_BFP128_UCONVERT_AUX(opcode,cc_dep1,cc_dep2,4); \
       break;                                                          \
@@ -1576,7 +1365,10 @@ s390_calculate_cc(ULong cc_op, ULong cc_dep1, ULong cc_dep2, ULong cc_ndep)
    switch (cc_op) {
 
    case S390_CC_OP_BITWISE:
-      return S390_CC_FOR_BINARY("ogr", cc_dep1, (ULong)0);
+      return cc_dep1 == 0 ? 0 : 1;
+
+   case S390_CC_OP_BITWISE2:
+      return cc_dep1 == 0 ? 0 : 3;
 
    case S390_CC_OP_SIGNED_COMPARE:
       return S390_CC_FOR_BINARY("cgr", cc_dep1, cc_dep2);
@@ -1937,9 +1729,9 @@ guest_s390x_spechelper(const HChar *function_name, IRExpr **args,
 
 #  if 0
    vex_printf("spec request:\n");
-   vex_printf("   %s  ", function_name);
+   vex_printf("   %s", function_name);
    for (i = 0; i < arity; i++) {
-      vex_printf("  ");
+      vex_printf("   [%u]: ", i);
       ppIRExpr(args[i]);
    }
    vex_printf("\n");
@@ -2167,6 +1959,21 @@ guest_s390x_spechelper(const HChar *function_name, IRExpr **args,
          return mkU32(0);
       }
 
+      /* S390_CC_OP_BITWISE2
+         Like S390_CC_OP_BITWISE, but yielding cc = 3 for nonzero result */
+      if (cc_op == S390_CC_OP_BITWISE2) {
+         if ((cond & (8 + 1)) == 8 + 1) {
+            return mkU32(1);
+         }
+         if (cond & 8) {
+            return unop(Iop_1Uto32, binop(Iop_CmpEQ64, cc_dep1, mkU64(0)));
+         }
+         if (cond & 1) {
+            return unop(Iop_1Uto32, binop(Iop_CmpNE64, cc_dep1, mkU64(0)));
+         }
+         return mkU32(0);
+      }
+
       /* S390_CC_OP_INSERT_CHAR_MASK_32
          Since the mask comes from an immediate field in the opcode, we
          expect the mask to be a constant here. That simplifies matters. */
@@ -2244,154 +2051,169 @@ guest_s390x_spechelper(const HChar *function_name, IRExpr **args,
       }
 
       /* S390_CC_OP_TEST_UNDER_MASK_8
-         Since the mask comes from an immediate field in the opcode, we
-         expect the mask to be a constant here. That simplifies matters. */
+         cc_dep1 = the value to be tested, ANDed with the mask
+         cc_dep2 = an 8-bit mask; expected to be a constant here */
       if (cc_op == S390_CC_OP_TEST_UNDER_MASK_8) {
-         ULong mask16;
+         ULong mask8;
 
          if (! isC64(cc_dep2)) goto missed;
 
-         mask16 = cc_dep2->Iex.Const.con->Ico.U64;
+         mask8 = cc_dep2->Iex.Const.con->Ico.U64;
 
-         /* Get rid of the mask16 == 0 case first. Some of the simplifications
-            below (e.g. for OVFL) only hold if mask16 == 0.  */
-         if (mask16 == 0) {   /* cc == 0 */
+         if (mask8 == 0) {   /* cc == 0 */
             if (cond & 0x8) return mkU32(1);
             return mkU32(0);
          }
 
          /* cc == 2 is a don't care */
-         if (cond == 8 || cond == 8 + 2) {
-            return unop(Iop_1Uto32, binop(Iop_CmpEQ64,
-                                          binop(Iop_And64, cc_dep1, cc_dep2),
-                                          mkU64(0)));
+         if (cond == 8 || cond == 8 + 2) { /* all bits zero */
+            return unop(Iop_1Uto32, binop(Iop_CmpEQ64, cc_dep1, mkU64(0)));
          }
-         if (cond == 7 || cond == 7 - 2) {
-            return unop(Iop_1Uto32, binop(Iop_CmpNE64,
-                                          binop(Iop_And64, cc_dep1, cc_dep2),
-                                          mkU64(0)));
+         if (cond == 7 || cond == 7 - 2) { /* not all bits zero */
+            return unop(Iop_1Uto32, binop(Iop_CmpNE64, cc_dep1, mkU64(0)));
          }
-         if (cond == 1 || cond == 1 + 2) {
-            return unop(Iop_1Uto32, binop(Iop_CmpEQ64,
-                                          binop(Iop_And64, cc_dep1, cc_dep2),
-                                          cc_dep2));
+         if (cond == 1 || cond == 1 + 2) { /* all bits set */
+            return unop(Iop_1Uto32, binop(Iop_CmpEQ64, cc_dep1, cc_dep2));
          }
-         if (cond == 14 || cond == 14 - 2) {  /* ! OVFL */
-            return unop(Iop_1Uto32, binop(Iop_CmpNE64,
-                                          binop(Iop_And64, cc_dep1, cc_dep2),
-                                          cc_dep2));
+         if (cond == 14 || cond == 14 - 2) { /* not all bits set */
+            return unop(Iop_1Uto32, binop(Iop_CmpNE64, cc_dep1, cc_dep2));
+         }
+         if (cond == 4 || cond == 4 + 2) { /* not all zero and not all one */
+            return unop(Iop_1Uto32, binop(Iop_And1,
+                        binop(Iop_CmpNE64, cc_dep1, cc_dep2),
+                        binop(Iop_CmpNE64, cc_dep1, mkU64(0))));
+         }
+         if (cond == 9 || cond == 9 + 2) { /* selected bits all 1 or all 0 */
+            return unop(Iop_1Uto32, binop(Iop_Or1,
+                                          binop(Iop_CmpEQ64, cc_dep1, cc_dep2),
+                                          binop(Iop_CmpEQ64, cc_dep1, mkU64(0))));
+         }
+         if (cond == 0 || cond == 0 + 2) {
+            return mkU32(0);
+         }
+         if (cond == 15 || cond == 15 - 2) {
+            return mkU32(1);
          }
          goto missed;
       }
 
       /* S390_CC_OP_TEST_UNDER_MASK_16
-         Since the mask comes from an immediate field in the opcode, we
-         expect the mask to be a constant here. That simplifies matters. */
+         cc_dep1 = the value to be tested, ANDed with the mask
+         cc_dep2 = a 16-bit mask; expected to be a constant here */
       if (cc_op == S390_CC_OP_TEST_UNDER_MASK_16) {
-         ULong mask16;
-         UInt msb;
+         IRExpr* val = cc_dep1;
+         ULong mask;
+         ULong msb;
 
          if (! isC64(cc_dep2)) goto missed;
 
-         mask16 = cc_dep2->Iex.Const.con->Ico.U64;
+         mask = cc_dep2->Iex.Const.con->Ico.U64;
 
-         /* Get rid of the mask16 == 0 case first. Some of the simplifications
-            below (e.g. for OVFL) only hold if mask16 == 0.  */
-         if (mask16 == 0) {   /* cc == 0 */
+         if (mask == 0) {   /* cc == 0 */
             if (cond & 0x8) return mkU32(1);
             return mkU32(0);
          }
 
-         if (cond == 15) return mkU32(1);
-
-         if (cond == 8) {
-            return unop(Iop_1Uto32, binop(Iop_CmpEQ64,
-                                          binop(Iop_And64, cc_dep1, cc_dep2),
-                                          mkU64(0)));
-         }
-         if (cond == 7) {
-            return unop(Iop_1Uto32, binop(Iop_CmpNE64,
-                                          binop(Iop_And64, cc_dep1, cc_dep2),
-                                          mkU64(0)));
-         }
-         if (cond == 1) {
-            return unop(Iop_1Uto32, binop(Iop_CmpEQ64,
-                                          binop(Iop_And64, cc_dep1, cc_dep2),
-                                          mkU64(mask16)));
-         }
-         if (cond == 14) {  /* ! OVFL */
-            return unop(Iop_1Uto32, binop(Iop_CmpNE64,
-                                          binop(Iop_And64, cc_dep1, cc_dep2),
-                                          mkU64(mask16)));
-         }
-
          /* Find MSB in mask */
          msb = 0x8000;
-         while (msb > mask16)
+         while (msb > mask)
             msb >>= 1;
 
-         if (cond == 2) {  /* cc == 2 */
-            IRExpr *c1, *c2;
+         /* If cc_dep1 results from a shift, avoid the shift operation */
+         if (val->tag == Iex_Binop && val->Iex.Binop.op == Iop_Shr64 &&
+             val->Iex.Binop.arg2->tag == Iex_Const &&
+             val->Iex.Binop.arg2->Iex.Const.con->tag == Ico_U8) {
+            UInt n_bits = val->Iex.Binop.arg2->Iex.Const.con->Ico.U8;
+            mask <<= n_bits;
+            msb <<= n_bits;
+            val = val->Iex.Binop.arg1;
+         }
 
-            /* (cc_dep & msb) != 0 && (cc_dep & mask16) != mask16 */
-            c1 = binop(Iop_CmpNE64,
-                       binop(Iop_And64, cc_dep1, mkU64(msb)), mkU64(0));
-            c2 = binop(Iop_CmpNE64,
-                       binop(Iop_And64, cc_dep1, cc_dep2),
-                       mkU64(mask16));
-            return binop(Iop_And32, unop(Iop_1Uto32, c1),
-                         unop(Iop_1Uto32, c2));
+         if (cond == 15) return mkU32(1);
+
+         if (cond == 8) { /* all bits zero */
+            return unop(Iop_1Uto32, binop(Iop_CmpEQ64, val, mkU64(0)));
+         }
+         if (cond == 7) { /* not all bits zero */
+            return unop(Iop_1Uto32, binop(Iop_CmpNE64, val, mkU64(0)));
+         }
+         if (cond == 1) { /* all bits set */
+            return unop(Iop_1Uto32, binop(Iop_CmpEQ64, val, mkU64(mask)));
+         }
+         if (cond == 14) { /* not all bits set */
+            return unop(Iop_1Uto32, binop(Iop_CmpNE64, val, mkU64(mask)));
+         }
+         if (cond == 9) { /* selected bits all 1 or all 0 */
+            return unop(Iop_1Uto32, binop(Iop_Or1,
+                                          binop(Iop_CmpEQ64, cc_dep1, cc_dep2),
+                                          binop(Iop_CmpEQ64, cc_dep1, mkU64(0))));
+         }
+         if (cond == 6) { /* not all zero and not all one */
+            return unop(Iop_1Uto32, binop(Iop_And1,
+                        binop(Iop_CmpNE64, cc_dep1, cc_dep2),
+                        binop(Iop_CmpNE64, cc_dep1, mkU64(0))));
+         }
+         if (cond == 0) return mkU32(0);
+
+         IRExpr *masked_msb = binop(Iop_And64, val, mkU64(msb));
+
+         if (cond == 2) {  /* cc == 2 */
+            /* mixed, and leftmost bit set */
+            return unop(Iop_1Uto32,
+                        binop(Iop_And1,
+                              binop(Iop_CmpNE64, masked_msb, mkU64(0)),
+                              binop(Iop_CmpNE64, val, mkU64(mask))));
          }
 
          if (cond == 4) {  /* cc == 1 */
-            IRExpr *c1, *c2;
-
-            /* (cc_dep & msb) == 0 && (cc_dep & mask16) != 0 */
-            c1 = binop(Iop_CmpEQ64,
-                       binop(Iop_And64, cc_dep1, mkU64(msb)), mkU64(0));
-            c2 = binop(Iop_CmpNE64,
-                       binop(Iop_And64, cc_dep1, cc_dep2),
-                       mkU64(0));
-            return binop(Iop_And32, unop(Iop_1Uto32, c1),
-                         unop(Iop_1Uto32, c2));
+            /* mixed, and leftmost bit zero */
+            return unop(Iop_1Uto32,
+                        binop(Iop_And1,
+                              binop(Iop_CmpEQ64, masked_msb, mkU64(0)),
+                              binop(Iop_CmpNE64, val, mkU64(0))));
          }
 
          if (cond == 11) {  /* cc == 0,2,3 */
-            IRExpr *c1, *c2;
-
-            c1 = binop(Iop_CmpNE64,
-                       binop(Iop_And64, cc_dep1, mkU64(msb)), mkU64(0));
-            c2 = binop(Iop_CmpEQ64,
-                       binop(Iop_And64, cc_dep1, cc_dep2),
-                       mkU64(0));
-            return binop(Iop_Or32, unop(Iop_1Uto32, c1),
-                         unop(Iop_1Uto32, c2));
+            /* leftmost bit set, or all bits zero */
+            return unop(Iop_1Uto32,
+                        binop(Iop_Or1,
+                              binop(Iop_CmpNE64, masked_msb, mkU64(0)),
+                              binop(Iop_CmpEQ64, val, mkU64(0))));
          }
 
          if (cond == 3) {  /* cc == 2 || cc == 3 */
+            /* leftmost bit set, rest don't care */
             return unop(Iop_1Uto32,
-                        binop(Iop_CmpNE64,
-                              binop(Iop_And64, cc_dep1, mkU64(msb)),
-                              mkU64(0)));
+                        binop(Iop_CmpNE64, masked_msb, mkU64(0)));
          }
          if (cond == 12) { /* cc == 0 || cc == 1 */
+            /* leftmost bit zero, rest don't care */
             return unop(Iop_1Uto32,
-                        binop(Iop_CmpEQ64,
-                              binop(Iop_And64, cc_dep1, mkU64(msb)),
-                              mkU64(0)));
+                        binop(Iop_CmpEQ64, masked_msb, mkU64(0)));
          }
          if (cond == 13) { /* cc == 0 || cc == 1 || cc == 3 */
-            IRExpr *c01, *c3;
-
-            c01 = binop(Iop_CmpEQ64, binop(Iop_And64, cc_dep1, mkU64(msb)),
-                        mkU64(0));
-            c3 = binop(Iop_CmpEQ64, binop(Iop_And64, cc_dep1, cc_dep2),
-                       mkU64(mask16));
-            return binop(Iop_Or32, unop(Iop_1Uto32, c01),
-                         unop(Iop_1Uto32, c3));
+            /* leftmost bit zero, or all bits set */
+            return unop(Iop_1Uto32,
+                        binop(Iop_Or1,
+                              binop(Iop_CmpEQ64, masked_msb, mkU64(0)),
+                              binop(Iop_CmpEQ64, val, mkU64(mask))));
          }
-         // fixs390: handle cond = 5,6,9,10 (the missing cases)
-         // vex_printf("TUM mask = 0x%llx\n", mask16);
+         if (cond == 5) { /* cc == 1 || cc == 3 */
+            /* mixed and leftmost bit zero or all bits set */
+            IRExpr *cc1 = binop(Iop_And1,
+                                binop(Iop_CmpEQ64, masked_msb, mkU64(0)),
+                                binop(Iop_CmpNE64, val, mkU64(0)));
+            IRExpr *cc3 = binop(Iop_CmpEQ64, val, mkU64(mask));
+            return unop(Iop_1Uto32, binop(Iop_Or1, cc1, cc3));
+         }
+         if (cond == 10) { /* cc == 0 || cc == 2 */
+            /* all bits zero or mixed and leftmost bit one */
+            IRExpr *cc0 = binop(Iop_CmpEQ64, val, mkU64(0));
+            IRExpr *cc2 = binop(Iop_And1,
+                                binop(Iop_CmpNE64, masked_msb, mkU64(0)),
+                                binop(Iop_CmpNE64, val, mkU64(mask)));
+            return unop(Iop_1Uto32, binop(Iop_Or1, cc0, cc2));
+         }
          goto missed;
       }
 
@@ -2582,14 +2404,8 @@ s390x_dirtyhelper_vec_op(VexGuestS390XState *guest_state,
       {0x00, 0x00}, /* invalid */
       [S390_VEC_OP_VPKS]  = {0xe7, 0x97},
       [S390_VEC_OP_VPKLS] = {0xe7, 0x95},
-      [S390_VEC_OP_VCEQ]  = {0xe7, 0xf8},
-      [S390_VEC_OP_VTM]   = {0xe7, 0xd8},
       [S390_VEC_OP_VGFM]  = {0xe7, 0xb4},
       [S390_VEC_OP_VGFMA] = {0xe7, 0xbc},
-      [S390_VEC_OP_VMAH]  = {0xe7, 0xab},
-      [S390_VEC_OP_VMALH] = {0xe7, 0xa9},
-      [S390_VEC_OP_VCH]   = {0xe7, 0xfb},
-      [S390_VEC_OP_VCHL]  = {0xe7, 0xf9},
       [S390_VEC_OP_VFTCI] = {0xe7, 0x4a},
       [S390_VEC_OP_VFMIN] = {0xe7, 0xee},
       [S390_VEC_OP_VFMAX] = {0xe7, 0xef},
@@ -2668,18 +2484,9 @@ s390x_dirtyhelper_vec_op(VexGuestS390XState *guest_state,
    the_insn.VRR.op2 = opcodes[d->op][1];
 
    switch(d->op) {
-   case S390_VEC_OP_VTM:
-      the_insn.VRR.v1 = 2;
-      the_insn.VRR.v2 = 3;
-      the_insn.VRR.rxb = 0b1100;
-      break;
-
    case S390_VEC_OP_VPKS:
    case S390_VEC_OP_VPKLS:
-   case S390_VEC_OP_VCEQ:
    case S390_VEC_OP_VGFM:
-   case S390_VEC_OP_VCH:
-   case S390_VEC_OP_VCHL:
       the_insn.VRR.v1 = 1;
       the_insn.VRR.v2 = 2;
       the_insn.VRR.v3 = 3;
@@ -2689,8 +2496,6 @@ s390x_dirtyhelper_vec_op(VexGuestS390XState *guest_state,
       break;
 
    case S390_VEC_OP_VGFMA:
-   case S390_VEC_OP_VMAH:
-   case S390_VEC_OP_VMALH:
    case S390_VEC_OP_VMSL:
       the_insn.VRRd.v1 = 1;
       the_insn.VRRd.v2 = 2;
@@ -2781,75 +2586,6 @@ s390x_dirtyhelper_vec_op(VexGuestS390XState *guest_state,
 
 #endif
 
-/*-----------------------------------------------------------------*/
-/*--- Dirty helper for Perform Pseudorandom number instruction  ---*/
-/*-----------------------------------------------------------------*/
-
-/* Dummy helper that is needed to indicate load of parameter block.
-   We have to use it because dirty helper cannot have two memory side
-   effects.
- */
-void s390x_dirtyhelper_PPNO_sha512_load_param_block( void )
-{
-}
-
-#if defined(VGA_s390x)
-
-/* IMPORTANT!
-   We return here bit mask where only supported functions are set to one.
-   If you implement new functions don't forget the supported array.
- */
-void
-s390x_dirtyhelper_PPNO_query(VexGuestS390XState *guest_state, ULong r1, ULong r2)
-{
-   ULong supported[2] = {0x9000000000000000ULL, 0x0000000000000000ULL};
-   ULong *result = (ULong*) guest_state->guest_r1;
-
-   result[0] = supported[0];
-   result[1] = supported[1];
-}
-
-ULong
-s390x_dirtyhelper_PPNO_sha512(VexGuestS390XState *guest_state, ULong r1, ULong r2)
-{
-   ULong* op1 = (ULong*) (((ULong)(&guest_state->guest_r0)) + r1 * sizeof(ULong));
-   ULong* op2 = (ULong*) (((ULong)(&guest_state->guest_r0)) + r2 * sizeof(ULong));
-
-   register ULong reg0 asm("0") = guest_state->guest_r0;
-   register ULong reg1 asm("1") = guest_state->guest_r1;
-   register ULong reg2 asm("2") = op1[0];
-   register ULong reg3 asm("3") = op1[1];
-   register ULong reg4 asm("4") = op2[0];
-   register ULong reg5 asm("5") = op2[1];
-
-   ULong cc = 0;
-   asm volatile(".insn rre, 0xb93c0000, %%r2, %%r4\n"
-                "ipm %[cc]\n"
-                "srl %[cc], 28\n"
-                : "+d"(reg0), "+d"(reg1),
-                  "+d"(reg2), "+d"(reg3),
-                  "+d"(reg4), "+d"(reg5),
-                  [cc] "=d"(cc)
-                :
-                : "cc", "memory");
-
-   return cc;
-}
-
-#else
-
-void
-s390x_dirtyhelper_PPNO_query(VexGuestS390XState *guest_state, ULong r1, ULong r2)
-{
-}
-
-ULong
-s390x_dirtyhelper_PPNO_sha512(VexGuestS390XState *guest_state, ULong r1, ULong r2)
-{
-   return 0;
-}
-
-#endif /* VGA_s390x */
 /*---------------------------------------------------------------*/
 /*--- end                                guest_s390_helpers.c ---*/
 /*---------------------------------------------------------------*/

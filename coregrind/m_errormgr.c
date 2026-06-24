@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -206,7 +206,8 @@ typedef
       // example should new core errors ever be added.
       ThreadSupp = -1,    /* Matches ThreadErr */
       FdBadCloseSupp = -2,
-      FdNotClosedSupp = -3
+      FdNotClosedSupp = -3,
+      FdBadUseSupp = -4
    }
    CoreSuppKind;
 
@@ -297,9 +298,9 @@ void VG_(set_supp_extra)  ( Supp* su, void* extra )
 /*--- Helper fns                                           ---*/
 /*------------------------------------------------------------*/
 
-// Only show core errors if the tool wants to, we're not running with -q,
+// Only show core warnings if the tool wants to, we're not running with -q,
 // and were not outputting XML.
-Bool VG_(showing_core_errors)(void)
+Bool VG_(showing_core_warnings)(void)
 {
    return VG_(needs).core_errors && VG_(clo_verbosity) >= 1 && !VG_(clo_xml);
 }
@@ -967,7 +968,8 @@ Bool VG_(unique_error) ( ThreadId tid, ErrorKind ekind, Addr a, const HChar* s,
 
 static Bool is_fd_core_error (const Error *e)
 {
-   return e->ekind == FdBadClose || e->ekind == FdNotClosed;
+   return e->ekind == FdBadClose || e->ekind == FdNotClosed ||
+          e->ekind == FdBadUse;
 }
 
 static Bool core_eq_Error (VgRes res, const Error *e1, const Error *e2)
@@ -1017,6 +1019,8 @@ static const HChar *core_get_error_name(const Error *err)
       return "FdBadClose";
    case FdNotClosed:
       return "FdNotClosed";
+   case FdBadUse:
+      return "FdBadUse";
    default:
       VG_(umsg)("FATAL: unknown core error kind: %d\n", err->ekind );
       VG_(exit)(1);
@@ -1030,6 +1034,8 @@ static Bool core_error_matches_suppression(const Error* err, const Supp* su)
       return err->ekind == FdBadClose;
    case FdNotClosedSupp:
       return err->ekind == FdNotClosed;
+   case FdBadUseSupp:
+      return err->ekind == FdBadUse;
    default:
       VG_(umsg)("FATAL: unknown core suppression kind: %d\n", su->skind );
       VG_(exit)(1);
@@ -1110,8 +1116,10 @@ static Bool show_used_suppressions ( void )
       any_supp = True;
    }
 
-   if (VG_(clo_xml))
+   if (VG_(clo_xml)) {
       VG_(printf_xml)("</suppcounts>\n");
+      VG_(printf_xml)("\n");
+   }
 
    return any_supp;
 }
@@ -1128,10 +1136,19 @@ void VG_(show_all_errors) (  Int verbosity, Bool xml, Int show_error_list)
    if (verbosity == 0 && show_error_list == 0)
       return;
 
-   /* If we're printing XML, just show the suppressions and stop. */
+   /* If we're printing XML, show the suppressions, the summary and stop. */
    if (xml) {
       if (show_error_list > 0)
          (void)show_used_suppressions();
+      VG_(printf_xml)("<error_summary>\n"
+                      "  <errors>%u</errors>\n"
+                      "  <error_contexts>%u</error_contexts>\n"
+                      "  <suppressed>%u</suppressed>\n"
+                      "  <suppressed_contexts>%u</suppressed_contexts>\n"
+                      "</error_summary>\n",
+                      n_errs_found, n_err_contexts,
+                      n_errs_suppressed, n_supp_contexts );
+      VG_(printf_xml)("\n");
       return;
    }
 
@@ -1517,6 +1534,8 @@ static void load_one_suppressions_file ( Int clo_suppressions_i )
             supp->skind = FdBadCloseSupp;
          else if (VG_STREQ(supp_name, "FdNotClosed"))
             supp->skind = FdNotClosedSupp;
+         else if (VG_STREQ(supp_name, "FdBadUse"))
+            supp->skind = FdBadUseSupp;
          else
             BOMB("unknown core suppression type");
       }

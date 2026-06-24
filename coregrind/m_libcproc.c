@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -698,7 +698,8 @@ Int VG_(gettid)(void)
        * the /proc/self link is pointing...
        */
 
-#     if defined(VGP_arm64_linux) || defined(VGP_nanomips_linux)
+#     if defined(VGP_arm64_linux) || defined(VGP_nanomips_linux) \
+         || defined(VGP_riscv64_linux)
       res = VG_(do_syscall4)(__NR_readlinkat, VKI_AT_FDCWD,
                              (UWord)"/proc/self",
                              (UWord)pid, sizeof(pid));
@@ -753,7 +754,8 @@ Int VG_(getpid) ( void )
 Int VG_(getpgrp) ( void )
 {
    /* ASSUMES SYSCALL ALWAYS SUCCEEDS */
-#  if defined(VGP_arm64_linux) || defined(VGP_nanomips_linux)
+#  if defined(VGP_arm64_linux) || defined(VGP_nanomips_linux) \
+      || defined(VGP_riscv64_linux)
    return sr_Res( VG_(do_syscall1)(__NR_getpgid, 0) );
 #  elif defined(VGO_linux) || defined(VGO_darwin) || defined(VGO_freebsd)
    return sr_Res( VG_(do_syscall0)(__NR_getpgrp) );
@@ -850,7 +852,7 @@ Int VG_(getgroups)( Int size, UInt* list )
         || defined(VGO_darwin) || defined(VGP_s390x_linux)    \
         || defined(VGP_mips32_linux) || defined(VGP_arm64_linux) \
         || defined(VGO_solaris) || defined(VGP_nanomips_linux) \
-        || defined(VGO_freebsd)
+        || defined(VGP_riscv64_linux) || defined(VGO_freebsd)
    SysRes sres;
    sres = VG_(do_syscall2)(__NR_getgroups, size, (Addr)list);
    if (sr_isError(sres))
@@ -951,7 +953,8 @@ Int VG_(fork) ( void )
       fds[0] = fds[1] = -1;
    }
 
-#  if defined(VGP_arm64_linux) || defined(VGP_nanomips_linux)
+#  if defined(VGP_arm64_linux) || defined(VGP_nanomips_linux) \
+      || defined(VGP_riscv64_linux)
    SysRes res;
    res = VG_(do_syscall5)(__NR_clone, VKI_SIGCHLD,
                           (UWord)NULL, (UWord)NULL, (UWord)NULL, (UWord)NULL);
@@ -1049,7 +1052,15 @@ UInt VG_(read_millisecond_timer) ( void )
      struct vki_timeval tv_now = { 0, 0 };
      res = VG_(do_syscall2)(__NR_gettimeofday, (UWord)&tv_now, (UWord)NULL);
      vg_assert(! sr_isError(res));
+#   if DARWIN_VERS >= DARWIN_10_13
+     now = tv_now.tv_sec * 1000000ULL + tv_now.tv_usec;
+#   else
+     // Weird: it seems that gettimeofday() doesn't fill in the timeval, but
+     // rather returns the tv_sec as the low 32 bits of the result and the
+     // tv_usec as the high 32 bits of the result.  (But the timeval cannot be
+     // NULL!)  See bug 200990.
      now = sr_Res(res) * 1000000ULL + sr_ResHI(res);
+#endif
    }
 
 #  else
@@ -1208,7 +1219,7 @@ void VG_(do_atfork_child)(ThreadId tid)
 Int VG_(sysctlbyname)(const HChar *name, void *oldp, SizeT *oldlenp, const void *newp, SizeT newlen)
 {
    vg_assert(name);
-#if (FREEBSD_VERS >= FREEBSD_12_2)
+#if ((__FreeBSD_version >= 1201522 && __FreeBSD_version <= 1300000) || __FreeBSD_version >= 1300045)
    SysRes res = VG_(do_syscall6)(__NR___sysctlbyname, (RegWord)name, VG_(strlen)(name), (RegWord)oldp, (RegWord)oldlenp, (RegWord)newp, (RegWord)newlen);
    return sr_isError(res) ? -1 : sr_Res(res);
 #else
@@ -1426,9 +1437,21 @@ void VG_(invalidate_icache) ( void *ptr, SizeT nbytes )
                                  (UWord) nbytes, (UWord) 3);
    vg_assert( !sr_isError(sres) );
 
-# elif defined(VGA_nanomips)
-
+#  elif defined(VGA_nanomips)
    __builtin___clear_cache(ptr, (char*)ptr + nbytes);
+
+#  elif defined(VGP_riscv64_linux)
+   /* Make data stores to the area visible to all RISC-V harts. */
+   __asm__ __volatile__("fence w,r");
+
+   /* Ask the kernel to execute fence.i on all harts to guarantee that an
+      instruction fetch on each hart will see any previous data stores visible
+      to the same hart. */
+   Addr   startaddr = (Addr)ptr;
+   Addr   endaddr   = startaddr + nbytes;
+   SysRes sres = VG_(do_syscall3)(__NR_riscv_flush_icache, startaddr, endaddr,
+                                  0 /*flags*/);
+   vg_assert(!sr_isError(sres));
 
 #  endif
 }

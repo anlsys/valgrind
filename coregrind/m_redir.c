@@ -14,7 +14,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -402,10 +402,8 @@ void VG_(redir_notify_new_DebugInfo)( DebugInfo* newdi )
    Bool         isText;
    const HChar* newdi_soname;
    Bool         dehacktivate_pthread_stack_cache_var_search = False;
-   const HChar* const pthread_soname = "libpthread.so.0";
    const HChar* const pthread_stack_cache_actsize_varname
       = "stack_cache_actsize";
-   const HChar* const libc_soname = "libc.so.6";
    const HChar* const libc_gnu_get_libc_version_funcname = "gnu_get_libc_version";
 #if defined(VGO_solaris)
    Bool         vg_vfork_fildes_var_search = False;
@@ -421,11 +419,19 @@ void VG_(redir_notify_new_DebugInfo)( DebugInfo* newdi )
    newdi_soname = VG_(DebugInfo_get_soname)(newdi);
    vg_assert(newdi_soname != NULL);
 
+#if defined(VGO_linux)
    /* libc is special, because it contains some of the core redirects.
       Make sure it is fully loaded.  */
+   /* If ever it is needed on other platforms
+    * FreeBSD libc is libc.so.7 libpthread is libthr.so.3
+    * Solaris libc is libc.so.1 libpthread is libpthread.so.1
+    * older Darwin has some system dylib, newer Darwin just has libs in memory */
+   const HChar* const libc_soname = "libc.so.6";
+   const HChar* const pthread_soname = "libpthread.so.0";
    if (0 == VG_(strcmp)(newdi_soname, libc_soname) ||
        0 == VG_(strcmp)(newdi_soname, pthread_soname))
       VG_(di_load_di)(newdi);
+#endif
 
 #ifdef ENABLE_INNER
    {
@@ -512,10 +518,12 @@ void VG_(redir_notify_new_DebugInfo)( DebugInfo* newdi )
 
    specList = NULL; /* the spec list we're building up */
 
+#if defined(VGO_linux)
    dehacktivate_pthread_stack_cache_var_search = 
       SimHintiS(SimHint_no_nptl_pthread_stackcache, VG_(clo_sim_hints))
       && (0 == VG_(strcmp)(newdi_soname, pthread_soname) ||
           0 == VG_(strcmp)(newdi_soname, libc_soname));
+#endif
 
 #if defined(VGO_solaris)
    vg_vfork_fildes_var_search =
@@ -533,6 +541,19 @@ void VG_(redir_notify_new_DebugInfo)( DebugInfo* newdi )
          alloc_symname_array(sym_name_pri, sym_names_sec, &twoslots[0]);
       const HChar** names;
       for (names = names_init; *names; names++) {
+         /*
+          * For Ada demangling, the language doesn't use a regular
+          * prefix like _Z or _R, so look for a common symbol and
+          * set a global flag.
+          *
+          * https://bugs.kde.org/show_bug.cgi?id=497723 but not for
+          * callgrind because demangled overloaded names get
+          * incorrectly counted together.
+          */
+         if (!isText && VG_(strcmp)(*names, "__gnat_ada_main_program_name") == 0 &&
+             VG_(strcmp)(VG_(clo_toolname), "callgrind") != 0)  {
+            VG_(lang_is_ada) = True;
+         }
          isGlobal = False;
          ok = VG_(maybe_Z_demangle)( *names,
                                      &demangled_sopatt,
@@ -672,6 +693,7 @@ void VG_(redir_notify_new_DebugInfo)( DebugInfo* newdi )
       }
       free_symname_array(names_init, &twoslots[0]);
    }
+#if defined(VGO_linux)
    if (dehacktivate_pthread_stack_cache_var_search) {
       VG_(message)(Vg_DebugMsg,
                    "WARNING: could not find symbol for var %s in %s\n",
@@ -679,6 +701,7 @@ void VG_(redir_notify_new_DebugInfo)( DebugInfo* newdi )
       VG_(message)(Vg_DebugMsg,
                    "=> pthread stack cache cannot be disabled!\n");
    }
+#endif
 #if defined(VGO_solaris)
    if (vg_vfork_fildes_var_search) {
       VG_(message)(Vg_DebugMsg,
@@ -912,6 +935,24 @@ void generate_and_add_actives (
          } /* for (sp = specs; sp; sp = sp->next) */
 
       } /* iterating over names[] */
+#if defined(VGO_freebsd)
+      /*
+       * See https://bugs.kde.org/show_bug.cgi?id=518609
+       *
+       * With VG_(clo_verbosity) > 2 the code that gets symbol names
+       * from addesses can trigger reading split .debug files. That
+       * in turn can modify the symtab that this loop is iterating over.
+       * This can cause redirection to fail.
+       *
+       * So set nsyms to the new number of symbols and reset the loop
+       * counter to 0. That may cause a few  "Ignoring duplicate redirection"
+       * messages.
+       */
+      if (nsyms != VG_(DebugInfo_syms_howmany)(di)) {
+         nsyms = VG_(DebugInfo_syms_howmany)(di);
+         i = 0;
+      }
+#endif
       free_symname_array(names_init, &twoslots[0]);
    } /* for (i = 0; i < nsyms; i++)  */
 
@@ -1240,6 +1281,7 @@ Bool VG_(is_soname_ld_so) (const HChar *soname)
    if (VG_STREQ(soname, VG_U_LD_LINUX_AARCH64_SO_1)) return True;
    if (VG_STREQ(soname, VG_U_LD_LINUX_ARMHF_SO_3))   return True;
    if (VG_STREQ(soname, VG_U_LD_LINUX_MIPSN8_S0_1))  return True;
+   if (VG_STREQ(soname, VG_U_LD_LINUX_RISCV64_SO_1)) return True;
 #  elif defined(VGO_freebsd)
    if (VG_STREQ(soname, VG_U_LD_ELF_SO_1))   return True;
    if (VG_STREQ(soname, VG_U_LD_ELF32_SO_1))   return True;
@@ -1419,6 +1461,15 @@ void VG_(redir_initialise) ( void )
          complain_about_stripped_glibc_ldso
 #        endif
       );
+      add_hardwired_spec(
+         "ld-linux-x86-64.so.2", "memcmp",
+         (Addr)&VG_(amd64_linux_REDIR_FOR_memcmp),
+#        ifndef GLIBC_MANDATORY_STRLEN_REDIRECT
+         NULL
+#        else
+         complain_about_stripped_glibc_ldso
+#        endif
+      );
    }
 
 #  elif defined(VGP_ppc32_linux)
@@ -1484,6 +1535,12 @@ void VG_(redir_initialise) ( void )
          (Addr)&VG_(ppc64_linux_REDIR_FOR_strchr),
          NULL /* not mandatory - so why bother at all? */
          /* glibc-2.5 (FC6, ppc64) seems fine without it */
+      );
+
+      add_hardwired_spec(
+         "ld64.so.2", "strcmp",
+         (Addr)&VG_(ppc64_linux_REDIR_FOR_strcmp),
+         NULL
       );
    }
 
@@ -1599,6 +1656,8 @@ void VG_(redir_initialise) ( void )
                          (Addr)&VG_(amd64_darwin_REDIR_FOR_strcpy), NULL);
       add_hardwired_spec("dyld", "strlcat",
                          (Addr)&VG_(amd64_darwin_REDIR_FOR_strlcat), NULL);
+      add_hardwired_spec("dyld", "bcmp",
+                         (Addr)&VG_(amd64_darwin_REDIR_FOR_bcmp), NULL);
       // DDD: #warning fixme rdar://6166275
       add_hardwired_spec("dyld", "arc4random",
                          (Addr)&VG_(amd64_darwin_REDIR_FOR_arc4random), NULL);
@@ -1684,6 +1743,25 @@ void VG_(redir_initialise) ( void )
       add_hardwired_spec(
          "ld.so.1", "index",
          (Addr)&VG_(nanomips_linux_REDIR_FOR_index),
+         complain_about_stripped_glibc_ldso
+      );
+   }
+
+#  elif defined(VGP_riscv64_linux)
+   if (0==VG_(strcmp)("Memcheck", VG_(details).name)) {
+      add_hardwired_spec(
+         "ld-linux-riscv64-lp64d.so.1", "strlen",
+         (Addr)&VG_(riscv64_linux_REDIR_FOR_strlen),
+         complain_about_stripped_glibc_ldso
+      );
+      add_hardwired_spec(
+         "ld-linux-riscv64-lp64d.so.1", "index",
+         (Addr)&VG_(riscv64_linux_REDIR_FOR_index),
+         complain_about_stripped_glibc_ldso
+      );
+      add_hardwired_spec(
+         "ld-linux-riscv64-lp64d.so.1", "strcmp",
+         (Addr)&VG_(riscv64_linux_REDIR_FOR_strcmp),
          complain_about_stripped_glibc_ldso
       );
    }

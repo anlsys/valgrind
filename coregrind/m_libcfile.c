@@ -13,7 +13,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -264,15 +264,16 @@ Bool VG_(resolve_filemode) ( Int fd, Int * result )
 
 SysRes VG_(mknod) ( const HChar* pathname, Int mode, UWord dev )
 {
-#  if defined(VGP_arm64_linux) || defined(VGP_nanomips_linux)
-   /* ARM64 wants to use __NR_mknodat rather than __NR_mknod. */
+#  if defined(VGP_arm64_linux) || defined(VGP_nanomips_linux) \
+      || defined(VGP_riscv64_linux)
+   /* More recent Linux platforms have only __NR_mknodat and no __NR_mknod. */
    SysRes res = VG_(do_syscall4)(__NR_mknodat,
                                  VKI_AT_FDCWD, (UWord)pathname, mode, dev);
 #  elif defined(VGO_linux) || defined(VGO_darwin)
    SysRes res = VG_(do_syscall3)(__NR_mknod,
                                  (UWord)pathname, mode, dev);
 #  elif defined(VGO_freebsd)
-#if (FREEBSD_VERS < FREEBSD_12)
+#if (__FreeBSD_version < 1200031)
    SysRes res = VG_(do_syscall3)(__NR_freebsd11_mknod,
                                  (UWord)pathname, mode, dev);
 #else
@@ -290,8 +291,9 @@ SysRes VG_(mknod) ( const HChar* pathname, Int mode, UWord dev )
 
 SysRes VG_(open) ( const HChar* pathname, Int flags, Int mode )
 {
-#  if defined(VGP_arm64_linux) || defined(VGP_nanomips_linux)
-   /* ARM64 wants to use __NR_openat rather than __NR_open. */
+#  if defined(VGP_arm64_linux) || defined(VGP_nanomips_linux) \
+      || defined(VGP_riscv64_linux)
+   /* More recent Linux platforms have only __NR_openat and no __NR_open. */
    SysRes res = VG_(do_syscall4)(__NR_openat,
                                  VKI_AT_FDCWD, (UWord)pathname, flags, mode);
 #  elif defined(VGO_linux) || defined(VGO_freebsd)
@@ -384,7 +386,8 @@ Int VG_(pipe) ( Int fd[2] )
    } else {
       return -1;
    }
-#  elif defined(VGP_arm64_linux) || defined(VGP_nanomips_linux)
+#  elif defined(VGP_arm64_linux) || defined(VGP_nanomips_linux) \
+      || defined(VGP_riscv64_linux)
    SysRes res = VG_(do_syscall2)(__NR_pipe2, (UWord)fd, 0);
    return sr_isError(res) ? -1 : 0;
 #  elif defined(VGO_linux)
@@ -554,6 +557,10 @@ SysRes VG_(stat) ( const HChar* file_name, struct vg_stat* vgbuf )
      return res;
    }
 #  endif
+#  if defined(VGP_riscv64_linux)
+   /* No fallback defined, statx syscall always exists. */
+   return res;
+#  endif
 #  elif defined(VGO_solaris)
    {
 #     if defined(VGP_x86_solaris)
@@ -573,7 +580,7 @@ SysRes VG_(stat) ( const HChar* file_name, struct vg_stat* vgbuf )
    }
 #  elif defined(VGO_freebsd)
    {
-#if (FREEBSD_VERS < FREEBSD_12)
+#if (__FreeBSD_version < 1200031)
       struct vki_freebsd11_stat buf;
       res = VG_(do_syscall2)(__NR_stat, (UWord)file_name, (UWord)&buf);
 #else
@@ -650,7 +657,7 @@ Int VG_(fstat) ( Int fd, struct vg_stat* vgbuf )
    }
 #  elif defined(VGO_freebsd)
    {
-#if (FREEBSD_VERS < FREEBSD_12)
+#if (__FreeBSD_version < 1200031)
      struct vki_freebsd11_stat buf;
      res = VG_(do_syscall2)(__NR_fstat, (RegWord)fd, (RegWord)(Addr)&buf);
 #else
@@ -667,26 +674,60 @@ Int VG_(fstat) ( Int fd, struct vg_stat* vgbuf )
 #  endif
 }
 
-#if defined(VGO_freebsd)
 /* extend this to other OSes as and when needed */
 SysRes VG_(lstat) ( const HChar* file_name, struct vg_stat* vgbuf )
 {
    SysRes res;
    VG_(memset)(vgbuf, 0, sizeof(*vgbuf));
 
-#if (FREEBSD_VERS < FREEBSD_12)
+#if defined(VGO_linux)
+
+struct vki_stat buf;
+
+#if defined(__NR_newfstatat)
+   res = VG_(do_syscall4)(__NR_newfstatat, VKI_AT_FDCWD, (UWord)file_name, (UWord)&buf, VKI_AT_SYMLINK_NOFOLLOW);
+#else
+   res = VG_(do_syscall2)(__NR_lstat, (UWord)file_name, (UWord)&buf);
+#endif
+
+#elif defined(VGO_freebsd)
+
+#if (__FreeBSD_version < 1200031)
    struct vki_freebsd11_stat buf;
    res = VG_(do_syscall2)(__NR_lstat, (UWord)file_name, (UWord)&buf);
 #else
    struct vki_stat buf;
    res = VG_(do_syscall4)(__NR_fstatat, VKI_AT_FDCWD, (UWord)file_name, (UWord)&buf, VKI_AT_SYMLINK_NOFOLLOW);
 #endif
+
+#elif defined(VGO_solaris)
+
+   struct vki_stat buf;
+#if defined(SOLARIS_OLD_SYSCALLS)
+   // illumos
+   res = VG_(do_syscall2)(__NR_lstat, (UWord)file_name, (UWord)&buf);
+#else
+   // Solaris 11+
+   res = VG_(do_syscall4)(__NR_fstatat, VKI_AT_FDCWD, (UWord)file_name, (UWord)&buf, VKI_AT_SYMLINK_NOFOLLOW);
+#endif
+
+#elif defined(VGO_darwin)
+
+   /* check this on Darwin */
+   struct vki_stat buf;
+   res = VG_(do_syscall2)(__NR_lstat, (UWord)file_name, (UWord)&buf);
+
+#else
+
+#error Unknown OS
+
+#endif
+
    if (!sr_isError(res)) {
       TRANSLATE_TO_vg_stat(vgbuf, &buf);
    }
    return res;
 }
-#endif
 
 #undef TRANSLATE_TO_vg_stat
 #undef TRANSLATE_statx_TO_vg_stat
@@ -731,7 +772,8 @@ SysRes VG_(dup) ( Int oldfd )
 
 SysRes VG_(dup2) ( Int oldfd, Int newfd )
 {
-#  if defined(VGP_arm64_linux) || defined(VGP_nanomips_linux)
+#  if defined(VGP_arm64_linux) || defined(VGP_nanomips_linux) \
+      || defined(VGP_riscv64_linux)
    /* We only have dup3, that means we have to mimic dup2.
       The only real difference is when oldfd == newfd.
       dup3 always returns an error, but dup2 returns only an
@@ -766,7 +808,6 @@ Int VG_(fcntl) ( Int fd, Int cmd, Addr arg )
 #    error "Unknown OS"
 #  endif
    if (sr_isError(res)) {
-      VG_(debugLog)(1, "VG_(fcntl)", "fcntl error %lu %s\n", sr_Err(res), VG_(strerror)(sr_Err(res)));
       return -1;
    }
    return (Int)sr_Res(res);
@@ -777,7 +818,7 @@ Int VG_(rename) ( const HChar* old_name, const HChar* new_name )
 #  if defined(VGO_solaris) || defined(VGP_arm64_linux)
    SysRes res = VG_(do_syscall4)(__NR_renameat, VKI_AT_FDCWD, (UWord)old_name,
                                  VKI_AT_FDCWD, (UWord)new_name);
-#  elif defined(VGP_nanomips_linux)
+#  elif defined(VGP_nanomips_linux) || defined(VGP_riscv64_linux)
    SysRes res = VG_(do_syscall5)(__NR_renameat2, VKI_AT_FDCWD, (UWord)old_name,
                                  VKI_AT_FDCWD, (UWord)new_name, 0);
 
@@ -791,7 +832,8 @@ Int VG_(rename) ( const HChar* old_name, const HChar* new_name )
 
 Int VG_(unlink) ( const HChar* file_name )
 {
-#  if defined(VGP_arm64_linux) || defined(VGP_nanomips_linux)
+#  if defined(VGP_arm64_linux) || defined(VGP_nanomips_linux) \
+      || defined(VGP_riscv64_linux)
    SysRes res = VG_(do_syscall2)(__NR_unlinkat, VKI_AT_FDCWD,
                                                 (UWord)file_name);
 #  elif defined(VGO_linux) || defined(VGO_darwin) || defined(VGO_freebsd)
@@ -870,8 +912,9 @@ const HChar *VG_(get_startup_wd) ( void )
 SysRes VG_(poll) (struct vki_pollfd *fds, Int nfds, Int timeout)
 {
    SysRes res;
-#  if defined(VGP_arm64_linux)  || defined(VGP_nanomips_linux)
-   /* ARM64 wants to use __NR_ppoll rather than __NR_poll. */
+#  if defined(VGP_arm64_linux)  || defined(VGP_nanomips_linux) \
+      || defined(VGP_riscv64_linux)
+   /* More recent Linux platforms have only __NR_ppoll and no __NR_poll. */
    struct vki_timespec timeout_ts;
    if (timeout >= 0) {
       timeout_ts.tv_sec = timeout / 1000;
@@ -915,7 +958,8 @@ SSizeT VG_(readlink) (const HChar* path, HChar* buf, SizeT bufsiz)
 {
    SysRes res;
    /* res = readlink( path, buf, bufsiz ); */
-#  if defined(VGP_arm64_linux) || defined(VGP_nanomips_linux)
+#  if defined(VGP_arm64_linux) || defined(VGP_nanomips_linux) \
+      || defined(VGP_riscv64_linux)
    res = VG_(do_syscall4)(__NR_readlinkat, VKI_AT_FDCWD,
                                            (UWord)path, (UWord)buf, bufsiz);
 #  elif defined(VGO_linux) || defined(VGO_darwin) || defined(VGO_freebsd)
@@ -994,7 +1038,8 @@ Int VG_(access) ( const HChar* path, Bool irusr, Bool iwusr, Bool ixusr )
    UWord w = (irusr ? VKI_R_OK : 0)
              | (iwusr ? VKI_W_OK : 0)
              | (ixusr ? VKI_X_OK : 0);
-#  if defined(VGP_arm64_linux) || defined(VGP_nanomips_linux)
+#  if defined(VGP_arm64_linux) || defined(VGP_nanomips_linux) \
+      || defined(VGP_riscv64_linux)
    SysRes res = VG_(do_syscall3)(__NR_faccessat, VKI_AT_FDCWD, (UWord)path, w);
 #  elif defined(VGO_linux) || defined(VGO_darwin) || defined(VGO_freebsd)
    SysRes res = VG_(do_syscall2)(__NR_access, (UWord)path, w);
@@ -1140,7 +1185,8 @@ SysRes VG_(pread) ( Int fd, void* buf, Int count, OffT offset )
    return res;
 #  elif defined(VGP_amd64_linux) || defined(VGP_s390x_linux) \
       || defined(VGP_ppc64be_linux)  || defined(VGP_ppc64le_linux) \
-      || defined(VGP_mips64_linux) || defined(VGP_arm64_linux)
+      || defined(VGP_mips64_linux) || defined(VGP_arm64_linux) \
+      || defined(VGP_riscv64_linux)
    res = VG_(do_syscall4)(__NR_pread64, fd, (UWord)buf, count, offset);
    return res;
 #  elif defined(VGP_amd64_freebsd) || defined(VGP_arm64_freebsd)
@@ -1405,7 +1451,8 @@ Int VG_(socket) ( Int domain, Int type, Int protocol )
 
 #  elif defined(VGP_amd64_linux) || defined(VGP_arm_linux) \
         || defined(VGP_mips32_linux) || defined(VGP_mips64_linux) \
-        || defined(VGP_arm64_linux) || defined(VGP_nanomips_linux) || defined(VGO_freebsd)
+        || defined(VGP_arm64_linux) || defined(VGP_nanomips_linux) \
+        || defined(VGP_riscv64_linux) || defined(VGO_freebsd)
    SysRes res;
    res = VG_(do_syscall3)(__NR_socket, domain, type, protocol );
    return sr_isError(res) ? -1 : sr_Res(res);
@@ -1416,10 +1463,9 @@ Int VG_(socket) ( Int domain, Int type, Int protocol )
    if (!sr_isError(res)) {
        // Set SO_NOSIGPIPE so write() returns EPIPE instead of raising SIGPIPE
        Int optval = 1;
-       SysRes res2;
-       res2 = VG_(do_syscall5)(__NR_setsockopt, sr_Res(res), VKI_SOL_SOCKET, 
-                               VKI_SO_NOSIGPIPE, (UWord)&optval, 
-                               sizeof(optval));
+       (void)VG_(do_syscall5)(__NR_setsockopt, sr_Res(res), VKI_SOL_SOCKET, 
+                              VKI_SO_NOSIGPIPE, (UWord)&optval, 
+                              sizeof(optval));
        // ignore setsockopt() error
    }
    return sr_isError(res) ? -1 : sr_Res(res);
@@ -1460,7 +1506,8 @@ Int my_connect ( Int sockfd, struct vki_sockaddr_in* serv_addr, Int addrlen )
 
 #  elif defined(VGP_amd64_linux) || defined(VGP_arm_linux) \
         || defined(VGP_mips32_linux) || defined(VGP_mips64_linux) \
-        || defined(VGP_arm64_linux) || defined(VGP_nanomips_linux) || defined(VGO_freebsd)
+        || defined(VGP_arm64_linux) || defined(VGP_nanomips_linux) \
+        || defined(VGP_riscv64_linux) || defined(VGO_freebsd)
    SysRes res;
    res = VG_(do_syscall3)(__NR_connect, sockfd, (UWord)serv_addr, addrlen);
    return sr_isError(res) ? -1 : sr_Res(res);
@@ -1507,7 +1554,8 @@ Int VG_(write_socket)( Int sd, const void *msg, Int count )
 
 #  elif defined(VGP_amd64_linux) || defined(VGP_arm_linux) \
         || defined(VGP_mips32_linux) || defined(VGP_mips64_linux) \
-        || defined(VGP_arm64_linux) || defined(VGP_nanomips_linux) || defined(VGO_freebsd)
+        || defined(VGP_arm64_linux) || defined(VGP_nanomips_linux) \
+        || defined(VGP_riscv64_linux) || defined(VGO_freebsd)
    SysRes res;
    res = VG_(do_syscall6)(__NR_sendto, sd, (UWord)msg, 
                                        count, VKI_MSG_NOSIGNAL, 0,0);
@@ -1544,8 +1592,8 @@ Int VG_(getsockname) ( Int sd, struct vki_sockaddr *name, Int *namelen)
 
 #  elif defined(VGP_amd64_linux) || defined(VGP_arm_linux) \
         || defined(VGP_mips64_linux) || defined(VGP_arm64_linux) \
-        || defined(VGP_nanomips_linux) || defined(VGO_freebsd) \
-        || defined(VGP_mips64_linux) || defined(VGP_arm64_linux)
+        || defined(VGP_nanomips_linux) || defined(VGP_riscv64_linux) \
+        || defined(VGO_freebsd)
    SysRes res;
    res = VG_(do_syscall3)( __NR_getsockname,
                            (UWord)sd, (UWord)name, (UWord)namelen );
@@ -1584,7 +1632,8 @@ Int VG_(getpeername) ( Int sd, struct vki_sockaddr *name, Int *namelen)
 
 #  elif defined(VGP_amd64_linux) || defined(VGP_arm_linux) \
         || defined(VGP_mips64_linux) || defined(VGP_arm64_linux) \
-        || defined(VGP_nanomips_linux) || defined(VGO_freebsd)
+        || defined(VGP_nanomips_linux) || defined(VGP_riscv64_linux) \
+        || defined(VGO_freebsd)
    SysRes res;
    res = VG_(do_syscall3)( __NR_getpeername,
                            (UWord)sd, (UWord)name, (UWord)namelen );
@@ -1626,7 +1675,7 @@ Int VG_(getsockopt) ( Int sd, Int level, Int optname, void *optval,
 #  elif defined(VGP_amd64_linux) || defined(VGP_arm_linux) \
         || defined(VGP_mips32_linux) || defined(VGP_mips64_linux) \
         || defined(VGP_arm64_linux) || defined(VGP_nanomips_linux) \
-        || defined(VGO_freebsd)
+        || defined(VGP_riscv64_linux) || defined(VGO_freebsd)
    SysRes res;
    res = VG_(do_syscall5)( __NR_getsockopt,
                            (UWord)sd, (UWord)level, (UWord)optname, 
@@ -1670,7 +1719,8 @@ Int VG_(setsockopt) ( Int sd, Int level, Int optname, void *optval,
 
 #  elif defined(VGP_amd64_linux) || defined(VGP_arm_linux) \
         || defined(VGP_mips32_linux) || defined(VGP_mips64_linux) \
-        || defined(VGP_arm64_linux) || defined(VGP_nanomips_linux)
+        || defined(VGP_arm64_linux) || defined(VGP_nanomips_linux) \
+        || defined(VGP_riscv64_linux)
    SysRes res;
    res = VG_(do_syscall5)( __NR_setsockopt,
                            (UWord)sd, (UWord)level, (UWord)optname, 
@@ -1785,7 +1835,6 @@ const HChar *VG_(dirname)(const HChar *path)
    return buf;
 }
 
-#if defined(VGO_freebsd)
 /*
  * I did look at nicking this from FreeBSD, it's fairly easy to port
  * but I was put off by the copyright and 3-clause licence
@@ -1801,7 +1850,7 @@ Bool VG_(realpath)(const HChar *path, HChar *resolved)
 {
    vg_assert(path);
    vg_assert(resolved);
-#if (FREEBSD_VERS >= FREEBSD_13_0)
+#if defined(VGO_freebsd) && (__FreeBSD_version >= 1300080)
    return !sr_isError(VG_(do_syscall5)(__NR___realpathat, VKI_AT_FDCWD, (RegWord)path, (RegWord)resolved, VKI_PATH_MAX, 0));
 #else
    // poor man's realpath
@@ -1816,7 +1865,9 @@ Bool VG_(realpath)(const HChar *path, HChar *resolved)
    }
 
    if (VKI_S_ISLNK(statbuf.mode)) {
-      SizeT link_len = VG_(readlink)(path, tmp, VKI_PATH_MAX);
+      SSizeT link_len = VG_(readlink)(path, tmp, VKI_PATH_MAX);
+      if (link_len < 0)
+         return False;
       tmp[link_len] = '\0';
       resolved_name = tmp;
    } else {
@@ -1829,7 +1880,16 @@ Bool VG_(realpath)(const HChar *path, HChar *resolved)
       if (resolved_name[0] == '.' && resolved_name[1] == '/') {
          resolved_name += 2;
       }
-      VG_(snprintf)(resolved, VKI_PATH_MAX, "%s/%s", VG_(get_startup_wd)(), resolved_name);
+      HChar wd[VKI_PATH_MAX];
+#if defined(VGO_linux) || defined(VGO_solaris)
+      res = VG_(do_syscall2)(__NR_getcwd, (UWord)wd, VKI_PATH_MAX);
+#elif defined(VGO_freebsd)
+      res = VG_(do_syscall2)(__NR___getcwd, (UWord)wd, VKI_PATH_MAX);
+#endif
+      if (sr_isError(res)) {
+         return False;
+      }
+      VG_(snprintf)(resolved, VKI_PATH_MAX, "%s/%s", wd, resolved_name);
    } else {
       VG_(snprintf)(resolved, VKI_PATH_MAX, "%s", resolved_name);
    }
@@ -1837,7 +1897,6 @@ Bool VG_(realpath)(const HChar *path, HChar *resolved)
    return True;
 #endif
 }
-#endif
 
 
 /*--------------------------------------------------------------------*/

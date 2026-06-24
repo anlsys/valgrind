@@ -13,7 +13,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -3504,12 +3504,12 @@ Bool dis_ARM64_data_processing_register(/*MB_OUT*/DisResult* dres,
       if (is64) {
          assign(dst, IRExpr_ITE(binop(Iop_CmpEQ64, mkexpr(srcZ), mkU64(0)),
                                 mkU64(isCLS ? 63 : 64),
-                                unop(Iop_Clz64, mkexpr(srcZ))));
+                                unop(Iop_ClzNat64, mkexpr(srcZ))));
          putIReg64orZR(dd, mkexpr(dst));
       } else {
          assign(dst, IRExpr_ITE(binop(Iop_CmpEQ64, mkexpr(srcZ), mkU64(0)),
                                 mkU64(isCLS ? 31 : 32),
-                                unop(Iop_Clz64, mkexpr(srcZ))));
+                                unop(Iop_ClzNat64, mkexpr(srcZ))));
          putIReg32orZR(dd, unop(Iop_64to32, mkexpr(dst)));
       }
       DIP("cl%c %s, %s\n", isCLS ? 's' : 'z',
@@ -7053,14 +7053,20 @@ Bool dis_ARM64_load_store(/*MB_OUT*/DisResult* dres, UInt insn,
 
    /* ------------------ LDA{R,RH,RB} ------------------ */
    /* ------------------ STL{R,RH,RB} ------------------ */
+   /* ------------------ LDAP{R,RH,RB} ----------------- */
    /* 31 29     23  20      14    9 4
       sz 001000 110 11111 1 11111 n t   LDAR<sz> Rt, [Xn|SP]
       sz 001000 100 11111 1 11111 n t   STLR<sz> Rt, [Xn|SP]
+      sz 111000 101 11111 1 10000 n t   LDAPR<sz> Rt, [Xn|SP]
    */
-   if (INSN(29,23) == BITS7(0,0,1,0,0,0,1)
-       && INSN(21,10) == BITS12(0,1,1,1,1,1,1,1,1,1,1,1)) {
+   if ((INSN(29,23) == BITS7(0,0,1,0,0,0,1)
+        && INSN(21,10) == BITS12(0,1,1,1,1,1,1,1,1,1,1,1))
+       ||
+       (INSN(29,21) == BITS9(1,1,1,0,0,0,1,0,1)
+        && INSN(20,10) == BITS11(1,1,1,1,1,1,1,0,0,0,0)))
+   {
       UInt szBlg2 = INSN(31,30);
-      Bool isLD   = INSN(22,22) == 1;
+      Bool isLD   = INSN(23,21) != BITS3(1,0,0);
       UInt nn     = INSN(9,5);
       UInt tt     = INSN(4,0);
 
@@ -7878,25 +7884,18 @@ Bool dis_ARM64_branch_etc(/*MB_OUT*/DisResult* dres, UInt insn,
    }
    /* ---- Cases for DCZID_EL0 ----
       This is the data cache zero ID register. It controls whether
-      DC ZVA is supported and if so the block size used. Support reads of it
-      only by passing through to the host.
+      DC ZVA is supported and if so the block size used. Use the values
+      read during startup when calling get_cache_info.
       D5 3B 00 111 Rt  MRS rT, dczid_el0
    */
    if ((INSN(31,0) & 0xFFFFFFE0) == 0xD53B00E0) {
       UInt tt = INSN(4,0);
-      IRTemp   val  = newTemp(Ity_I64);
-      IRExpr** args = mkIRExprVec_0();
-      IRDirty* d    = unsafeIRDirty_1_N (
-                         val,
-                         0/*regparms*/,
-                         "arm64g_dirtyhelper_MRS_DCZID_EL0",
-                         &arm64g_dirtyhelper_MRS_DCZID_EL0,
-                         args
-                      );
-      /* execute the dirty call, dumping the result in val. */
-      stmt( IRStmt_Dirty(d) );
+      ULong val_cached = (archinfo->arm64_data_zero_prohibited ? 0x10 : 0) |
+                         archinfo->arm64_cache_block_size;
+      IRTemp val = newTemp(Ity_I64);
+      assign(val, mkU64(val_cached));
       putIReg64orZR(tt, mkexpr(val));
-      DIP("mrs %s, dczid_el0 (FAKED)\n", nameIReg64orZR(tt));
+      DIP("mrs %s, dczid_el0 (cached)\n", nameIReg64orZR(tt));
       return True;
    }
    /* ---- Cases for CTR_EL0 ----
@@ -8003,6 +8002,14 @@ Bool dis_ARM64_branch_etc(/*MB_OUT*/DisResult* dres, UInt insn,
    if ((INSN(31,0) & 0xFFFFFFE0) == 0xD50B7420) {
       /* Round the requested address, in rT, down to the start of the
          containing block. */
+      /* Unless DZP is true */
+      if (archinfo->arm64_data_zero_prohibited) {
+         vex_printf("ARM64 front end: DC ZVA instruction encountered with the DCZID_EL0 DZP flag set.\n");
+         putPC(mkU64( guest_PC_curr_instr));
+         dres->jk_StopHere = Ijk_SigILL;
+         dres->whatNext    = Dis_StopHere;
+         return True;
+      }
       UInt   tt      = INSN(4,0);
       ULong  clearszB = 1UL << (archinfo->arm64_cache_block_size + 2);
       IRTemp addr    = newTemp(Ity_I64);
@@ -15937,7 +15944,7 @@ Bool dis_AdvSIMD_fp_to_from_int_conv(/*MB_OUT*/DisResult* dres, UInt insn)
       } else {
          vassert(op == BITS3(1,0,0) || op == BITS3(1,0,1));
          switch (rm) {
-            case BITS2(0,0): ch = 'a'; irrm = Irrm_NEAREST; break;
+            case BITS2(0,0): ch = 'a'; irrm = Irrm_NEAREST_TIE_AWAY_0; break;
             default: vassert(0);
          }
       }
@@ -15961,45 +15968,53 @@ Bool dis_AdvSIMD_fp_to_from_int_conv(/*MB_OUT*/DisResult* dres, UInt insn)
       IROp iop = iops[ix];
       // A bit of ATCery: bounce all cases we haven't seen an example of.
       if (/* F32toI32S */
-             (iop == Iop_F32toI32S && irrm == Irrm_ZERO)   /* FCVTZS Wd,Sn */
-          || (iop == Iop_F32toI32S && irrm == Irrm_NegINF) /* FCVTMS Wd,Sn */
-          || (iop == Iop_F32toI32S && irrm == Irrm_PosINF) /* FCVTPS Wd,Sn */
-          || (iop == Iop_F32toI32S && irrm == Irrm_NEAREST)/* FCVT{A,N}S W,S */
+             (iop == Iop_F32toI32S && irrm == Irrm_ZERO)              /* FCVTZS Wd,Sn */
+          || (iop == Iop_F32toI32S && irrm == Irrm_NegINF)            /* FCVTMS Wd,Sn */
+          || (iop == Iop_F32toI32S && irrm == Irrm_PosINF)            /* FCVTPS Wd,Sn */
+          || (iop == Iop_F32toI32S && irrm == Irrm_NEAREST)           /* FCVTNS W,S */
+          || (iop == Iop_F32toI32S && irrm == Irrm_NEAREST_TIE_AWAY_0)/* FCVTAS W,S */
           /* F32toI32U */
-          || (iop == Iop_F32toI32U && irrm == Irrm_ZERO)   /* FCVTZU Wd,Sn */
-          || (iop == Iop_F32toI32U && irrm == Irrm_NegINF) /* FCVTMU Wd,Sn */
-          || (iop == Iop_F32toI32U && irrm == Irrm_PosINF) /* FCVTPU Wd,Sn */
-          || (iop == Iop_F32toI32U && irrm == Irrm_NEAREST)/* FCVT{A,N}U W,S */
+          || (iop == Iop_F32toI32U && irrm == Irrm_ZERO)              /* FCVTZU Wd,Sn */
+          || (iop == Iop_F32toI32U && irrm == Irrm_NegINF)            /* FCVTMU Wd,Sn */
+          || (iop == Iop_F32toI32U && irrm == Irrm_PosINF)            /* FCVTPU Wd,Sn */
+          || (iop == Iop_F32toI32U && irrm == Irrm_NEAREST)           /* FCVTNU W,S */
+          || (iop == Iop_F32toI32U && irrm == Irrm_NEAREST_TIE_AWAY_0)/* FCVTAU W,S */
           /* F32toI64S */
-          || (iop == Iop_F32toI64S && irrm == Irrm_ZERO)   /* FCVTZS Xd,Sn */
-          || (iop == Iop_F32toI64S && irrm == Irrm_NegINF) /* FCVTMS Xd,Sn */
-          || (iop == Iop_F32toI64S && irrm == Irrm_PosINF) /* FCVTPS Xd,Sn */
-          || (iop == Iop_F32toI64S && irrm == Irrm_NEAREST)/* FCVT{A,N}S X,S */
+          || (iop == Iop_F32toI64S && irrm == Irrm_ZERO)              /* FCVTZS Xd,Sn */
+          || (iop == Iop_F32toI64S && irrm == Irrm_NegINF)            /* FCVTMS Xd,Sn */
+          || (iop == Iop_F32toI64S && irrm == Irrm_PosINF)            /* FCVTPS Xd,Sn */
+          || (iop == Iop_F32toI64S && irrm == Irrm_NEAREST)           /* FCVTNS X,S */
+          || (iop == Iop_F32toI64S && irrm == Irrm_NEAREST_TIE_AWAY_0)/* FCVTAS X,S */
           /* F32toI64U */
-          || (iop == Iop_F32toI64U && irrm == Irrm_ZERO)   /* FCVTZU Xd,Sn */
-          || (iop == Iop_F32toI64U && irrm == Irrm_NegINF) /* FCVTMU Xd,Sn */
-          || (iop == Iop_F32toI64U && irrm == Irrm_PosINF) /* FCVTPU Xd,Sn */
-          || (iop == Iop_F32toI64U && irrm == Irrm_NEAREST)/* FCVT{A,N}U X,S */
+          || (iop == Iop_F32toI64U && irrm == Irrm_ZERO)              /* FCVTZU Xd,Sn */
+          || (iop == Iop_F32toI64U && irrm == Irrm_NegINF)            /* FCVTMU Xd,Sn */
+          || (iop == Iop_F32toI64U && irrm == Irrm_PosINF)            /* FCVTPU Xd,Sn */
+          || (iop == Iop_F32toI64U && irrm == Irrm_NEAREST)           /* FCVTNU X,S */
+          || (iop == Iop_F32toI64U && irrm == Irrm_NEAREST_TIE_AWAY_0)/* FCVTAU X,S */
           /* F64toI32S */
-          || (iop == Iop_F64toI32S && irrm == Irrm_ZERO)   /* FCVTZS Wd,Dn */
-          || (iop == Iop_F64toI32S && irrm == Irrm_NegINF) /* FCVTMS Wd,Dn */
-          || (iop == Iop_F64toI32S && irrm == Irrm_PosINF) /* FCVTPS Wd,Dn */
-          || (iop == Iop_F64toI32S && irrm == Irrm_NEAREST)/* FCVT{A,N}S W,D */
+          || (iop == Iop_F64toI32S && irrm == Irrm_ZERO)              /* FCVTZS Wd,Dn */
+          || (iop == Iop_F64toI32S && irrm == Irrm_NegINF)            /* FCVTMS Wd,Dn */
+          || (iop == Iop_F64toI32S && irrm == Irrm_PosINF)            /* FCVTPS Wd,Dn */
+          || (iop == Iop_F64toI32S && irrm == Irrm_NEAREST)           /* FCVTNS W,D */
+          || (iop == Iop_F64toI32S && irrm == Irrm_NEAREST_TIE_AWAY_0)/* FCVTAS W,D */
           /* F64toI32U */
-          || (iop == Iop_F64toI32U && irrm == Irrm_ZERO)   /* FCVTZU Wd,Dn */
-          || (iop == Iop_F64toI32U && irrm == Irrm_NegINF) /* FCVTMU Wd,Dn */
-          || (iop == Iop_F64toI32U && irrm == Irrm_PosINF) /* FCVTPU Wd,Dn */
-          || (iop == Iop_F64toI32U && irrm == Irrm_NEAREST)/* FCVT{A,N}U W,D */
+          || (iop == Iop_F64toI32U && irrm == Irrm_ZERO)              /* FCVTZU Wd,Dn */
+          || (iop == Iop_F64toI32U && irrm == Irrm_NegINF)            /* FCVTMU Wd,Dn */
+          || (iop == Iop_F64toI32U && irrm == Irrm_PosINF)            /* FCVTPU Wd,Dn */
+          || (iop == Iop_F64toI32U && irrm == Irrm_NEAREST)           /* FCVTNU W,D */
+          || (iop == Iop_F64toI32U && irrm == Irrm_NEAREST_TIE_AWAY_0)/* FCVTAU W,D */
           /* F64toI64S */
-          || (iop == Iop_F64toI64S && irrm == Irrm_ZERO)   /* FCVTZS Xd,Dn */
-          || (iop == Iop_F64toI64S && irrm == Irrm_NegINF) /* FCVTMS Xd,Dn */
-          || (iop == Iop_F64toI64S && irrm == Irrm_PosINF) /* FCVTPS Xd,Dn */
-          || (iop == Iop_F64toI64S && irrm == Irrm_NEAREST)/* FCVT{A,N}S X,D */
+          || (iop == Iop_F64toI64S && irrm == Irrm_ZERO)              /* FCVTZS Xd,Dn */
+          || (iop == Iop_F64toI64S && irrm == Irrm_NegINF)            /* FCVTMS Xd,Dn */
+          || (iop == Iop_F64toI64S && irrm == Irrm_PosINF)            /* FCVTPS Xd,Dn */
+          || (iop == Iop_F64toI64S && irrm == Irrm_NEAREST)           /* FCVTNS X,D */
+          || (iop == Iop_F64toI64S && irrm == Irrm_NEAREST_TIE_AWAY_0)/* FCVTAS X,D */
           /* F64toI64U */
-          || (iop == Iop_F64toI64U && irrm == Irrm_ZERO)   /* FCVTZU Xd,Dn */
-          || (iop == Iop_F64toI64U && irrm == Irrm_NegINF) /* FCVTMU Xd,Dn */
-          || (iop == Iop_F64toI64U && irrm == Irrm_PosINF) /* FCVTPU Xd,Dn */
-          || (iop == Iop_F64toI64U && irrm == Irrm_NEAREST)/* FCVT{A,N}U X,D */
+          || (iop == Iop_F64toI64U && irrm == Irrm_ZERO)              /* FCVTZU Xd,Dn */
+          || (iop == Iop_F64toI64U && irrm == Irrm_NegINF)            /* FCVTMU Xd,Dn */
+          || (iop == Iop_F64toI64U && irrm == Irrm_PosINF)            /* FCVTPU Xd,Dn */
+          || (iop == Iop_F64toI64U && irrm == Irrm_NEAREST)           /* FCVTNU X,D */
+          || (iop == Iop_F64toI64U && irrm == Irrm_NEAREST_TIE_AWAY_0)/* FCVTAU X,D */
          ) {
         /* validated */
       } else {

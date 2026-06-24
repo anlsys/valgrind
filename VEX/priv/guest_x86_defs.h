@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -143,7 +143,7 @@ extern void  x86g_dirtyhelper_CPUID_sse0 ( VexGuestX86State* );
 extern void  x86g_dirtyhelper_CPUID_mmxext ( VexGuestX86State* );
 extern void  x86g_dirtyhelper_CPUID_sse1 ( VexGuestX86State* );
 extern void  x86g_dirtyhelper_CPUID_sse2 ( VexGuestX86State* );
-extern void  x86g_dirtyhelper_CPUID_sse3 ( VexGuestX86State* );
+extern void  x86g_dirtyhelper_CPUID_sse3 ( VexGuestX86State*, UInt );
 
 extern void  x86g_dirtyhelper_FINIT ( VexGuestX86State* );
 

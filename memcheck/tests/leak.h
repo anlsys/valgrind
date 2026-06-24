@@ -148,14 +148,19 @@
    do {                                                                      \
       __asm__ __volatile__ ("movl $0, %ecx\n\t"); \
    } while (0)
+#elif defined (__clang__) && defined(VGA_amd64)
+#define CLEAR_CALLER_SAVED_REGS                                              \
+   do {                                                                      \
+      __asm__ __volatile__ ("movq $0, %r11\n\t"); \
+   } while (0)
 #elif defined(__arm__)
 /* 32bit arm */
 #define CLEAR_CALLER_SAVED_REGS                                              \
    do {                                                                      \
-      __asm__ __volatile__ ("mov %r0, $0\n\t");                              \
-      __asm__ __volatile__ ("mov %r1, $0\n\t");                              \
-      __asm__ __volatile__ ("mov %r2, $0\n\t");                              \
-      __asm__ __volatile__ ("mov %r3, $0\n\t");                              \
+      __asm__ __volatile__ ("mov r0, $0\n\t");                              \
+      __asm__ __volatile__ ("mov r1, $0\n\t");                              \
+      __asm__ __volatile__ ("mov r2, $0\n\t");                              \
+      __asm__ __volatile__ ("mov r3, $0\n\t");                              \
    } while (0)
 #elif defined(__aarch64__)
 /* 64bit arm */
@@ -181,6 +186,11 @@
       __asm__ __volatile__ ("mov x17, 0\n\t");                              \
       __asm__ __volatile__ ("mov x18, 0\n\t");                              \
    } while (0)
+#elif defined(__riscv)
+#define CLEAR_CALLER_SAVED_REGS \
+  do { \
+    __asm__ __volatile__( "li a0, 0" : : :/*trash*/"a0" ); \
+  } while (0)
 #else
 #define CLEAR_CALLER_SAVED_REGS  /*nothing*/
 #endif

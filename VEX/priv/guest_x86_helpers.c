@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -42,6 +42,7 @@
 #include "guest_generic_bb_to_IR.h"
 #include "guest_x86_defs.h"
 #include "guest_generic_x87.h"
+#include "guest_generic_helpers.h"
 
 
 /* This file contains helper functions for x86 guest code.
@@ -706,6 +707,36 @@ UInt x86g_calculate_condition ( UInt/*X86Condcode*/ cond,
                     cond, cc_op, cc_dep1, cc_dep2, cc_ndep );
          vpanic("x86g_calculate_condition");
    }
+}
+
+/* CALLED FROM GENERATED CODE: CLEAN HELPER */
+UInt x86g_calc_crc32b ( UInt crcIn, UInt b )
+{
+   UInt  i;
+   UInt crc = (b & 0xFFU) ^ crcIn;
+   for (i = 0; i < 8; i++)
+      crc = (crc >> 1) ^ ((crc & 1) ? 0x82f63b78U : 0);
+   return crc;
+}
+
+/* CALLED FROM GENERATED CODE: CLEAN HELPER */
+UInt x86g_calc_crc32w ( UInt crcIn, UInt w )
+{
+   UInt  i;
+   UInt crc = (w & 0xFFFFU) ^ crcIn;
+   for (i = 0; i < 16; i++)
+      crc = (crc >> 1) ^ ((crc & 1) ? 0x82f63b78U : 0);
+   return crc;
+}
+
+/* CALLED FROM GENERATED CODE: CLEAN HELPER */
+UInt x86g_calc_crc32l ( UInt crcIn, UInt l )
+{
+   UInt i;
+   UInt crc = (l & 0xFFFFFFFFU) ^ crcIn;
+   for (i = 0; i < 32; i++)
+      crc = (crc >> 1) ^ ((crc & 1) ? 0x82f63b78U : 0);
+   return crc;
 }
 
 
@@ -2475,7 +2506,8 @@ void x86g_dirtyhelper_CPUID_sse2 ( VexGuestX86State* st )
    address sizes   : 36 bits physical, 48 bits virtual
    power management:
 */
-void x86g_dirtyhelper_CPUID_sse3 ( VexGuestX86State* st )
+void x86g_dirtyhelper_CPUID_sse3 ( VexGuestX86State* st,
+                                   UInt hasLZCNT )
 {
 #  define SET_ABCD(_a,_b,_c,_d)               \
       do { st->guest_EAX = (UInt)(_a);        \
@@ -2489,7 +2521,7 @@ void x86g_dirtyhelper_CPUID_sse3 ( VexGuestX86State* st )
          SET_ABCD(0x0000000a, 0x756e6547, 0x6c65746e, 0x49656e69);
          break;
       case 0x00000001:
-         SET_ABCD(0x000006f6, 0x00020800, 0x0000e3bd, 0xbfebfbff);
+         SET_ABCD(0x000006f6, 0x00020800, 0x0080e3bd, 0xbfebfbff);
          break;
       case 0x00000002:
          SET_ABCD(0x05b0b101, 0x005657f0, 0x00000000, 0x2cb43049);
@@ -2532,9 +2564,13 @@ void x86g_dirtyhelper_CPUID_sse3 ( VexGuestX86State* st )
       case 0x80000000:
          SET_ABCD(0x80000008, 0x00000000, 0x00000000, 0x00000000);
          break;
-      case 0x80000001:
-         SET_ABCD(0x00000000, 0x00000000, 0x00000001, 0x20100000);
+      case 0x80000001: {
+         UInt ecx_extra = 0;
+         ecx_extra = hasLZCNT ? (1U << 5) : 0;
+         SET_ABCD(0x00000000, 0x00000000, 0x00000001 | ecx_extra,
+                  0x20100000);
          break;
+         }
       case 0x80000002:
          SET_ABCD(0x65746e49, 0x2952286c, 0x726f4320, 0x4d542865);
          break;
@@ -2651,62 +2687,8 @@ void x86g_dirtyhelper_SxDT ( void *address, UInt op ) {
 /*--- Helpers for MMX/SSE/SSE2.                               ---*/
 /*---------------------------------------------------------------*/
 
-static inline UChar abdU8 ( UChar xx, UChar yy ) {
-   return toUChar(xx>yy ? xx-yy : yy-xx);
-}
-
 static inline ULong mk32x2 ( UInt w1, UInt w0 ) {
    return (((ULong)w1) << 32) | ((ULong)w0);
-}
-
-static inline UShort sel16x4_3 ( ULong w64 ) {
-   UInt hi32 = toUInt(w64 >> 32);
-   return toUShort(hi32 >> 16);
-}
-static inline UShort sel16x4_2 ( ULong w64 ) {
-   UInt hi32 = toUInt(w64 >> 32);
-   return toUShort(hi32);
-}
-static inline UShort sel16x4_1 ( ULong w64 ) {
-   UInt lo32 = toUInt(w64);
-   return toUShort(lo32 >> 16);
-}
-static inline UShort sel16x4_0 ( ULong w64 ) {
-   UInt lo32 = toUInt(w64);
-   return toUShort(lo32);
-}
-
-static inline UChar sel8x8_7 ( ULong w64 ) {
-   UInt hi32 = toUInt(w64 >> 32);
-   return toUChar(hi32 >> 24);
-}
-static inline UChar sel8x8_6 ( ULong w64 ) {
-   UInt hi32 = toUInt(w64 >> 32);
-   return toUChar(hi32 >> 16);
-}
-static inline UChar sel8x8_5 ( ULong w64 ) {
-   UInt hi32 = toUInt(w64 >> 32);
-   return toUChar(hi32 >> 8);
-}
-static inline UChar sel8x8_4 ( ULong w64 ) {
-   UInt hi32 = toUInt(w64 >> 32);
-   return toUChar(hi32 >> 0);
-}
-static inline UChar sel8x8_3 ( ULong w64 ) {
-   UInt lo32 = toUInt(w64);
-   return toUChar(lo32 >> 24);
-}
-static inline UChar sel8x8_2 ( ULong w64 ) {
-   UInt lo32 = toUInt(w64);
-   return toUChar(lo32 >> 16);
-}
-static inline UChar sel8x8_1 ( ULong w64 ) {
-   UInt lo32 = toUInt(w64);
-   return toUChar(lo32 >> 8);
-}
-static inline UChar sel8x8_0 ( ULong w64 ) {
-   UInt lo32 = toUInt(w64);
-   return toUChar(lo32 >> 0);
 }
 
 /* CALLED FROM GENERATED CODE: CLEAN HELPER */
@@ -2912,12 +2894,6 @@ void LibVEX_GuestX86_initialise ( /*OUT*/VexGuestX86State* vex_state )
 
    vex_state->guest_NRADDR   = 0;
    vex_state->guest_SC_CLASS = 0;
-   vex_state->guest_IP_AT_SYSCALL = 0;
-
-   vex_state->guest_SETC = 0;
-
-   vex_state->padding1 = 0;
-   vex_state->padding2 = 0;
 }
 
 
@@ -2990,7 +2966,7 @@ VexGuestLayout
 
           /* Describe any sections to be regarded by Memcheck as
              'always-defined'. */
-          .n_alwaysDefd = 24,
+          .n_alwaysDefd = 23,
 
           /* flags thunk: OP and NDEP are always defd, whereas DEP1
              and DEP2 have to be tracked.  See detailed comment in
@@ -3018,8 +2994,7 @@ VexGuestLayout
                  /* 19 */ ALWAYSDEFD(guest_SSEROUND),
                  /* 20 */ ALWAYSDEFD(guest_CMSTART),
                  /* 21 */ ALWAYSDEFD(guest_CMLEN),
-                 /* 22 */ ALWAYSDEFD(guest_SC_CLASS),
-                 /* 23 */ ALWAYSDEFD(guest_IP_AT_SYSCALL)
+                 /* 22 */ ALWAYSDEFD(guest_SC_CLASS)
                }
         };
 

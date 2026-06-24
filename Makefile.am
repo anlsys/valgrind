@@ -1,5 +1,7 @@
 
-AUTOMAKE_OPTIONS = 1.10
+AUTOMAKE_OPTIONS = 1.13
+
+ACLOCAL_AMFLAGS = -I m4
 
 include $(top_srcdir)/Makefile.all.am 
 
@@ -32,6 +34,7 @@ SUBDIRS = \
 	perf \
 	gdbserver_tests \
 	memcheck/tests/vbit-test \
+	none/tests/iropt-test \
 	auxprogs \
 	mpi \
 	solaris \
@@ -45,11 +48,9 @@ SUPP_FILES = \
 	glibc-2.X-helgrind.supp \
 	glibc-2.2-LinuxThreads-helgrind.supp \
 	glibc-2.X-drd.supp \
-	darwin9.supp darwin9-drd.supp \
 	freebsd.supp freebsd-helgrind.supp freebsd-drd.supp \
-	darwin10.supp darwin10-drd.supp \
-	darwin11.supp darwin12.supp darwin13.supp darwin14.supp darwin15.supp \
-	darwin16.supp darwin17.supp \
+	darwin-legacy.supp darwin.supp \
+	darwin-drd.supp darwin-helgrind.supp \
 	bionic.supp \
 	solaris11.supp solaris12.supp \
 	musl.supp
@@ -68,16 +69,22 @@ pkgconfig_DATA = valgrind.pc
 BUILT_SOURCES  = default.supp include/vgversion.h valgrind.pc
 CLEANFILES     = default.supp
 
+BUNSEN ?= yes
+ ifeq "$(BUNSEN)" "no"
+  VG_REGTEST_ARG ?= "--no-bunsen"
+ else
+  VG_REGTEST_ARG ?=
+ endif
+
 default.supp: $(DEFAULT_SUPP_FILES)
 	echo "# This is a generated file, composed of the following suppression rules:" > default.supp
 	echo "# " $(DEFAULT_SUPP_FILES) >> default.supp
 	cat $^ >> default.supp
 
-## Preprend @PERL@ because tests/vg_regtest isn't executable
-## Ensure make exits with error if PERL fails or post_regtest_checks fails.
+## Ensure make exits with error if vg_regtest fails or post_regtest_checks fails.
 regtest: check
 	$(top_srcdir)/gdbserver_tests/make_local_links $(GDB)
-	if @PERL@ tests/vg_regtest gdbserver_tests $(TOOLS) $(EXP_TOOLS) ; then \
+	if tests/vg_regtest $(VG_REGTEST_ARG) gdbserver_tests $(TOOLS) $(EXP_TOOLS) ; then \
 	   tests/post_regtest_checks $(abs_top_srcdir) gdbserver_tests $(TOOLS) $(EXP_TOOLS); \
 	else \
 	   tests/post_regtest_checks $(abs_top_srcdir) gdbserver_tests $(TOOLS) $(EXP_TOOLS); \
@@ -86,20 +93,22 @@ regtest: check
 post-regtest-checks:
 	tests/post_regtest_checks $(abs_top_srcdir) gdbserver_tests $(TOOLS) $(EXP_TOOLS)
 nonexp-regtest: check
-	@PERL@ tests/vg_regtest $(TOOLS)
+	tests/vg_regtest $(VG_REGTEST_ARG) $(TOOLS)
 exp-regtest: check
-	@PERL@ tests/vg_regtest gdbserver_tests $(EXP_TOOLS)
+	tests/vg_regtest $(VG_REGTEST_ARG) gdbserver_tests $(EXP_TOOLS)
 # Nb: gdbserver_tests are put in exp-regtest rather than nonexp-regtest
 # because they are tested with various valgrind tools, so might be using
 # an experimental tool.
 
-## Preprend @PERL@ because tests/vg_perf isn't executable
 perf: check
-	@PERL@ perf/vg_perf perf
+	perf/vg_perf perf
 
 # Auxiliary test suites run under valgrind
 auxchecks: all
 	$(MAKE) -C auxprogs auxchecks
+
+ltpchecks: all
+	$(MAKE) -C auxprogs ltpchecks
 
 # Nb: no need to include any Makefile.am files here, or files included from
 # them, as automake includes them automatically.  Also not COPYING, README
@@ -117,13 +126,16 @@ EXTRA_DIST = \
 	README.android_emulator \
 	README.mips \
 	README.aarch64 \
+	README.riscv64 \
 	README.solaris \
 	README.freebsd \
 	NEWS.old \
+	NEWS.older \
 	valgrind.pc.in \
 	valgrind.spec.in \
 	valgrind.spec \
-	autogen.sh
+	autogen.sh \
+	m4
 
 dist-hook: include/vgversion.h
 	cp -p include/vgversion.h $(distdir)/include/vgversion_dist.h
@@ -138,6 +150,20 @@ all-local: default.supp include/vgversion.h
 
 clean-local:
 	rm -rf $(inplacedir) include/vgversion.h
+	find . -name '*.vgtest.log' -print0 | xargs -r -0 rm
+	find . -name '*.vgtest.trs' -print0 | xargs -r -0 rm
+	find . -name test-suite.log -print0 | xargs -r -0 rm
+	rm -f test-suite-overall.log
+	find . -name '*.stdout.out'    -print0 | xargs -r -0 rm
+	find . -name '*.stderr.out'    -print0 | xargs -r -0 rm
+	find . -name '*.stdoutB.out'   -print0 | xargs -r -0 rm
+	find . -name '*.stderrB.out'   -print0 | xargs -r -0 rm
+	find . -name '*.post.out'      -print0 | xargs -r -0 rm
+	find . -name '*.stdout.diff*'  -print0 | xargs -r -0 rm
+	find . -name '*.stderr.diff*'  -print0 | xargs -r -0 rm
+	find . -name '*.stdoutB.diff*' -print0 | xargs -r -0 rm
+	find . -name '*.stderrB.diff*' -print0 | xargs -r -0 rm
+	find . -name '*.post.diff*'    -print0 | xargs -r -0 rm
 
 # Need config.h in the installed tree, since some files depend on it
 pkginclude_HEADERS = config.h

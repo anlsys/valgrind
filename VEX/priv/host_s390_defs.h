@@ -8,11 +8,11 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright IBM Corp. 2010-2020
+   Copyright IBM Corp. 2010-2026
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -100,13 +100,10 @@ typedef enum {
 } s390_opnd_t;
 
 
-/* Naming convention for operand locations:
-   R    - GPR
-   I    - immediate value
-   M    - memory (any Amode may be used)
-*/
-
-/* An operand that is either in a GPR or is addressable via a BX20 amode */
+/* An operand that is either
+   R  located in a GPR   or
+   M  located in memory and addressable via any amode   or
+   I  an immediate integer constant */
 typedef struct {
    s390_opnd_t tag;
    union {
@@ -125,7 +122,8 @@ typedef enum {
    S390_INSN_MEMCPY, /* from memory to memory */
    S390_INSN_COND_MOVE, /* conditonal "move" to register */
    S390_INSN_LOAD_IMMEDIATE,
-   S390_INSN_ALU,
+   S390_INSN_ALU,    /* a = a <op> b */
+   S390_INSN_ALU3,   /* a = b <op> c -- distinct operands */
    S390_INSN_SMUL,   /*   signed multiply; n-bit operands; 2n-bit result */
    S390_INSN_UMUL,   /* unsigned multiply; n-bit operands; 2n-bit result */
    S390_INSN_SDIV,   /*   signed division; 2n-bit / n-bit -> n-bit quot/rem */
@@ -187,6 +185,14 @@ typedef enum {
 } s390_alu_t;
 
 
+/* The kind of ALU3 instructions */
+typedef enum {
+   S390_ALU3_ANDC, /* and with complement */
+   S390_ALU3_ORC,  /* or with complement */
+   S390_ALU3_NAND,
+   S390_ALU3_NOR,
+} s390_alu3_t;
+
 /* The kind of unary integer operations */
 typedef enum {
    S390_ZERO_EXTEND_8,
@@ -195,7 +201,9 @@ typedef enum {
    S390_SIGN_EXTEND_8,
    S390_SIGN_EXTEND_16,
    S390_SIGN_EXTEND_32,
+   S390_LOAD_ADDRESS,
    S390_NEGATE,
+   S390_POPCNT,
    S390_VEC_FILL,
    S390_VEC_DUPLICATE,
    S390_VEC_UNPACKLOWS,
@@ -385,8 +393,12 @@ typedef enum {
    S390_VEC_INT_MUL_HIGHS,
    S390_VEC_INT_MUL_HIGHU,
    S390_VEC_INT_MUL_LOW,
-   S390_VEC_INT_MUL_EVENS,
-   S390_VEC_INT_MUL_EVENU,
+   S390_VEC_INT_MUL_ODDS,
+   S390_VEC_INT_MUL_ODDU,
+   S390_VEC_INT_DIVS,
+   S390_VEC_INT_DIVU,
+   S390_VEC_INT_MODS,
+   S390_VEC_INT_MODU,
    S390_VEC_ELEM_SHL_V,
    S390_VEC_ELEM_SHRA_V,
    S390_VEC_ELEM_SHRL_V,
@@ -509,6 +521,12 @@ typedef struct {
          HReg          dst; /* op1 */
          s390_opnd_RMI op2;
       } alu;
+      struct {
+         s390_alu3_t   tag;
+         HReg          dst;
+         HReg          op1;
+         HReg          op2;
+      } alu3;
       struct {
          HReg          dst_hi;  /*           r10 */
          HReg          dst_lo;  /* also op1  r11 */
@@ -706,8 +724,18 @@ typedef struct {
          s390_amode   *guest_IA;
       } xassisted;
       struct {
-         /* fixs390: I don't think these are really needed
-            as the gsp and the offset are fixed  no ? */
+         /* Note: these fields are needed. Here's why:
+            These fields are amodes for accessing the host_EvC_COUNTER and
+            host_EvC_FAILADDR fields in the guest state.
+            When guest and host architecture are both s390x then we know that
+            the displacement in evcheck::counter is
+            offsetof(VexGuestS390XState, host_EvC_COUNTER) and likewise for
+            the displacement in evcheck::fail_addr. There would be no point
+            to build these amodes in the first place because we could just
+            hardwire the displacements in s390_insn_evcheck_emit.
+            However in a multi-arch setting the amodes point to the
+            host_EvC_COUNTER/FAILADDR fields in a *different* guest state and
+            those offsets are not known. So we do need to build the amodes. */
          s390_amode   *counter;    /* dispatch counter */
          s390_amode   *fail_addr;
       } evcheck;
@@ -758,6 +786,8 @@ s390_insn *s390_insn_cond_move(UChar size, s390_cc_t cond, HReg dst,
 s390_insn *s390_insn_load_immediate(UChar size, HReg dst, ULong val);
 s390_insn *s390_insn_alu(UChar size, s390_alu_t, HReg dst,
                          s390_opnd_RMI op2);
+s390_insn *s390_insn_alu3(UChar size, s390_alu3_t tag, HReg dst, HReg op1,
+                          HReg op2);
 s390_insn *s390_insn_mul(UChar size, HReg dst_hi, HReg dst_lo,
                          s390_opnd_RMI op2, Bool signed_multiply);
 s390_insn *s390_insn_div(UChar size, HReg op1_hi, HReg op1_lo,
@@ -878,13 +908,13 @@ UInt ppHRegS390(HReg);
 void  getRegUsage_S390Instr( HRegUsage *, const s390_insn *, Bool );
 void  mapRegs_S390Instr    ( HRegRemap *, s390_insn *, Bool );
 Int   emit_S390Instr       ( Bool *, UChar *, Int, const s390_insn *, Bool,
-                             VexEndness, const void *, const void *,
+                             const VexArchInfo *, const void *, const void *,
                              const void *, const void *);
 const RRegUniverse *getRRegUniverse_S390( void );
 void  genSpill_S390        ( HInstr **, HInstr **, HReg , Int , Bool );
 void  genReload_S390       ( HInstr **, HInstr **, HReg , Int , Bool );
-HInstr* directReload_S390  ( HInstr *, HReg, Short );
-extern s390_insn* genMove_S390(HReg from, HReg to, Bool mode64);
+HInstr *directReload_S390  ( HInstr *, HReg, Short );
+s390_insn *genMove_S390    ( HReg from, HReg to, Bool mode64);
 HInstrArray *iselSB_S390   ( const IRSB *, VexArch, const VexArchInfo *,
                              const VexAbiInfo *, Int, Int, Bool, Bool, Addr);
 
@@ -907,38 +937,16 @@ VexInvalRange patchProfInc_S390(VexEndness endness_host,
                                 void  *code_to_patch,
                                 const ULong *location_of_counter);
 
-/* KLUDGE: See detailled comment in host_s390_defs.c. */
+/* KLUDGE: See detailled comment in main_main.c. */
 extern UInt s390_host_hwcaps;
 
 /* Convenience macros to test installed facilities */
-#define s390_host_has_ldisp \
-                      (s390_host_hwcaps & (VEX_HWCAPS_S390X_LDISP))
-#define s390_host_has_eimm \
-                      (s390_host_hwcaps & (VEX_HWCAPS_S390X_EIMM))
-#define s390_host_has_gie \
-                      (s390_host_hwcaps & (VEX_HWCAPS_S390X_GIE))
-#define s390_host_has_dfp \
-                      (s390_host_hwcaps & (VEX_HWCAPS_S390X_DFP))
-#define s390_host_has_fgx \
-                      (s390_host_hwcaps & (VEX_HWCAPS_S390X_FGX))
-#define s390_host_has_etf2 \
-                      (s390_host_hwcaps & (VEX_HWCAPS_S390X_ETF2))
-#define s390_host_has_stfle \
-                      (s390_host_hwcaps & (VEX_HWCAPS_S390X_STFLE))
-#define s390_host_has_etf3 \
-                      (s390_host_hwcaps & (VEX_HWCAPS_S390X_ETF3))
-#define s390_host_has_stckf \
-                      (s390_host_hwcaps & (VEX_HWCAPS_S390X_STCKF))
-#define s390_host_has_fpext \
-                      (s390_host_hwcaps & (VEX_HWCAPS_S390X_FPEXT))
-#define s390_host_has_lsc \
-                      (s390_host_hwcaps & (VEX_HWCAPS_S390X_LSC))
-#define s390_host_has_pfpo \
-                      (s390_host_hwcaps & (VEX_HWCAPS_S390X_PFPO))
 #define s390_host_has_vx \
                       (s390_host_hwcaps & (VEX_HWCAPS_S390X_VX))
 #define s390_host_has_msa5 \
                       (s390_host_hwcaps & (VEX_HWCAPS_S390X_MSA5))
+#define s390_host_has_mi2 \
+                      (s390_host_hwcaps & (VEX_HWCAPS_S390X_MI2))
 #define s390_host_has_lsc2 \
                       (s390_host_hwcaps & (VEX_HWCAPS_S390X_LSC2))
 #define s390_host_has_vxe \
@@ -947,6 +955,20 @@ extern UInt s390_host_hwcaps;
                       (s390_host_hwcaps & (VEX_HWCAPS_S390X_NNPA))
 #define s390_host_has_dflt \
                       (s390_host_hwcaps & (VEX_HWCAPS_S390X_DFLT))
+#define s390_host_has_vxe2 \
+                      (s390_host_hwcaps & (VEX_HWCAPS_S390X_VXE2))
+#define s390_host_has_vxd \
+                      (s390_host_hwcaps & (VEX_HWCAPS_S390X_VXD))
+#define s390_host_has_msa8 \
+                      (s390_host_hwcaps & (VEX_HWCAPS_S390X_MSA8))
+#define s390_host_has_msa9 \
+                      (s390_host_hwcaps & (VEX_HWCAPS_S390X_MSA9))
+#define s390_host_has_mi3 \
+                      (s390_host_hwcaps & (VEX_HWCAPS_S390X_MI3))
+#define s390_host_has_vxe3 \
+                      (s390_host_hwcaps & (VEX_HWCAPS_S390X_VXE3))
+#define s390_host_has_msa12 \
+                      (s390_host_hwcaps & (VEX_HWCAPS_S390X_MSA12))
 #endif /* ndef __VEX_HOST_S390_DEFS_H */
 
 /*---------------------------------------------------------------*/

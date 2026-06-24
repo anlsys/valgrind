@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -42,6 +42,7 @@
 #include "guest_generic_bb_to_IR.h"
 #include "guest_amd64_defs.h"
 #include "guest_generic_x87.h"
+#include "guest_generic_helpers.h"
 
 
 /* This file contains helper functions for amd64 guest code.
@@ -1062,6 +1063,7 @@ IRExpr* guest_amd64_spechelper ( const HChar* function_name,
 #  define binop(_op,_a1,_a2) IRExpr_Binop((_op),(_a1),(_a2))
 #  define mkU64(_n) IRExpr_Const(IRConst_U64(_n))
 #  define mkU32(_n) IRExpr_Const(IRConst_U32(_n))
+#  define mkU16(_n) IRExpr_Const(IRConst_U16(_n))
 #  define mkU8(_n)  IRExpr_Const(IRConst_U8(_n))
 
    Int i, arity = 0;
@@ -1140,6 +1142,15 @@ IRExpr* guest_amd64_spechelper ( const HChar* function_name,
 
       }
 
+      /* 4, */
+      if (isU64(cc_op, AMD64G_CC_OP_ADDL) && isU64(cond, AMD64CondZ)) {
+         /* long add, then Z --> test ((int)(dst+src) == 0) */
+         return unop(Iop_1Uto64,
+                     binop(Iop_CmpEQ32,
+                           unop(Iop_64to32, binop(Iop_Add64, cc_dep1, cc_dep2)),
+                           mkU32(0)));
+      }
+
       /* 8, 9 */
       if (isU64(cc_op, AMD64G_CC_OP_ADDL) && isU64(cond, AMD64CondS)) {
          /* long add, then S (negative)
@@ -1164,6 +1175,29 @@ IRExpr* guest_amd64_spechelper ( const HChar* function_name,
                                   mkU8(31)),
                             mkU64(1)),
                       mkU64(1));
+      }
+
+      /*---------------- ADDW ----------------*/
+
+      /* 4, */
+      if (isU64(cc_op, AMD64G_CC_OP_ADDW) && isU64(cond, AMD64CondZ)) {
+
+         /* word add, then Z --> test ((short)(dst+src) == 0) */
+         return unop(Iop_1Uto64,
+                     binop(Iop_CmpEQ16,
+                           unop(Iop_64to16, binop(Iop_Add64, cc_dep1, cc_dep2)),
+                           mkU16(0)));
+      }
+
+      /*---------------- ADDB ----------------*/
+
+      /* 4, */
+      if (isU64(cc_op, AMD64G_CC_OP_ADDB) && isU64(cond, AMD64CondZ)) {
+         /* byte add, then Z --> test ((char)(dst+src) == 0) */
+         return unop(Iop_1Uto64,
+                     binop(Iop_CmpEQ8,
+                           unop(Iop_64to8, binop(Iop_Add64, cc_dep1, cc_dep2)),
+                           mkU8(0)));
       }
 
       /*---------------- SUBQ ----------------*/
@@ -1274,7 +1308,7 @@ IRExpr* guest_amd64_spechelper ( const HChar* function_name,
                      binop(Iop_CmpLE64S, cc_dep1, cc_dep2));
       }
       if (isU64(cc_op, AMD64G_CC_OP_SUBQ) && isU64(cond, AMD64CondNLE)) {
-         /* long sub/cmp, then NLE (signed greater than) 
+         /* long long sub/cmp, then NLE (signed greater than)
             --> test !(dst <=s src)
             --> test (dst >s src)
             --> test (src <s dst) */
@@ -1307,6 +1341,8 @@ IRExpr* guest_amd64_spechelper ( const HChar* function_name,
                         mkU8(31)),
                   mkU64(1));
       }
+
+      /* 1, */
       if (isU64(cc_op, AMD64G_CC_OP_SUBL) && isU64(cond, AMD64CondNO)) {
          /* No action.  Never yet found a test case. */
       }
@@ -1578,7 +1614,7 @@ IRExpr* guest_amd64_spechelper ( const HChar* function_name,
       if (isU64(cc_op, AMD64G_CC_OP_SUBB) && isU64(cond, AMD64CondZ)) {
          /* byte sub/cmp, then Z --> test dst==src */
          return unop(Iop_1Uto64,
-                     binop(Iop_CmpEQ8, 
+                     binop(Iop_CmpEQ8,
                            unop(Iop_64to8,cc_dep1),
                            unop(Iop_64to8,cc_dep2)));
       }
@@ -1953,6 +1989,14 @@ IRExpr* guest_amd64_spechelper ( const HChar* function_name,
       //   /* SHLL, then NS --> (ULong) ~ result[31] */
       //   vassert(0);
       //}
+
+      /*---------------- SHLB ----------------*/
+      if (isU64(cc_op, AMD64G_CC_OP_SHLB) && isU64(cond, AMD64CondZ)) {
+         /* SHLB, then Z --> test dep1 == 0 */
+         return unop(Iop_1Uto64,
+                     binop(Iop_CmpEQ8, unop(Iop_64to8, cc_dep1),
+                           mkU8(0)));
+      }
 
       /*---------------- COPY ----------------*/
       /* This can happen, as a result of amd64 FP compares: "comisd ... ;
@@ -2630,6 +2674,7 @@ void amd64g_dirtyhelper_FINIT ( VexGuestAMD64State* gst )
 {
    Int i;
    gst->guest_FTOP = 0;
+   gst->pad1 = 0;
    for (i = 0; i < 8; i++) {
       gst->guest_FPTAG[i] = 0; /* empty */
       gst->guest_FPREG[i] = 0; /* IEEE754 64-bit zero */
@@ -3502,7 +3547,7 @@ void amd64g_dirtyhelper_CPUID_avx_and_cx16 ( VexGuestAMD64State* st,
 */
 void amd64g_dirtyhelper_CPUID_avx2 ( VexGuestAMD64State* st,
                                      ULong hasF16C, ULong hasRDRAND,
-                                     ULong hasRDSEED )
+                                     ULong hasRDSEED, ULong hasLZCNT )
 {
    vassert((hasF16C >> 1) == 0ULL);
    vassert((hasRDRAND >> 1) == 0ULL);
@@ -3604,9 +3649,13 @@ void amd64g_dirtyhelper_CPUID_avx2 ( VexGuestAMD64State* st,
       case 0x80000000:
          SET_ABCD(0x80000008, 0x00000000, 0x00000000, 0x00000000);
          break;
-      case 0x80000001:
-         SET_ABCD(0x00000000, 0x00000000, 0x00000021, 0x2c100800);
+      case 0x80000001: {
+         ULong ecx_extra = 0;
+         ecx_extra = hasLZCNT ? (1U << 5) : 0;
+         SET_ABCD(0x00000000, 0x00000000, 0x00000001 | ecx_extra,
+                  0x2c100800);
          break;
+      }
       case 0x80000002:
          SET_ABCD(0x65746e49, 0x2952286c, 0x726f4320, 0x4d542865);
          break;
@@ -3992,62 +4041,8 @@ ULong amd64g_dirtyhelper_RDSEED ( void ) {
 /*--- Helpers for MMX/SSE/SSE2.                               ---*/
 /*---------------------------------------------------------------*/
 
-static inline UChar abdU8 ( UChar xx, UChar yy ) {
-   return toUChar(xx>yy ? xx-yy : yy-xx);
-}
-
 static inline ULong mk32x2 ( UInt w1, UInt w0 ) {
    return (((ULong)w1) << 32) | ((ULong)w0);
-}
-
-static inline UShort sel16x4_3 ( ULong w64 ) {
-   UInt hi32 = toUInt(w64 >> 32);
-   return toUShort(hi32 >> 16);
-}
-static inline UShort sel16x4_2 ( ULong w64 ) {
-   UInt hi32 = toUInt(w64 >> 32);
-   return toUShort(hi32);
-}
-static inline UShort sel16x4_1 ( ULong w64 ) {
-   UInt lo32 = toUInt(w64);
-   return toUShort(lo32 >> 16);
-}
-static inline UShort sel16x4_0 ( ULong w64 ) {
-   UInt lo32 = toUInt(w64);
-   return toUShort(lo32);
-}
-
-static inline UChar sel8x8_7 ( ULong w64 ) {
-   UInt hi32 = toUInt(w64 >> 32);
-   return toUChar(hi32 >> 24);
-}
-static inline UChar sel8x8_6 ( ULong w64 ) {
-   UInt hi32 = toUInt(w64 >> 32);
-   return toUChar(hi32 >> 16);
-}
-static inline UChar sel8x8_5 ( ULong w64 ) {
-   UInt hi32 = toUInt(w64 >> 32);
-   return toUChar(hi32 >> 8);
-}
-static inline UChar sel8x8_4 ( ULong w64 ) {
-   UInt hi32 = toUInt(w64 >> 32);
-   return toUChar(hi32 >> 0);
-}
-static inline UChar sel8x8_3 ( ULong w64 ) {
-   UInt lo32 = toUInt(w64);
-   return toUChar(lo32 >> 24);
-}
-static inline UChar sel8x8_2 ( ULong w64 ) {
-   UInt lo32 = toUInt(w64);
-   return toUChar(lo32 >> 16);
-}
-static inline UChar sel8x8_1 ( ULong w64 ) {
-   UInt lo32 = toUInt(w64);
-   return toUChar(lo32 >> 8);
-}
-static inline UChar sel8x8_0 ( ULong w64 ) {
-   UInt lo32 = toUInt(w64);
-   return toUChar(lo32 >> 0);
 }
 
 /* CALLED FROM GENERATED CODE: CLEAN HELPER */
@@ -4076,22 +4071,6 @@ ULong amd64g_calculate_mmx_psadbw ( ULong xx, ULong yy )
    t += (UInt)abdU8( sel8x8_0(xx), sel8x8_0(yy) );
    t &= 0xFFFF;
    return (ULong)t;
-}
-
-/* CALLED FROM GENERATED CODE: CLEAN HELPER */
-ULong amd64g_calculate_sse_phminposuw ( ULong sLo, ULong sHi )
-{
-   UShort t, min;
-   UInt   idx;
-   t = sel16x4_0(sLo); if (True)    { min = t; idx = 0; }
-   t = sel16x4_1(sLo); if (t < min) { min = t; idx = 1; }
-   t = sel16x4_2(sLo); if (t < min) { min = t; idx = 2; }
-   t = sel16x4_3(sLo); if (t < min) { min = t; idx = 3; }
-   t = sel16x4_0(sHi); if (t < min) { min = t; idx = 4; }
-   t = sel16x4_1(sHi); if (t < min) { min = t; idx = 5; }
-   t = sel16x4_2(sHi); if (t < min) { min = t; idx = 6; }
-   t = sel16x4_3(sHi); if (t < min) { min = t; idx = 7; }
-   return ((ULong)(idx << 16)) | ((ULong)min);
 }
 
 /* CALLED FROM GENERATED CODE: CLEAN HELPER */
@@ -4129,60 +4108,6 @@ ULong amd64g_calc_crc32q ( ULong crcIn, ULong q )
 {
    ULong crc = amd64g_calc_crc32l(crcIn, q);
    return amd64g_calc_crc32l(crc, q >> 32);
-}
-
-
-/* .. helper for next fn .. */
-static inline ULong sad_8x4 ( ULong xx, ULong yy )
-{
-   UInt t = 0;
-   t += (UInt)abdU8( sel8x8_3(xx), sel8x8_3(yy) );
-   t += (UInt)abdU8( sel8x8_2(xx), sel8x8_2(yy) );
-   t += (UInt)abdU8( sel8x8_1(xx), sel8x8_1(yy) );
-   t += (UInt)abdU8( sel8x8_0(xx), sel8x8_0(yy) );
-   return (ULong)t;
-}
-
-/* CALLED FROM GENERATED CODE: CLEAN HELPER */
-ULong amd64g_calc_mpsadbw ( ULong sHi, ULong sLo,
-                            ULong dHi, ULong dLo,
-                            ULong imm_and_return_control_bit )
-{
-   UInt imm8     = imm_and_return_control_bit & 7;
-   Bool calcHi   = (imm_and_return_control_bit >> 7) & 1;
-   UInt srcOffsL = imm8 & 3; /* src offs in 32-bit (L) chunks */
-   UInt dstOffsL = (imm8 >> 2) & 1; /* dst offs in ditto chunks */
-   /* For src we only need 32 bits, so get them into the
-      lower half of a 64 bit word. */
-   ULong src = ((srcOffsL & 2) ? sHi : sLo) >> (32 * (srcOffsL & 1));
-   /* For dst we need to get hold of 56 bits (7 bytes) from a total of
-      11 bytes.  If calculating the low part of the result, need bytes
-      dstOffsL * 4 + (0 .. 6); if calculating the high part,
-      dstOffsL * 4 + (4 .. 10). */
-   ULong dst;
-   /* dstOffL = 0, Lo  ->  0 .. 6
-      dstOffL = 1, Lo  ->  4 .. 10
-      dstOffL = 0, Hi  ->  4 .. 10
-      dstOffL = 1, Hi  ->  8 .. 14
-   */
-   if (calcHi && dstOffsL) {
-      /* 8 .. 14 */
-      dst = dHi & 0x00FFFFFFFFFFFFFFULL;
-   }
-   else if (!calcHi && !dstOffsL) {
-      /* 0 .. 6 */
-      dst = dLo & 0x00FFFFFFFFFFFFFFULL;
-   } 
-   else {
-      /* 4 .. 10 */
-      dst = (dLo >> 32) | ((dHi & 0x00FFFFFFULL) << 32);
-   }
-   ULong r0  = sad_8x4( dst >>  0, src );
-   ULong r1  = sad_8x4( dst >>  8, src );
-   ULong r2  = sad_8x4( dst >> 16, src );
-   ULong r3  = sad_8x4( dst >> 24, src );
-   ULong res = (r3 << 48) | (r2 << 32) | (r1 << 16) | r0;
-   return res;
 }
 
 /* CALLED FROM GENERATED CODE: CLEAN HELPER */
@@ -4784,8 +4709,6 @@ void LibVEX_GuestAMD64_initialise ( /*OUT*/VexGuestAMD64State* vex_state )
 
    vex_state->guest_EMNOTE = EmNote_NONE;
 
-   vex_state->guest_SETC = 0;
-
    /* These should not ever be either read or written, but we
       initialise them anyway. */
    vex_state->guest_CMSTART = 0;
@@ -4795,8 +4718,7 @@ void LibVEX_GuestAMD64_initialise ( /*OUT*/VexGuestAMD64State* vex_state )
    vex_state->guest_SC_CLASS = 0;
    vex_state->guest_GS_CONST = 0;
 
-   vex_state->guest_IP_AT_SYSCALL = 0;
-   vex_state->pad1 = 0;
+   vex_state->guest_TLSBASE = 0;
 }
 
 
@@ -4869,7 +4791,7 @@ VexGuestLayout
 
           /* Describe any sections to be regarded by Memcheck as
              'always-defined'. */
-          .n_alwaysDefd = 16,
+          .n_alwaysDefd = 15,
 
           /* flags thunk: OP and NDEP are always defd, whereas DEP1
              and DEP2 have to be tracked.  See detailed comment in
@@ -4897,8 +4819,7 @@ VexGuestLayout
                  /* 11 */ ALWAYSDEFD(guest_SSEROUND),
                  /* 12 */ ALWAYSDEFD(guest_CMSTART),
                  /* 13 */ ALWAYSDEFD(guest_CMLEN),
-                 /* 14 */ ALWAYSDEFD(guest_SC_CLASS),
-                 /* 15 */ ALWAYSDEFD(guest_IP_AT_SYSCALL)
+                 /* 14 */ ALWAYSDEFD(guest_SC_CLASS)
                }
         };
 

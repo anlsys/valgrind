@@ -14,6 +14,7 @@
 #define SY res = syscall
 
 #define FAIL assert(res == -1);
+#define FAIL_ERRORCODE(ec) assert(res == ec);
 #define SUCC assert(res != -1);
 #define FAILx(E) \
    do { \
@@ -32,6 +33,15 @@
          exit(1); \
       } \
    } while (0);
+
+#define FAKE_GO(str) \
+   fprintf(stderr, "---------------------------------------------------------\n"  \
+                   "%s\n"                                                         \
+                   "---------------------------------------------------------\n", \
+                   str);
+
+#define FAKE_SY(msg) \
+   fprintf(stderr, "%s", (msg));
 
 /* Module variables. */
 static long x0;

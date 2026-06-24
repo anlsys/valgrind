@@ -12,7 +12,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -272,7 +272,7 @@ void VEX_REGPARM(3)
    semantics of these primops (Sar64x2, etc) it is an error if in
    fact we are ever given an out-of-range shift amount. 
 */
-void /*not-regparm*/
+void VEX_REGPARM(3)
      h_generic_calc_SarN64x2 ( /*OUT*/V128* res,
                                V128* argL, UInt nn)
 {
@@ -282,7 +282,7 @@ void /*not-regparm*/
    res->w64[1] = sar64(argL->w64[1], nn);
 }
 
-void /*not-regparm*/
+void VEX_REGPARM(3)
      h_generic_calc_SarN8x16 ( /*OUT*/V128* res,
                               V128* argL, UInt nn)
 {

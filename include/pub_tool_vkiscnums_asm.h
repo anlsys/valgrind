@@ -14,7 +14,7 @@
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 2 of the
+   published by the Free Software Foundation; either version 3 of the
    License, or (at your option) any later version.
 
    This program is distributed in the hope that it will be useful, but
@@ -71,6 +71,10 @@
 
 #elif defined(VGP_mips64_linux)
 #  include "vki/vki-scnums-mips64-linux.h"
+
+#elif defined(VGP_riscv64_linux)
+#  include "vki/vki-scnums-shared-linux.h"
+#  include "vki/vki-scnums-riscv64-linux.h"
 
 #elif defined(VGP_x86_freebsd) || defined(VGP_amd64_freebsd) || defined(VGP_arm64_freebsd)
 #  include "vki/vki-scnums-freebsd.h"
