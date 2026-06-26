@@ -62,6 +62,26 @@ drain(tracegrind_access_kind_t kind, tracegrind_interval_t ** out)
     return got;
 }
 
+/* Returns 1 iff Tracegrind is the active tool. Probes by recording a single
+ * store and checking it shows up; under any other tool (or natively) the client
+ * requests are no-ops that return 0, so the probe store is never seen. */
+static int
+tracegrind_is_active(void)
+{
+    static volatile int probe;
+    unsigned long n;
+
+    TRACEGRIND_DISABLE();
+    TRACEGRIND_CLEAR_QUEUE(TRACEGRIND_STORES);
+    TRACEGRIND_ENABLE();
+    probe = 1;
+    TRACEGRIND_DISABLE();
+    n = TRACEGRIND_QUEUE_SIZE(TRACEGRIND_STORES);
+    TRACEGRIND_CLEAR_QUEUE(TRACEGRIND_STORES);
+
+    return n > 0;
+}
+
 int
 main(void)
 {
@@ -75,6 +95,12 @@ main(void)
     if (!RUNNING_ON_VALGRIND)
     {
         printf("SKIP: run with `valgrind --tool=tracegrind`\n");
+        return 0;
+    }
+
+    if (!tracegrind_is_active())
+    {
+        printf("SKIP: this test requires --tool=tracegrind\n");
         return 0;
     }
 
