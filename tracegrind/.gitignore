@@ -1,0 +1,7 @@
+a.out
+.deps
+tmp
+taskgrind-x86-linux
+vgpreload_taskgrind-amd64-linux.so
+*.dot
+

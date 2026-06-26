@@ -15,7 +15,8 @@ TOOLS = \
 		dhat \
 		lackey \
 		none	\
-		taskgrind
+		taskgrind \
+		tracegrind
 
 EXP_TOOLS = \
 		exp-bbv
