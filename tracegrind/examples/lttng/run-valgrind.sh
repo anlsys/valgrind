@@ -30,6 +30,8 @@ fi
 VG_INC="-I$VG_FORK/include -I$VG_FORK/tracegrind"
 echo ">> Using tracegrind fork: $VALGRIND"
 
+CC="${CC:-cc}"
+
 # --- make sure the target program exists -------------------------------------
 if [[ ! -x ./hello ]]; then
 	echo ">> ./hello missing; building via run.sh build steps..."
@@ -37,9 +39,9 @@ if [[ ! -x ./hello ]]; then
 	UST_LIBS="$(pkg-config --libs lttng-ust)"
 	UST_RPATH=""
 	for d in $(pkg-config --libs-only-L lttng-ust); do UST_RPATH+=" -Wl,-rpath,${d#-L}"; done
-	cc -c -I. $UST_CFLAGS hello-tp.c -o hello-tp.o
-	cc -c -I. $UST_CFLAGS hello.c    -o hello.o
-	cc hello.o hello-tp.o $UST_LIBS $UST_RPATH -o hello
+	$CC -c -I. $UST_CFLAGS hello-tp.c -o hello-tp.o
+	$CC -c -I. $UST_CFLAGS hello.c    -o hello.o
+	$CC hello.o hello-tp.o $UST_LIBS $UST_RPATH -o hello
 fi
 
 # --- build the wrapper shared object -----------------------------------------
@@ -50,7 +52,7 @@ UST_CFLAGS="$(pkg-config --cflags lttng-ust)"
 UST_LIBS="$(pkg-config --libs lttng-ust)"
 UST_RPATH=""
 for d in $(pkg-config --libs-only-L lttng-ust); do UST_RPATH+=" -Wl,-rpath,${d#-L}"; done
-cc -fPIC -shared -I. $VG_INC $UST_CFLAGS \
+$CC -fPIC -shared -I. $VG_INC $UST_CFLAGS \
 	vg_intercept.c vg-tp.c \
 	$UST_LIBS $UST_RPATH -o vg_intercept.so
 echo ">> Built ./vg_intercept.so"
