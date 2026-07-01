@@ -22,16 +22,27 @@ onto liblttng-ust's internal `lttng_event_reserve()`.
      its `I_WRAP_SONAME_FNNAME_ZU` redirection binds to it. The Z-encoded soname
      is `liblttngZhustZdsoZd1` (`-`→`Zh`, `.`→`Zd`).
    - On each interception: pauses recording (`TRACEGRIND_DISABLE`), drains the
-     per-thread LOAD and STORE interval queues (`TRACEGRIND_EMPTY_QUEUE`), emits
-     `vgust:mem_accesses` with the intervals, clears + re-enables, then calls the
-     real `lttng_event_reserve()` so the program's own event follows.
+     per-thread LOAD and STORE interval queues (`TRACEGRIND_EMPTY_QUEUE`)
+     straight into a per-thread `tracegrind_interval_t` buffer, emits
+     `vgust:mem_accesses` with those buffers **as-is**, clears + re-enables, then
+     calls the real `lttng_event_reserve()` so the program's own event follows.
    - A thread-local re-entrancy guard stops the wrapper's own emit (which itself
      reserves an event) from recursing forever.
 
-3. **`vgust:mem_accesses`** carries the intervals as CTF sequences. lttng-ust
-   fields are scalar-only (no array-of-struct), so each interval is split across
-   two parallel arrays: interval `i` is `[load_start[i] ; load_end[i])` and
-   likewise for stores.
+3. **`vgust:mem_accesses`** carries the raw `tracegrind_interval_t` buffer
+   flushed as-is, as just **two** CTF sequences — `loads` and `stores`. Each
+   interval is two consecutive words, so a sequence is
+   `[a0, b0, a1, b1, ...]` and interval `i` is `[loads[2i] ; loads[2i+1])`
+   (`a` = first byte, `b` = one-past-last). `n_loads` / `n_stores` are the
+   interval counts (half the sequence length). This avoids deinterleaving the
+   queue into separate `start[]`/`end[]` arrays, i.e. a single copy out of the
+   Tracegrind queue.
+
+4. **No loss / bounded records.** A single record carries at most
+   `MAX_INTERVALS` intervals per kind (thread-private, default **16384**). If a
+   thread accumulated more since the previous user event, the wrapper emits
+   several records back-to-back with the same `seq` and increasing `chunk`, so
+   nothing is ever dropped.
 
 ## Files
 
@@ -65,10 +76,14 @@ Expected: pairs of events, `vgust:mem_accesses(seq=N)` immediately preceding the
 Nth user event, e.g.
 
 ```
-vgust:mem_accesses:            { seq = 3, n_loads = 96, load_start = [ ... ], load_end = [ ... ],
-                                 n_stores = 31, store_start = [ ... ], store_end = [ ... ] }
+vgust:mem_accesses:            { seq = 3, chunk = 0, n_loads = 96, loads = [ a0, b0, a1, b1, ... ],
+                                 n_stores = 31, stores = [ a0, b0, a1, b1, ... ] }
 hello_world:my_first_tracepoint: { my_integer_field = 2 }
 ```
+
+Each interval `i` is `[loads[2i] ; loads[2i+1])`. When a window holds more than
+`MAX_INTERVALS` intervals of a kind, you will see multiple `vgust:mem_accesses`
+records with the same `seq` and increasing `chunk` before the user event.
 
 `seq = 1` is large — it captures process/loader start-up accesses before the
 first event. Pass `--start-disabled=yes` to tracegrind, or clear the queues once

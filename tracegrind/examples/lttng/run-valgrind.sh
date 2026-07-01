@@ -43,7 +43,7 @@ if [[ ! -x ./hello ]]; then
 fi
 
 # --- build the wrapper shared object -----------------------------------------
-# The wrapper now ALSO emits its own lttng event (vgust:valgrind_event), so it
+# The wrapper now ALSO emits its own lttng event (vgust:mem_accesses), so it
 # must compile the provider (vg-tp.c) and link against lttng-ust itself.
 echo ">> Building vg_intercept.so..."
 UST_CFLAGS="$(pkg-config --cflags lttng-ust)"
