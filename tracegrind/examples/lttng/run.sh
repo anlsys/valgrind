@@ -29,9 +29,10 @@ done
 # 2. Build. We compile the tracepoint provider and the app, linking against
 #    lttng-ust. -I. lets the generated provider find ./hello-tp.h.
 echo ">> Building..."
-cc -c -I. $UST_CFLAGS hello-tp.c -o hello-tp.o
-cc -c -I. $UST_CFLAGS hello.c -o hello.o
-cc hello.o hello-tp.o -o hello $UST_LIBS $UST_RPATH
+CC="${CC:-cc}"
+$CC -c -I. $UST_CFLAGS hello-tp.c -o hello-tp.o
+$CC -c -I. $UST_CFLAGS hello.c -o hello.o
+$CC hello.o hello-tp.o -o hello $UST_LIBS $UST_RPATH
 echo ">> Built ./hello"
 
 # 2. Create a tracing session that stores traces in a temp dir.
