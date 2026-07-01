@@ -1,0 +1,4 @@
+# Build artifacts
+hello
+*.o
+*.so
