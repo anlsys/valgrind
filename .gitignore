@@ -2523,6 +2523,17 @@ none/tests/freebsd/bug499212
 
 
 
+# /tracegrind/
+/tracegrind/Makefile
+/tracegrind/Makefile.in
+/tracegrind/.deps/none__linux-nl_main.Po
+/tracegrind/.deps/none_amd64_linux-nl_main.Po
+/tracegrind/.deps/tracegrind__linux-tracegrind_main.Po
+/tracegrind/.deps/tracegrind_amd64_linux-tracegrind_main.Po
+/tracegrind/tracegrind-amd64-linux
+/tracegrind/tags
+/tracegrind/tests/basic.exe
+
 # /perf/
 /perf/*.dSYM
 /perf/.deps
