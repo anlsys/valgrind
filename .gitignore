@@ -2506,9 +2506,22 @@ none/tests/freebsd/bug499212
 /taskgrind/.deps/none_amd64_linux-nl_main.Po
 /taskgrind/.deps/taskgrind__linux-taskgrind_main.Po
 /taskgrind/.deps/taskgrind_amd64_linux-taskgrind_main.Po
-taskgrind/docs/openmp-task-manual.xml
-taskgrind/taskgrind-amd64-linux
-taskgrind/tags
+/taskgrind/docs/openmp-task-manual.xml
+/taskgrind/taskgrind-amd64-linux
+/taskgrind/tags
+
+# /tracegrind/
+/tracegrind/Makefile
+/tracegrind/Makefile.in
+/tracegrind/.deps/none__linux-nl_main.Po
+/tracegrind/.deps/none_amd64_linux-nl_main.Po
+/tracegrind/.deps/taskgrind__linux-taskgrind_main.Po
+/tracegrind/.deps/taskgrind_amd64_linux-taskgrind_main.Po
+/tracegrind/docs/openmp-task-manual.xml
+/tracegrind/taskgrind-amd64-linux
+/tracegrind/tags
+
+
 
 # /tracegrind/
 /tracegrind/Makefile
