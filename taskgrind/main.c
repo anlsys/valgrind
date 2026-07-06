@@ -487,7 +487,7 @@ static const char * clo_record      = NULL;
 // global command line options
 taskgrind_clo_t CLOS = {
     .dump=0,
-    .instrumentlist=0,
+    .instrumentlist=1,
     .ignorelist=0,
     .noanalysis=0,
 };
@@ -496,10 +496,10 @@ static void
 taskgrind_print_usage(void)
 {
     VG_(printf)(
-"    --dump            Dump internal data structures to dot files\n"
-"    --instrumentlist  Only instrument accesses in functions of the instrumentlist\n"
-"    --ignorelist      Do not instrument accesses in functions of the instrumentlist\n"
-"    --noanalysis      Only record the execution but perform no analysis\n"
+"    --dump               Dump internal data structures to dot files\n"
+"    --no-instrument-list Instrument all memory accesses --- by default, only instrument the one in the instrument list\n"
+"    --ignore-list        Do not instrument accesses in functions of the ignore list\n"
+"    --no-analysis        Only record the execution but perform no analysis\n"
    );
 }
 
@@ -520,19 +520,19 @@ taskgrind_process_cmd_line_option(const HChar * arg)
         return True;
     }
 
-    if (VG_(strcmp)(arg, "--instrumentlist") == 0)
+    if (VG_(strcmp)(arg, "--no-instrument-list") == 0)
     {
-        CLOS.instrumentlist = 1;
+        CLOS.instrumentlist = 0;
         return True;
     }
 
-    if (VG_(strcmp)(arg, "--ignorelist") == 0)
+    if (VG_(strcmp)(arg, "--ignore-list") == 0)
     {
         CLOS.ignorelist = 1;
         return True;
     }
 
-    if (VG_(strcmp)(arg, "--noanalysis") == 0)
+    if (VG_(strcmp)(arg, "--no-analysis") == 0)
     {
         CLOS.noanalysis = 1;
         return True;
@@ -550,7 +550,7 @@ taskgrind_post_clo_init(void)
         TASKGRIND_INFO("Export to dot files disabled");
 
     if (CLOS.instrumentlist || CLOS.ignorelist)
-        TASKGRIND_INFO("You can modify the lists in the file `%s`", __FILE__);
+        TASKGRIND_INFO("You can modify the lists of instrumented symbol in the file `%s`", __FILE__);
 
     if (CLOS.instrumentlist)
     {
